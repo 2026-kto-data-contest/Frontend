@@ -1,32 +1,398 @@
-# React + TypeScript + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+## Git Convention
 
-Currently, two official plugins are available:
+원활한 협업과 작업 이력 관리를 위해 모든 작업은 **GitHub Issue를 기준으로 진행**한다.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+### 1. 작업 진행 순서
 
-## React Compiler
+Issue 생성
+→ 작업 브랜치 생성
+→ 코드 작성 및 커밋
+→ Pull Request 생성
+→ 코드 리뷰
+→ `main` 브랜치 병합
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+---
 
-## Expanding the Oxlint configuration
+## 1. Issue 규칙
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+모든 작업은 GitHub Issue를 등록한 후 시작한다.
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+### Issue 제목 형식
+
+`[유형]: 작업 설명`
+
+### Issue 제목 예시
+
+- `[FEAT]: 로그인 페이지 구현`
+- `[FIX]: 모바일 화면 레이아웃 오류 수정`
+- `[REFACTOR]: 로그인 폼 컴포넌트 분리`
+- `[STYLE]: 메인 페이지 UI 수정`
+- `[DOCS]: 실행 방법 문서 추가`
+- `[TEST]: 회원가입 폼 테스트 작성`
+- `[CHORE]: ESLint 설정 추가`
+
+### Issue 유형
+
+| 유형       | 설명                         |
+| ---------- | ---------------------------- |
+| `FEAT`     | 새로운 기능 추가             |
+| `FIX`      | 버그 수정                    |
+| `REFACTOR` | 기능 변경 없는 코드 개선     |
+| `STYLE`    | UI 및 스타일 수정            |
+| `DOCS`     | 문서 작성 및 수정            |
+| `TEST`     | 테스트 코드 작성 및 수정     |
+| `CHORE`    | 설정, 패키지, 빌드 관련 작업 |
+
+### Issue 작성 기준
+
+- 작업 시작 전에 Issue를 등록한다.
+- Issue 담당자에게 `Assignee`를 지정한다.
+- 작업 성격에 맞는 `Label`을 설정한다.
+- 하나의 Issue에는 하나의 작업만 포함한다.
+- 세부 작업은 체크리스트로 작성한다.
+
+### Issue 본문 예시
+
+## 작업 내용
+
+- 로그인 페이지를 구현한다.
+- 이메일과 비밀번호 입력 폼을 추가한다.
+- 로그인 API를 연결한다.
+
+## 세부 작업
+
+- [ ] 로그인 페이지 UI 구현
+- [ ] 입력값 검증 추가
+- [ ] 로그인 API 연결
+- [ ] 로그인 성공 후 페이지 이동
+- [ ] 에러 메시지 처리
+
+---
+
+## 2. Branch 규칙
+
+`main` 브랜치에서는 직접 작업하지 않는다.
+
+Issue를 생성한 후 해당 Issue 번호를 포함한 작업 브랜치를 생성한다.
+
+### 브랜치 이름 형식
+
+`유형/이슈번호/작업설명`
+
+### 브랜치 이름 예시
+
+- `feat/17/login-page`
+- `fix/21/mobile-layout`
+- `refactor/24/login-form`
+- `style/30/main-page-ui`
+- `docs/32/update-readme`
+- `test/35/signup-form`
+- `chore/40/eslint-setting`
+
+### 브랜치 작성 기준
+
+- 브랜치 유형은 영문 소문자로 작성한다.
+- 작업 설명은 영문 소문자와 하이픈(`-`)을 사용한다.
+- 브랜치명에는 관련 Issue 번호를 포함한다.
+- 하나의 브랜치에서는 하나의 Issue 작업만 진행한다.
+- `main`에 병합된 작업 브랜치는 삭제한다.
+
+### 브랜치 생성 방법
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b feat/17/login-page
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+---
+
+## 3. Commit 규칙
+
+커밋 메시지는 아래 형식으로 작성한다.
+
+### 커밋 메시지 형식
+
+`유형: 작업 내용 (#이슈번호)`
+
+### 커밋 메시지 예시
+
+- `feat: 로그인 페이지 구현 (#17)`
+- `fix: 모바일 화면 레이아웃 오류 수정 (#21)`
+- `refactor: 로그인 폼 컴포넌트 분리 (#24)`
+- `style: 메인 페이지 버튼 스타일 수정 (#30)`
+- `docs: 프로젝트 실행 방법 추가 (#32)`
+- `test: 회원가입 폼 테스트 추가 (#35)`
+- `chore: ESLint 설정 추가 (#40)`
+
+### Commit 유형
+
+| 유형       | 설명                         |
+| ---------- | ---------------------------- |
+| `feat`     | 새로운 기능 추가             |
+| `fix`      | 버그 수정                    |
+| `refactor` | 기능 변경 없는 코드 개선     |
+| `style`    | UI, CSS 및 코드 포맷 수정    |
+| `docs`     | 문서 작성 및 수정            |
+| `test`     | 테스트 코드 작성 및 수정     |
+| `chore`    | 설정, 패키지, 빌드 관련 작업 |
+
+### Commit 작성 기준
+
+- 커밋 하나에는 하나의 변경 목적만 포함한다.
+- 커밋 메시지에는 변경 내용을 명확하게 작성한다.
+- 관련 Issue 번호를 커밋 메시지에 포함한다.
+- 작업 내용이 많으면 커밋 본문에 상세 내용을 작성한다.
+- 서로 관련 없는 작업을 하나의 커밋에 포함하지 않는다.
+
+### 커밋 본문 예시
+
+```text
+feat: 로그인 페이지 구현 (#17)
+
+- 이메일과 비밀번호 입력 폼 구현
+- 로그인 API 연결
+- 로그인 성공 후 메인 페이지 이동
+- 로그인 실패 메시지 처리
+```
+
+---
+
+## 4. Pull Request 규칙
+
+작업이 완료되면 작업 브랜치에서 `main` 브랜치로 Pull Request를 생성한다.
+
+### PR 제목 형식
+
+`[유형]: 작업 설명`
+
+### PR 제목 예시
+
+- `[FEAT]: 로그인 페이지 구현`
+- `[FIX]: 모바일 화면 레이아웃 오류 수정`
+- `[REFACTOR]: 로그인 폼 컴포넌트 분리`
+- `[STYLE]: 메인 페이지 UI 수정`
+- `[DOCS]: 프로젝트 실행 방법 추가`
+- `[TEST]: 회원가입 폼 테스트 추가`
+- `[CHORE]: ESLint 설정 추가`
+
+### PR 작성 기준
+
+- PR에 작업 성격에 맞는 `Label`을 설정한다.
+- PR 본문에 관련 Issue 번호를 연결한다.
+- 하나의 PR에는 하나의 Issue 작업만 포함한다.
+- 작업 내용과 테스트 결과를 작성한다.
+- UI가 변경된 경우 변경 화면의 스크린샷 또는 영상을 첨부한다.
+- 반응형 화면을 수정한 경우 PC와 모바일 화면을 함께 확인한다.
+- 불필요한 코드, 주석, 디버깅 출력문은 제거한다.
+- 환경변수, API Key 등 민감한 정보는 포함하지 않는다.
+- PR 생성 전 최신 `main` 브랜치 내용을 반영한다.
+
+### PR 본문 양식
+
+## 관련 Issue
+
+- close #17
+
+## 작업 내용
+
+- 로그인 페이지 UI를 구현했다.
+- 이메일과 비밀번호 입력값 검증을 추가했다.
+- 로그인 API를 연결했다.
+- 로그인 성공 후 메인 페이지로 이동하도록 처리했다.
+
+## 테스트 내용
+
+- [ ] 이메일 입력값 검증
+- [ ] 비밀번호 입력값 검증
+- [ ] 로그인 성공 처리
+- [ ] 로그인 실패 메시지 출력
+- [ ] 모바일 화면 확인
+
+## 화면 결과
+
+UI 변경 전후 스크린샷 또는 테스트 영상을 첨부한다.
+
+## 참고 사항
+
+- 리뷰어가 확인해야 할 내용을 작성한다.
+
+`close #이슈번호`를 작성하면 PR이 `main` 브랜치에 병합될 때 연결된 Issue가 자동으로 종료된다.
+
+---
+
+## 5. Code Review 규칙
+
+- 최소 2명 이상의 승인을 받은 후 `main` 브랜치에 병합한다.
+- 리뷰어는 매주 랜덤으로 지정한다.
+- 리뷰 요청을 받은 사람은 변경 목적과 영향 범위를 확인한다.
+- UI 변경 시 디자인과 실제 구현 결과를 함께 확인한다.
+- 컴포넌트가 불필요하게 크거나 중복되지 않았는지 확인한다.
+- 수정 요청이 있으면 반영한 후 다시 리뷰를 요청한다.
+- 질문이나 의견에는 답변을 남긴다.
+- 모든 리뷰가 완료되면 PR 작성자가 직접 병합한다.
+- 승인되지 않았거나 빌드가 실패한 PR은 병합하지 않는다.
+
+### 리뷰 코멘트 구분
+
+```text
+MUST: 반드시 수정해야 하는 내용
+SUGGESTION: 수정하면 더 좋은 내용
+QUESTION: 코드의 의도나 동작을 확인하는 질문
+NIT: 사소한 스타일 관련 의견
+```
+
+---
+
+## 6. Merge 규칙
+
+- 최소 2명 이상의 리뷰 승인을 받은 후 병합한다.
+- PR 작성자가 본인의 PR을 직접 병합한다.
+- 기본 병합 방식은 `Create a merge commit`을 사용한다.
+- 병합 커밋 메시지에는 Issue 번호를 포함한다.
+- 충돌이 발생하면 PR 작성자가 해결한다.
+- 병합 후 작업 브랜치는 삭제한다.
+- 테스트 또는 빌드가 실패한 상태에서는 병합하지 않는다.
+
+### 병합 커밋 메시지 예시
+
+`feat: 로그인 페이지 구현 (#17)`
+
+---
+
+## 7. Frontend Code Convention
+
+프로젝트 내 코드 작성 방식과 컴포넌트 구조를 통일하기 위해 아래 규칙을 따른다.
+
+### 코드 작성 규칙
+
+- TypeScript 사용을 기본으로 한다.
+- 들여쓰기는 스페이스 2칸을 사용한다.
+- 세미콜론과 따옴표 사용 방식은 ESLint와 Prettier 설정을 따른다.
+- `var`는 사용하지 않고 `const`와 `let`을 사용한다.
+- 변경되지 않는 값은 `const`로 선언한다.
+- `any` 사용은 최대한 지양한다.
+- 사용하지 않는 변수, import, 주석은 제거한다.
+- 디버깅용 `console.log()`는 PR 생성 전에 제거한다.
+- API 주소, 토큰, API Key를 코드에 직접 작성하지 않는다.
+- 공통으로 사용되는 값은 상수로 분리한다.
+
+### 네이밍 규칙
+
+| 대상          | 규칙                    | 예시                   |
+| ------------- | ----------------------- | ---------------------- |
+| 컴포넌트      | PascalCase              | `LoginForm`            |
+| 컴포넌트 파일 | PascalCase              | `LoginForm.tsx`        |
+| 함수·변수     | camelCase               | `handleLogin`          |
+| 상수          | UPPER_SNAKE_CASE        | `MAX_LOGIN_COUNT`      |
+| Hook          | `use`로 시작            | `useLogin`             |
+| Boolean       | `is`, `has`, `can` 사용 | `isLoading`            |
+| CSS Module    | 컴포넌트명과 통일       | `LoginForm.module.css` |
+
+### 컴포넌트 규칙
+
+- 컴포넌트는 하나의 역할만 담당하도록 작성한다.
+- 컴포넌트가 지나치게 커지면 기능 단위로 분리한다.
+- 공통으로 사용하는 UI는 공통 컴포넌트로 분리한다.
+- 페이지 전용 컴포넌트와 공통 컴포넌트를 구분한다.
+- 이벤트 함수는 `handle`로 시작한다.
+- Props 타입은 명확하게 정의한다.
+- 배열 렌더링 시 안정적인 고유값을 `key`로 사용한다.
+- 배열의 인덱스를 `key`로 사용하는 것은 지양한다.
+
+```tsx
+interface LoginFormProps {
+  isLoading: boolean;
+  onSubmit: (email: string, password: string) => void;
+}
+
+function LoginForm({ isLoading, onSubmit }: LoginFormProps) {
+  const handleSubmit = () => {
+    onSubmit("user@example.com", "password");
+  };
+
+  return (
+    <button type="button" onClick={handleSubmit} disabled={isLoading}>
+      로그인
+    </button>
+  );
+}
+
+export default LoginForm;
+```
+
+### 폴더 구조
+
+```text
+src
+├── api
+├── assets
+├── components
+│   ├── common
+│   └── layout
+├── constants
+├── hooks
+├── pages
+├── routes
+├── stores
+├── styles
+├── types
+└── utils
+```
+
+- API 요청 코드는 `api`에 작성한다.
+- 공통 컴포넌트는 `components/common`에 작성한다.
+- 페이지 단위 컴포넌트는 `pages`에 작성한다.
+- 커스텀 Hook은 `hooks`에 작성한다.
+- 공통 타입은 `types`에 작성한다.
+- 공통 함수는 `utils`에 작성한다.
+- 전역 상태 관리 코드는 `stores`에 작성한다.
+
+### API 규칙
+
+- API 요청 코드는 컴포넌트 내부에 직접 작성하지 않는다.
+- API 요청과 응답 타입을 명확하게 정의한다.
+- 로딩, 성공, 실패 상태를 구분하여 처리한다.
+- 에러 메시지는 사용자에게 이해하기 쉬운 형태로 표시한다.
+- 반복되는 API 요청 코드는 공통 함수로 분리한다.
+
+### 스타일 규칙
+
+- 프로젝트에서 정한 스타일 방식을 통일하여 사용한다.
+- 동일한 역할의 색상, 크기, 여백은 공통 변수로 관리한다.
+- 인라인 스타일 사용은 지양한다.
+- 반응형 화면을 고려하여 구현한다.
+- 버튼, 입력창 등 반복되는 UI는 공통 컴포넌트로 작성한다.
+- 디자인 시안이 있는 경우 임의로 변경하지 않는다.
+
+### 테스트 규칙
+
+- 주요 사용자 동작을 기준으로 테스트를 작성한다.
+- 기능 추가 또는 수정 시 관련 테스트를 함께 작성한다.
+- 정상 동작과 실패 상황을 모두 확인한다.
+- API 요청이 필요한 테스트는 Mock 데이터를 사용한다.
+- 컴포넌트의 내부 구현보다 실제 사용자 동작을 검증한다.
+
+---
+
+## 8. PR 체크리스트
+
+PR을 생성하기 전에 아래 항목을 확인한다.
+
+- [ ] 작업 전에 Issue를 생성했는가?
+- [ ] Issue에 Assignee와 Label을 설정했는가?
+- [ ] 브랜치명에 Issue 번호를 포함했는가?
+- [ ] 하나의 PR에 하나의 Issue 작업만 포함했는가?
+- [ ] 커밋 메시지에 Issue 번호를 포함했는가?
+- [ ] PR 본문에 `close #이슈번호`를 작성했는가?
+- [ ] 작업 내용과 테스트 내용을 작성했는가?
+- [ ] UI 변경 화면의 스크린샷 또는 영상을 첨부했는가?
+- [ ] PC와 모바일 화면을 확인했는가?
+- [ ] 불필요한 코드와 `console.log()`를 제거했는가?
+- [ ] `any` 타입을 불필요하게 사용하지 않았는가?
+- [ ] 환경변수와 민감한 정보가 포함되지 않았는가?
+- [ ] 최신 `main` 브랜치를 반영했는가?
+- [ ] 빌드와 테스트가 정상적으로 실행되는가?
+- [ ] 최소 2명 이상의 리뷰 승인을 받았는가?
