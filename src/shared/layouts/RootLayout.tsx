@@ -1,8 +1,18 @@
-import type { ReactNode } from "react";
 import styled from "styled-components";
+import { Outlet } from "react-router-dom";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
+
+export const Layout = () => {
+  return (
+    <Backdrop>
+      <PhoneFrame>
+        <Outlet />
+      </PhoneFrame>
+    </Backdrop>
+  );
+};
 
 const Backdrop = styled.div`
   display: flex;
@@ -37,15 +47,3 @@ const PhoneFrame = styled.div`
     height: 100vh;
   }
 `;
-
-interface RootLayoutProps {
-  children: ReactNode;
-}
-
-export default function RootLayout({ children }: RootLayoutProps) {
-  return (
-    <Backdrop>
-      <PhoneFrame>{children}</PhoneFrame>
-    </Backdrop>
-  );
-}

@@ -1,13 +1,8 @@
-import RootLayout from "./shared/layouts/RootLayout";
+import { RouterProvider } from "react-router-dom";
+import { router } from "../src/routes/router";
 
 function App() {
-  return (
-    <RootLayout>
-      <div style={{ padding: 24 }}>
-        <h1>전통주로</h1>
-      </div>
-    </RootLayout>
-  );
+  return <RouterProvider router={router} />;
 }
 
 export default App;
