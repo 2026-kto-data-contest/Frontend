@@ -51,12 +51,14 @@ const StyledChip = styled.button<StyledChipProps>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
   gap: 6px;
   padding: 8px 18px;
   border-radius: 9999px;
   font-size: 15px;
   font-weight: 500;
   line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
   outline: none;
   user-select: none;
