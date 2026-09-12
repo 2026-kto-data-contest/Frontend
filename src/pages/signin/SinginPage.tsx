@@ -1,45 +1,28 @@
-import { useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { KakaoLoginButton } from "../../shared/components/KakaoLoginButton";
 import { BackButton } from "../../shared/components/BackButton";
-import { startKakaoLogin, isKakaoConfigured } from "../../shared/lib/kakao";
-import { useAuth } from "../../shared/lib/authContext";
+import { loginWithKakao } from "../../shared/api/api";
 import loginBg from "../../assets/img/Login.png";
+
+const ERROR_MESSAGES: Record<string, string> = {
+  kakao_cancelled: "카카오 로그인을 취소했어요.",
+  invalid_oauth_state: "로그인 요청이 만료됐어요. 다시 시도해주세요.",
+  kakao_auth_failed: "카카오 로그인에 실패했어요. 다시 시도해주세요.",
+};
 
 export default function SinginPage() {
   const navigate = useNavigate();
-  const auth = useAuth();
-  const [isPending, setIsPending] = useState(false);
-  // 로그인을 시작한 화면을 기억해뒀다가, 이미 온보딩까지 끝난 유저는 완료 즉시 그 화면으로 돌려보냅니다.
   const [searchParams] = useSearchParams();
+  // 로그인을 시작한 화면을 기억해뒀다가, 백엔드가 로그인·약관·온보딩을 모두 마친 뒤 그 화면으로 돌려보냅니다.
   const from = searchParams.get("from") || "/";
-
-  const goToNext = () => {
-    if (auth.hasOnboarded) {
-      navigate(from);
-    } else {
-      navigate(`/signin/terms?from=${encodeURIComponent(from)}`);
-    }
-  };
+  const kakaoError = searchParams.get("error");
+  const errorMessage = kakaoError
+    ? ERROR_MESSAGES[kakaoError] || "로그인에 실패했어요. 다시 시도해주세요."
+    : null;
 
   const handleKakaoLogin = () => {
-    if (isKakaoConfigured) {
-      sessionStorage.setItem("kakao:from", from);
-      try {
-        startKakaoLogin();
-      } catch (error) {
-        console.error(error);
-        alert("카카오 로그인에 실패했어요. 다시 시도해주세요.");
-      }
-      return;
-    }
-    setIsPending(true);
-    setTimeout(() => {
-      auth.login();
-      setIsPending(false);
-      goToNext();
-    }, 500);
+    loginWithKakao(from);
   };
 
   return (
@@ -68,10 +51,9 @@ export default function SinginPage() {
       </TopContent>
 
       <BottomContent>
+        {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
         <Subtext>로그인하고 나만의 전통주 여행을 이어가세요</Subtext>
-        <KakaoLoginButton onClick={handleKakaoLogin} disabled={isPending}>
-          {isPending ? "로그인 중..." : "카카오로 로그인"}
-        </KakaoLoginButton>
+        <KakaoLoginButton onClick={handleKakaoLogin}>카카오로 로그인</KakaoLoginButton>
       </BottomContent>
     </PageContainer>
   );
@@ -153,5 +135,15 @@ const Subtext = styled.p`
   margin: 0;
   font-size: 0.875rem;
   color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+`;
+
+const ErrorText = styled.p`
+  margin: 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background-color: rgba(239, 68, 68, 0.16);
+  color: #fecaca;
+  font-size: 0.8125rem;
   text-align: center;
 `;
