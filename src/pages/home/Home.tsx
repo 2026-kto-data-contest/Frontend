@@ -1,28 +1,27 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Header } from "../components/header/Header";
+import { Header } from "../../shared/components/Header";
 import miniBannerIcon from "../../assets/icon/MiniBanner.svg";
 import { Chip } from "../../shared/components/Chip";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { ErrorState } from "../../shared/components/ErrorState";
+import { Snackbar } from "../../shared/components/Snackbar";
 import { WineryCard } from "../../shared/components/WineryCard";
 import { PhotoCard } from "../../shared/components/PhotoCard";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState } from "../../shared/lib/pageState";
-import {
-  WINERIES,
-  getAvailableTypeFilters,
-  getAvailableRegionFilters,
-  sortByPreference,
-  getRecommendedWineries,
-} from "../../shared/lib/mockWineries";
-import { getSortedCourses } from "../../shared/lib/mockCourses";
+import { ApiError } from "../../shared/api/api";
+import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
+import type { HomeResponse } from "../../shared/api/breweriesApi";
+import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
 
 const ROTATE_INTERVAL_MS = 3000;
 const TYPE_LIST_LIMIT = 3;
+const DEFAULT_TYPE_FILTER = "탁주";
+const DEFAULT_REGION_FILTER = "수도권";
 
 type LoadState = "loading" | "success" | "network-error" | "server-error";
 
@@ -32,45 +31,86 @@ export default function Home() {
   const [searchParams] = useSearchParams();
   const forcedError = searchParams.get("error");
   const [loadState, setLoadState] = usePersistentState<LoadState>("home:loadState", "loading");
-  const availableTypeFilters = getAvailableTypeFilters();
-  const availableRegionFilters = getAvailableRegionFilters();
+  const [home, setHome] = useState<HomeResponse | null>(null);
   const [typeFilter, setTypeFilter] = usePersistentState<string>(
     "home:typeFilter",
-    availableTypeFilters[0]
+    DEFAULT_TYPE_FILTER
   );
   const [regionFilter, setRegionFilter] = usePersistentState<string>(
     "home:regionFilter",
-    availableRegionFilters[0]
+    DEFAULT_REGION_FILTER
   );
 
-  const bannerItems = getSortedCourses(auth.hasOnboarded, auth.preferredRegion);
+  const bannerItems = home?.recommendedCourses ?? [];
   const [activeBanner, setActiveBanner] = usePersistentState("home:activeBanner", 0);
   const pointerStartX = useRef<number | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [filterErrorToast, setFilterErrorToast] = useState<string | null>(null);
+  const [isRefetching, setIsRefetching] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (forcedError === "network") {
-        setLoadState("network-error");
-      } else if (forcedError === "server") {
-        setLoadState("server-error");
-      } else {
+    if (forcedError === "network" || forcedError === "server") {
+      const timer = setTimeout(() => {
+        setLoadState(forcedError === "network" ? "network-error" : "server-error");
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+
+    // 개발 모드(StrictMode)에서 같은 효과가 두 번 실행되며 이전 요청이 그대로 남아있으면
+    // 느린 백엔드에 동시에 두 번 요청이 몰려 오히려 더 느려집니다. 정리 시점에 실제로
+    // 요청 자체를 끊어서(AbortController) 낭비되는 중복 요청을 없앱니다.
+    const controller = new AbortController();
+    // 이미 한 번 성공적으로 불러온 뒤 칩만 바꾼 경우에는, 전체 화면을 다시 스켈레톤으로
+    // 덮지 않고 기존 내용을 보여준 채로 조용히 해당 데이터만 새로 받아옵니다.
+    // 다만 탭이 등록됐다는 걸 바로 보여주기 위해 목록 영역만 즉시(동기적으로) 흐리게 표시합니다.
+    const isFirstLoad = !home;
+    if (isFirstLoad) setLoadState("loading");
+    else setIsRefetching(true);
+
+    fetchHome(regionFilter, typeFilter, controller.signal)
+      .then((response) => {
+        setHome(response);
         setLoadState("success");
-      }
-    }, 500);
+        setIsRefetching(false);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("홈 화면 조회 실패", error);
+        if (isFirstLoad) {
+          setLoadState(
+            error instanceof ApiError && error.status >= 500 ? "server-error" : "network-error"
+          );
+        } else {
+          setFilterErrorToast("필터를 적용하지 못했어요. 다시 시도해주세요.");
+        }
+        setIsRefetching(false);
+      });
+    return () => {
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regionFilter, typeFilter, forcedError, reloadKey]);
+
+  useEffect(() => {
+    if (!filterErrorToast) return;
+    const timer = setTimeout(() => setFilterErrorToast(null), 3000);
     return () => clearTimeout(timer);
-  }, [forcedError]);
+  }, [filterErrorToast]);
 
   const goToBanner = (index: number) => {
     const length = bannerItems.length;
+    if (length === 0) return;
     setActiveBanner(((index % length) + length) % length);
   };
 
   useEffect(() => {
+    if (bannerItems.length === 0) return;
     const timer = setInterval(() => {
       goToBanner(activeBanner + 1);
     }, ROTATE_INTERVAL_MS);
     return () => clearInterval(timer);
-  }, [activeBanner]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBanner, bannerItems.length]);
 
   const handleBannerPointerDown = (e: ReactPointerEvent) => {
     pointerStartX.current = e.clientX;
@@ -89,34 +129,27 @@ export default function Home() {
   };
 
   const handlePreferenceBannerClick = () => {
+    if (home?.banner.actionPath) {
+      navigate(home.banner.actionPath);
+      return;
+    }
     if (auth.hasOnboarded) {
       navigate("/explore");
+    } else if (auth.isLoggedIn && auth.termsAgreed) {
+      navigate("/onboarding");
     } else if (auth.isLoggedIn) {
-      navigate("/signin/terms");
+      navigate("/terms");
     } else {
-      navigate("/signin?from=%2F");
+      navigate("/login?from=%2F");
     }
   };
 
-  const greeting = !auth.isLoggedIn
-    ? { title: "반가워요!\n내 취향 양조장 여행, 전통주로입니다" }
-    : auth.hasOnboarded
-      ? { title: `${auth.nickname}님\n${auth.preferenceLabel}를 선호하시네요` }
-      : { title: `${auth.nickname}님\n나에게 맞는 양조장을 찾아볼까요?` };
-
-  const typeFilteredWineries = sortByPreference(
-    WINERIES.filter((winery) => winery.type === typeFilter),
-    auth.preferredRegion,
-    auth.preferredType,
-    auth.preferredTag
-  ).slice(0, TYPE_LIST_LIMIT);
-  const regionFilteredWineries = WINERIES.filter((winery) => winery.region === regionFilter);
-  const recommendedWineries = getRecommendedWineries(
-    auth.hasOnboarded,
-    auth.preferredRegion,
-    auth.preferredType,
-    auth.preferredTag
+  const typeFilteredWineries = (home?.liquorTypeBreweries.breweries ?? []).slice(
+    0,
+    TYPE_LIST_LIMIT
   );
+  const regionFilteredWineries = home?.regionBreweries.breweries ?? [];
+  const recommendedWineries = home?.recommendedBreweries ?? [];
 
   return (
     <PageContainer>
@@ -128,7 +161,7 @@ export default function Home() {
         <ErrorState
           title="네트워크 연결 상태가 좋지않아요"
           description={"WIFI, 셀룰러 데이터 연결 상태를 확인하고\n다시 시도해주세요."}
-          onRetry={() => navigate("/", { replace: true })}
+          onRetry={() => setReloadKey((k) => k + 1)}
         />
       )}
 
@@ -136,53 +169,70 @@ export default function Home() {
         <ErrorState
           title="정보를 불러오지 못했어요"
           description={"이용에 불편을 드려 죄송합니다.\n잠시 후 다시 시도해주세요."}
-          onRetry={() => navigate("/", { replace: true })}
+          onRetry={() => setReloadKey((k) => k + 1)}
         />
       )}
 
-      {loadState === "success" && (
+      {loadState === "success" && home && (
         <>
           <Greeting>
-            <GreetingTitle>{greeting.title}</GreetingTitle>
+            <GreetingTitle>{home.header.message}</GreetingTitle>
           </Greeting>
 
-          <BannerCard>
-            <BannerStack
-              onPointerDown={handleBannerPointerDown}
-              onPointerUp={handleBannerPointerUp}
-            >
-              {bannerItems.map((item, index) => {
-                // 활성 카드 기준 몇 번째 뒤에 있는 카드인지 (0=맨 앞, 1=바로 뒤, 2=그 뒤...). 3장 이상 뒤는 안 그립니다.
-                const offset = (index - activeBanner + bannerItems.length) % bannerItems.length;
-                if (offset > 2) return null;
-                return (
-                  <BannerStackItem
-                    key={item.id}
-                    type="button"
-                    $offset={offset}
-                    onClick={() =>
-                      offset === 0 ? navigate(`/course/${item.id}`) : goToBanner(index)
-                    }
-                  >
-                    <BannerImage />
-                    {offset === 0 && (
-                      <BannerText>
-                        <BannerRegion>{item.region}</BannerRegion>
-                        <BannerTitle>{item.title}</BannerTitle>
-                        <BannerSubtitle>{item.subtitle}</BannerSubtitle>
-                      </BannerText>
-                    )}
-                  </BannerStackItem>
-                );
-              })}
-            </BannerStack>
-          </BannerCard>
+          {bannerItems.length > 0 && (
+            <>
+              <BannerCard>
+                <BannerStack
+                  onPointerDown={handleBannerPointerDown}
+                  onPointerUp={handleBannerPointerUp}
+                >
+                  {bannerItems.map((item, index) => {
+                    // 활성 카드 기준 몇 번째 뒤에 있는 카드인지 (0=맨 앞, 1=바로 뒤, 2=그 뒤...). 3장 이상 뒤는 안 그립니다.
+                    const offset = (index - activeBanner + bannerItems.length) % bannerItems.length;
+                    if (offset > 2) return null;
+                    return (
+                      <BannerStackItem
+                        key={item.courseId}
+                        type="button"
+                        $offset={offset}
+                        onClick={() =>
+                          offset === 0 ? navigate(`/course/${item.courseId}`) : goToBanner(index)
+                        }
+                      >
+                        <BannerImage
+                          style={
+                            item.imageUrl
+                              ? {
+                                  backgroundImage: `url(${item.imageUrl})`,
+                                  backgroundSize: "cover",
+                                  backgroundPosition: "center",
+                                }
+                              : undefined
+                          }
+                        />
+                        {offset === 0 && (
+                          <BannerText>
+                            {item.regionLabel && <BannerRegion>{item.regionLabel}</BannerRegion>}
+                            <BannerTitle>{item.title}</BannerTitle>
+                          </BannerText>
+                        )}
+                      </BannerStackItem>
+                    );
+                  })}
+                </BannerStack>
+              </BannerCard>
 
-          <Dots>
-            {bannerItems.map((item, i) => (
-              <Dot key={item.id} $active={i === activeBanner} onClick={() => goToBanner(i)} />
-            ))}
-          </Dots>
+              <Dots>
+                {bannerItems.map((item, i) => (
+                  <Dot
+                    key={item.courseId}
+                    $active={i === activeBanner}
+                    onClick={() => goToBanner(i)}
+                  />
+                ))}
+              </Dots>
+            </>
+          )}
 
           <Section>
             <SectionHeader>
@@ -192,7 +242,7 @@ export default function Home() {
               </MoreLink>
             </SectionHeader>
             <FilterRow>
-              {availableTypeFilters.map((filter) => (
+              {ALL_TYPE_FILTERS.filter((filter) => filter !== "기타").map((filter) => (
                 <Chip
                   key={filter}
                   label={filter}
@@ -204,12 +254,12 @@ export default function Home() {
             {typeFilteredWineries.length === 0 ? (
               <EmptyNotice>아직 등록된 양조장이 없어요</EmptyNotice>
             ) : (
-              <WineryList>
+              <WineryList $dimmed={isRefetching}>
                 {typeFilteredWineries.map((winery) => (
                   <WineryCard
-                    key={winery.id}
-                    winery={winery}
-                    onClick={() => navigate(`/winery/${winery.id}`)}
+                    key={winery.breweryId}
+                    winery={breweryToCardData(winery)}
+                    onClick={() => navigate(`/winery/${winery.breweryId}`)}
                   />
                 ))}
               </WineryList>
@@ -218,21 +268,7 @@ export default function Home() {
 
           <PromoBanner type="button" onClick={handlePreferenceBannerClick}>
             <PromoTextArea>
-              <PromoTitle>
-                {auth.hasOnboarded ? (
-                  <>
-                    전국의 체험 가능한 양조장을
-                    <br />
-                    한곳에서 만나보세요
-                  </>
-                ) : (
-                  <>
-                    내 취향에 딱 맞는
-                    <br />
-                    양조장 체험이 궁금하다면?
-                  </>
-                )}
-              </PromoTitle>
+              <PromoTitle>{home.banner.message}</PromoTitle>
               <PromoSubtitle>1분이면 맞춤형 양조장, 여행 코스를 추천해드려요</PromoSubtitle>
             </PromoTextArea>
             <PromoIcon src={miniBannerIcon} alt="" />
@@ -246,7 +282,7 @@ export default function Home() {
               </MoreLink>
             </SectionHeader>
             <FilterRow>
-              {availableRegionFilters.map((filter) => (
+              {ALL_REGION_FILTERS.map((filter) => (
                 <Chip
                   key={filter}
                   label={filter}
@@ -258,13 +294,14 @@ export default function Home() {
             {regionFilteredWineries.length === 0 ? (
               <EmptyNotice>아직 등록된 양조장이 없어요</EmptyNotice>
             ) : (
-              <ScrollRow>
+              <ScrollRow $dimmed={isRefetching}>
                 {regionFilteredWineries.map((winery) => (
                   <PhotoCard
-                    key={winery.id}
-                    name={winery.name}
-                    region={winery.detailRegion}
-                    onClick={() => navigate(`/winery/${winery.id}`)}
+                    key={winery.breweryId}
+                    name={winery.businessName}
+                    region={breweryToCardData(winery).detailRegion}
+                    photoUrl={winery.mainImage?.url}
+                    onClick={() => navigate(`/winery/${winery.breweryId}`)}
                   />
                 ))}
               </ScrollRow>
@@ -281,18 +318,21 @@ export default function Home() {
             <ScrollRow>
               {recommendedWineries.map((winery) => (
                 <PhotoCard
-                  key={winery.id}
+                  key={winery.breweryId}
                   large
-                  name={winery.name}
-                  region={winery.detailRegion}
-                  description={winery.description}
-                  onClick={() => navigate(`/winery/${winery.id}`)}
+                  name={winery.businessName}
+                  region={breweryToCardData(winery).detailRegion}
+                  description={winery.introduction ?? undefined}
+                  photoUrl={winery.mainImage?.url}
+                  onClick={() => navigate(`/winery/${winery.breweryId}`)}
                 />
               ))}
             </ScrollRow>
           </Section>
         </>
       )}
+
+      <Snackbar message={filterErrorToast} />
     </PageContainer>
   );
 }
@@ -410,12 +450,6 @@ const BannerTitle = styled.p`
   line-height: 1.4;
 `;
 
-const BannerSubtitle = styled.p`
-  margin: 2px 0 0;
-  font-size: 0.8125rem;
-  opacity: 0.85;
-`;
-
 const Dots = styled.div`
   display: flex;
   justify-content: center;
@@ -480,10 +514,12 @@ const EmptyNotice = styled.p`
   color: ${colors.gray[400]};
 `;
 
-const WineryList = styled.div`
+const WineryList = styled.div<{ $dimmed?: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 20px;
+  opacity: ${(props) => (props.$dimmed ? 0.4 : 1)};
+  transition: opacity 0.15s ease-in-out;
 `;
 
 const PromoBanner = styled.button`
@@ -517,6 +553,7 @@ const PromoTitle = styled.p`
   font-weight: 700;
   color: ${colors.gray[900]};
   line-height: 1.4;
+  white-space: pre-line;
 `;
 
 const PromoSubtitle = styled.p`
@@ -532,7 +569,7 @@ const PromoIcon = styled.img`
   height: 68px;
 `;
 
-const ScrollRow = styled.div`
+const ScrollRow = styled.div<{ $dimmed?: boolean }>`
   display: flex;
   gap: 10px;
   overflow-x: auto;
@@ -542,6 +579,8 @@ const ScrollRow = styled.div`
   width: calc(100% + 32px);
   margin-left: -16px;
   padding: 0 16px;
+  opacity: ${(props) => (props.$dimmed ? 0.4 : 1)};
+  transition: opacity 0.15s ease-in-out;
 
   &::-webkit-scrollbar {
     display: none;

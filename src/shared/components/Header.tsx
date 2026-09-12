@@ -1,8 +1,8 @@
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import logoIcon from "../../../assets/icon/Logo.svg";
-import searchIcon from "../../../assets/icon/Search.svg";
-import { colors } from "../../../shared/styles/colors";
+import logoIcon from "../../assets/icon/Logo.svg";
+import searchIcon from "../../assets/icon/Search.svg";
+import { colors } from "../styles/colors";
 
 export const Header = () => {
   const navigate = useNavigate();
