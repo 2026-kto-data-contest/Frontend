@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { ErrorState } from "../../shared/components/ErrorState";
@@ -16,22 +16,29 @@ import mapIcon from "../../assets/icon/Map.svg";
 import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import { colors } from "../../shared/styles/colors";
+import { SUGGESTED_KEYWORDS } from "../../shared/lib/mockWineries";
+import { breweryToCardData, fetchRecommendedBreweries } from "../../shared/api/breweriesApi";
+import type { BreweryListItem } from "../../shared/api/breweriesApi";
 import {
-  SUGGESTED_KEYWORDS,
-  WINERIES,
-  searchWineries,
-  getAutocompleteSuggestions,
-} from "../../shared/lib/mockWineries";
-import type { Winery } from "../../shared/lib/mockWineries";
+  searchBreweries,
+  fetchSearchSuggestions,
+  fetchRecentSearches,
+  saveRecentSearch,
+  deleteRecentSearch,
+  deleteAllRecentSearches,
+} from "../../shared/api/searchApi";
+import type { SearchSuggestion, RecentSearch, RecentSearchInput } from "../../shared/api/searchApi";
+import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState } from "../../shared/lib/pageState";
 import { findMatchRange } from "../../shared/lib/hangul";
 
-type Phase = "idle" | "typing" | "loading" | "results" | "empty";
+type Phase = "idle" | "typing" | "loading" | "results" | "empty" | "error";
 
 const INITIAL_RECENT: string[] = [];
 const RECENT_VISIBLE_COUNT = 4;
 const RECENT_MAX_COUNT = 10;
 const QUERY_MAX_LENGTH = 20;
+const SUGGESTION_DEBOUNCE_MS = 200;
 
 function HighlightedText({ text, match }: { text: string; match: string }) {
   const range = findMatchRange(text, match);
@@ -47,33 +54,117 @@ function HighlightedText({ text, match }: { text: string; match: string }) {
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const [query, setQuery] = usePersistentState("search:query", "");
   const [submittedQuery, setSubmittedQuery] = usePersistentState("search:submittedQuery", "");
   const [phase, setPhase] = usePersistentState<Phase>("search:phase", "idle");
-  const [recentSearches, setRecentSearches] = usePersistentState<string[]>(
+  const [localRecent, setLocalRecent] = usePersistentState<string[]>(
     "search:recentSearches",
     INITIAL_RECENT
   );
+  const [remoteRecent, setRemoteRecent] = useState<RecentSearch[]>([]);
   const [recentExpanded, setRecentExpanded] = usePersistentState("search:recentExpanded", false);
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
-  const [results, setResults] = usePersistentState<Winery[]>("search:results", []);
+  const [results, setResults] = usePersistentState<BreweryListItem[]>("search:results", []);
+  const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
+  const [recommended, setRecommended] = useState<BreweryListItem[]>([]);
 
-  const runSearch = (keyword: string) => {
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchRecommendedBreweries(0, 6, controller.signal)
+      .then((page) => setRecommended(page.content))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRecommended([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setRemoteRecent([]);
+      return;
+    }
+    const controller = new AbortController();
+    fetchRecentSearches(RECENT_MAX_COUNT, controller.signal)
+      .then(setRemoteRecent)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRemoteRecent([]);
+      });
+    return () => controller.abort();
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (phase !== "typing" || !query.trim()) {
+      setSuggestions([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetchSearchSuggestions(query.trim(), controller.signal)
+        .then((list) => setSuggestions(list))
+        .catch((error) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          setSuggestions([]);
+        });
+    }, SUGGESTION_DEBOUNCE_MS);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [query, phase]);
+
+  const runSearch = (keyword: string, suggestion?: SearchSuggestion) => {
     const trimmed = keyword.trim().slice(0, QUERY_MAX_LENGTH);
     if (!trimmed) return;
 
     setQuery(trimmed);
     setSubmittedQuery(trimmed);
-    setRecentSearches((prev) =>
-      [trimmed, ...prev.filter((item) => item !== trimmed)].slice(0, RECENT_MAX_COUNT)
-    );
     setPhase("loading");
 
-    setTimeout(() => {
-      const matched = searchWineries(trimmed);
-      setResults(matched);
-      setPhase(matched.length > 0 ? "results" : "empty");
-    }, 600);
+    searchBreweries(trimmed)
+      .then((page) => {
+        setResults(page.content);
+        setPhase(page.content.length > 0 ? "results" : "empty");
+      })
+      .catch((error) => {
+        console.error("검색 실패", error);
+        setPhase("error");
+      });
+
+    // 자동완성 항목이면 실제 대상(type·id)을 그대로 저장하고,
+    // 자유 입력 검색은 대상을 특정할 수 없어 REGION 버킷의 키워드로 저장합니다.
+    const entry: RecentSearchInput = suggestion
+      ? {
+          type: suggestion.type,
+          id: suggestion.id,
+          keyword: suggestion.keyword,
+          displayName: suggestion.displayName,
+        }
+      : { type: "REGION", id: trimmed, keyword: trimmed, displayName: trimmed };
+
+    if (isLoggedIn) {
+      saveRecentSearch(entry)
+        .then((saved) => {
+          setRemoteRecent((prev) =>
+            [
+              saved,
+              ...prev.filter((item) => !(item.type === saved.type && item.id === saved.id)),
+            ].slice(0, RECENT_MAX_COUNT)
+          );
+        })
+        .catch(() => {
+          // 저장 실패는 검색 결과 화면에 영향 없이 조용히 무시합니다.
+        });
+    } else {
+      setLocalRecent((prev) =>
+        [entry.displayName, ...prev.filter((item) => item !== entry.displayName)].slice(
+          0,
+          RECENT_MAX_COUNT
+        )
+      );
+    }
   };
 
   const handleInputChange = (value: string) => {
@@ -82,12 +173,30 @@ export default function SearchPage() {
     setPhase(next ? "typing" : "idle");
   };
 
-  const handleRemoveRecent = (index: number) => {
-    setRecentSearches((prev) => prev.filter((_, i) => i !== index));
-  };
+  const recentItems = isLoggedIn
+    ? remoteRecent.map((item) => ({
+        key: String(item.recentSearchId),
+        label: item.displayName,
+        onSelect: () => runSearch(item.keyword),
+        onRemove: () => {
+          deleteRecentSearch(item.recentSearchId).catch(() => {});
+          setRemoteRecent((prev) => prev.filter((r) => r.recentSearchId !== item.recentSearchId));
+        },
+      }))
+    : localRecent.map((keyword, index) => ({
+        key: `${keyword}-${index}`,
+        label: keyword,
+        onSelect: () => runSearch(keyword),
+        onRemove: () => setLocalRecent((prev) => prev.filter((_, i) => i !== index)),
+      }));
 
   const handleClearAllRecent = () => {
-    setRecentSearches([]);
+    if (isLoggedIn) {
+      deleteAllRecentSearches().catch(() => {});
+      setRemoteRecent([]);
+    } else {
+      setLocalRecent([]);
+    }
     setConfirmingClearAll(false);
   };
 
@@ -101,11 +210,7 @@ export default function SearchPage() {
     navigate(-1);
   };
 
-  const autocompleteSuggestions = phase === "typing" ? getAutocompleteSuggestions(query) : [];
-  const visibleRecent = recentExpanded
-    ? recentSearches
-    : recentSearches.slice(0, RECENT_VISIBLE_COUNT);
-  const emptySuggestions = WINERIES.slice(0, 6);
+  const visibleRecent = recentExpanded ? recentItems : recentItems.slice(0, RECENT_VISIBLE_COUNT);
 
   return (
     <PageContainer>
@@ -143,35 +248,31 @@ export default function SearchPage() {
           <Section>
             <SectionHeader>
               <SectionTitle>최근 검색어</SectionTitle>
-              {recentSearches.length > 0 && (
+              {recentItems.length > 0 && (
                 <TextButton type="button" onClick={() => setConfirmingClearAll(true)}>
                   전체삭제
                 </TextButton>
               )}
             </SectionHeader>
 
-            {recentSearches.length === 0 ? (
+            {recentItems.length === 0 ? (
               <EmptyRecent>최근 검색어 내역이 없어요.</EmptyRecent>
             ) : (
               <>
                 <RecentList>
-                  {visibleRecent.map((keyword, index) => (
-                    <RecentItem key={`${keyword}-${index}`}>
-                      <RecentLeft type="button" onClick={() => runSearch(keyword)}>
+                  {visibleRecent.map((item) => (
+                    <RecentItem key={item.key}>
+                      <RecentLeft type="button" onClick={item.onSelect}>
                         <img src={watchIcon} alt="" width={16} height={16} />
-                        {keyword}
+                        {item.label}
                       </RecentLeft>
-                      <RemoveButton
-                        type="button"
-                        aria-label="삭제"
-                        onClick={() => handleRemoveRecent(index)}
-                      >
+                      <RemoveButton type="button" aria-label="삭제" onClick={item.onRemove}>
                         <img src={removeIcon} alt="" width={14} height={14} />
                       </RemoveButton>
                     </RecentItem>
                   ))}
                 </RecentList>
-                {recentSearches.length > RECENT_VISIBLE_COUNT && (
+                {recentItems.length > RECENT_VISIBLE_COUNT && (
                   <ExpandToggle type="button" onClick={() => setRecentExpanded((prev) => !prev)}>
                     {recentExpanded ? "최근 검색어 접기" : "최근 검색어 더보기"}
                     <img
@@ -204,17 +305,17 @@ export default function SearchPage() {
       )}
 
       {phase === "typing" &&
-        (autocompleteSuggestions.length > 0 ? (
+        (suggestions.length > 0 ? (
           <AutocompleteList>
-            {autocompleteSuggestions.map((winery) => (
+            {suggestions.map((item) => (
               <AutocompleteItem
-                key={winery.id}
+                key={`${item.type}-${item.id}`}
                 type="button"
-                onClick={() => runSearch(winery.name)}
+                onClick={() => runSearch(item.keyword, item)}
               >
                 <img src={searchIcon} alt="" width={16} height={16} />
                 <AutocompleteText>
-                  <HighlightedText text={`${winery.name} · ${winery.productName}`} match={query} />
+                  <HighlightedText text={item.displayName} match={query} />
                 </AutocompleteText>
                 <img src={rightArrowIcon} alt="" width={16} height={16} />
               </AutocompleteItem>
@@ -247,9 +348,9 @@ export default function SearchPage() {
           <ResultList>
             {results.map((result) => (
               <WineryCard
-                key={result.id}
-                winery={result}
-                onClick={() => navigate(`/winery/${result.id}`)}
+                key={result.breweryId}
+                winery={breweryToCardData(result)}
+                onClick={() => navigate(`/winery/${result.breweryId}`)}
                 thumbSize={115}
                 nameFirst
                 showTags={false}
@@ -277,18 +378,31 @@ export default function SearchPage() {
               </TextButton>
             </SectionHeader>
             <SuggestGrid>
-              {emptySuggestions.map((winery) => (
+              {recommended.map((winery) => (
                 <PhotoCard
-                  key={winery.id}
+                  key={winery.breweryId}
                   fluid
-                  name={winery.name}
-                  region={winery.detailRegion}
-                  onClick={() => navigate(`/winery/${winery.id}`)}
+                  name={winery.businessName}
+                  region={
+                    winery.sigungu
+                      ? `${winery.sido ?? ""} ${winery.sigungu}`.trim()
+                      : (winery.sido ?? winery.region ?? "")
+                  }
+                  photoUrl={winery.mainImage?.url}
+                  onClick={() => navigate(`/winery/${winery.breweryId}`)}
                 />
               ))}
             </SuggestGrid>
           </Section>
         </EmptyResultWrapper>
+      )}
+
+      {phase === "error" && (
+        <ErrorState
+          title="검색에 실패했어요"
+          description={"네트워크 상태를 확인하고\n다시 시도해주세요"}
+          onRetry={() => runSearch(submittedQuery)}
+        />
       )}
 
       {confirmingClearAll && (

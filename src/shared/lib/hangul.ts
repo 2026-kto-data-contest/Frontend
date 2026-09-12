@@ -65,7 +65,3 @@ export function findMatchRange(target: string, query: string): MatchRange | null
 
   return null;
 }
-
-export function matchesQuery(target: string, query: string): boolean {
-  return findMatchRange(target, query) !== null;
-}
