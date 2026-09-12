@@ -18,7 +18,6 @@ export const Chip: React.FC<ChipProps> = ({
   deletable = false,
   onDelete,
   onClick,
-  children,
   ...props
 }) => {
   const handleDeleteClick = (e: React.MouseEvent<HTMLSpanElement>) => {
