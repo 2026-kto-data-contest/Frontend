@@ -63,6 +63,7 @@ const PhoneFrame = styled.div`
   overflow: hidden;
   background-color: #ffffff;
   position: relative;
+  transform: translateZ(0);
 
   @media (min-width: ${PHONE_WIDTH + 1}px) {
     margin: 32px 0;
