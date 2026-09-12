@@ -1,39 +1,100 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../../shared/lib/authContext";
+import { useNavigate } from "react-router-dom";
 import { Button } from "../../shared/components/Button";
+import { useAuth } from "../../shared/lib/authContext";
+import { fetchTerms, saveTermsAgreements, continueAuth, ApiError } from "../../shared/api/api";
+import type { TermItem } from "../../shared/api/api";
 
-interface TermItem {
-  id: string;
-  required: boolean;
-  label: string;
-}
-
-const TERMS_ITEMS: TermItem[] = [
-  { id: "service", required: true, label: "서비스 이용약관 동의" },
-  { id: "privacy", required: true, label: "개인정보 수집 및 이용 동의" },
-  { id: "location", required: false, label: "위치기반 서비스 이용약관" },
-  { id: "marketing", required: false, label: "마케팅 정보 수신 동의 (카카오톡, 이메일 등)" },
+// 백엔드 조회가 실패했을 때(오프라인 등) 화면이 비지 않도록 쓰는 기본값입니다.
+const FALLBACK_TERMS: TermItem[] = [
+  {
+    code: "SERVICE_USE",
+    version: "1",
+    title: "서비스 이용약관 동의",
+    required: true,
+    contentUrl: null,
+    agreed: false,
+  },
+  {
+    code: "PRIVACY",
+    version: "1",
+    title: "개인정보 수집 및 이용 동의",
+    required: true,
+    contentUrl: null,
+    agreed: false,
+  },
+  {
+    code: "LOCATION",
+    version: "1",
+    title: "위치기반 서비스 이용약관",
+    required: false,
+    contentUrl: null,
+    agreed: false,
+  },
+  {
+    code: "MARKETING",
+    version: "1",
+    title: "마케팅 정보 수신 동의 (카카오톡, 이메일 등)",
+    required: false,
+    contentUrl: null,
+    agreed: false,
+  },
 ];
 
 export default function TermsPage() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const [searchParams] = useSearchParams();
-  const from = searchParams.get("from") || "/";
+  const [terms, setTerms] = useState<TermItem[]>(FALLBACK_TERMS);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const allChecked = TERMS_ITEMS.every((item) => checked[item.id]);
-  const canContinue = TERMS_ITEMS.filter((item) => item.required).every((item) => checked[item.id]);
+  useEffect(() => {
+    fetchTerms()
+      .then((items) => {
+        setTerms(items);
+        setChecked(Object.fromEntries(items.map((item) => [item.code, item.agreed])));
+      })
+      .catch((error) => {
+        console.error("약관 조회 실패", error);
+      });
+  }, []);
+
+  const allChecked = terms.every((item) => checked[item.code]);
+  const canContinue = terms.filter((item) => item.required).every((item) => checked[item.code]);
 
   const toggleAll = () => {
     const next = !allChecked;
-    setChecked(Object.fromEntries(TERMS_ITEMS.map((item) => [item.id, next])));
+    setChecked(Object.fromEntries(terms.map((item) => [item.code, next])));
   };
 
-  const toggleItem = (id: string) => {
-    setChecked((prev) => ({ ...prev, [id]: !prev[id] }));
+  const toggleItem = (code: string) => {
+    setChecked((prev) => ({ ...prev, [code]: !prev[code] }));
+  };
+
+  const handleSubmit = async () => {
+    setErrorMessage(null);
+    setIsSubmitting(true);
+    try {
+      await saveTermsAgreements(
+        terms.map((item) => ({ code: item.code, agreed: !!checked[item.code] }))
+      );
+      const { nextPath } = await continueAuth();
+      await auth.refresh();
+      navigate(nextPath);
+    } catch (error) {
+      console.error("약관 저장 실패", error);
+      const message =
+        error instanceof ApiError
+          ? error.status === 400
+            ? "필수 약관에 모두 동의해주세요."
+            : error.message
+          : "약관 저장에 실패했어요. 다시 시도해주세요.";
+      setErrorMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -58,31 +119,34 @@ export default function TermsPage() {
       <Divider />
 
       <ItemList>
-        {TERMS_ITEMS.map((item) => (
-          <ItemRow key={item.id}>
-            <ItemLeft type="button" onClick={() => toggleItem(item.id)}>
-              <CheckCircle $active={!!checked[item.id]} $size={18}>
+        {terms.map((item) => (
+          <ItemRow key={item.code}>
+            <ItemLeft type="button" onClick={() => toggleItem(item.code)}>
+              <CheckCircle $active={!!checked[item.code]} $size={18}>
                 ✓
               </CheckCircle>
               <ItemLabel>
-                [{item.required ? "필수" : "선택"}] {item.label}
+                [{item.required ? "필수" : "선택"}] {item.title}
               </ItemLabel>
             </ItemLeft>
-            <ViewLink>보기</ViewLink>
+            {item.contentUrl && (
+              <ViewLink as="a" href={item.contentUrl} target="_blank" rel="noopener noreferrer">
+                보기
+              </ViewLink>
+            )}
           </ItemRow>
         ))}
       </ItemList>
 
+      {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
+
       <Button
         variant="primary"
-        disabled={!canContinue}
+        disabled={!canContinue || isSubmitting}
         style={{ marginTop: 32, width: "100%" }}
-        onClick={() => {
-          auth.completeOnboarding();
-          navigate(from);
-        }}
+        onClick={handleSubmit}
       >
-        동의하고 계속하기
+        {isSubmitting ? "처리 중..." : "동의하고 계속하기"}
       </Button>
     </PageContainer>
   );
@@ -193,4 +257,11 @@ const CheckCircle = styled.span<{ $active: boolean; $size: number }>`
   color: ${(props) => (props.$active ? "#ffffff" : "#9ca3af")};
   background-color: ${(props) => (props.$active ? "#ff7a00" : "#f3f4f6")};
   border: 1px solid ${(props) => (props.$active ? "transparent" : "#e5e7eb")};
+`;
+
+const ErrorText = styled.p`
+  margin: 16px 0 0;
+  font-size: 0.8125rem;
+  color: #ef4444;
+  text-align: center;
 `;
