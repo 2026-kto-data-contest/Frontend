@@ -3,10 +3,22 @@ import styled from "styled-components";
 import { colors } from "../styles/colors";
 import { Tag } from "./Tag";
 import { Badge } from "./Badge";
-import type { Winery } from "../lib/mockWineries";
+import noneImage from "../../assets/img/NoneImage.png";
+
+// 목데이터(Winery)와 실제 백엔드 양조장 목록 응답을 둘 다 그릴 수 있도록,
+// 카드가 실제로 쓰는 필드만 최소한으로 받는 느슨한 형태입니다.
+export interface WineryCardData {
+  name: string;
+  productName?: string;
+  detailRegion: string;
+  description?: string;
+  tags?: string[];
+  badges?: string[];
+  photoUrls?: string[];
+}
 
 export interface WineryCardProps {
-  winery: Winery;
+  winery: WineryCardData;
   onClick?: () => void;
   showDescription?: boolean;
   showTags?: boolean;
@@ -22,19 +34,21 @@ export const WineryCard: React.FC<WineryCardProps> = ({
   nameFirst = false,
   thumbSize,
 }) => {
-  const visibleTags = winery.tags.slice(0, 2);
-  const hiddenTagCount = winery.tags.length - visibleTags.length;
+  const tags = winery.tags ?? [];
+  const visibleTags = tags.slice(0, 2);
+  const hiddenTagCount = tags.length - visibleTags.length;
 
   const nameEl = (
     <Name>
-      {winery.name} · {winery.productName}
+      {winery.name}
+      {winery.productName ? ` · ${winery.productName}` : ""}
     </Name>
   );
   const regionEl = <Region>{winery.detailRegion}</Region>;
 
   return (
     <Row onClick={onClick} $clickable={!!onClick}>
-      <Thumb $size={thumbSize} />
+      <Thumb $size={thumbSize} src={winery.photoUrls?.[0] ?? noneImage} alt="" />
       <Info>
         {nameFirst ? (
           <>
@@ -47,7 +61,7 @@ export const WineryCard: React.FC<WineryCardProps> = ({
             {nameEl}
           </>
         )}
-        {showDescription && <Description>{winery.description}</Description>}
+        {showDescription && winery.description && <Description>{winery.description}</Description>}
         {showTags && (
           <TagRow>
             {visibleTags.map((tag) => (
@@ -74,12 +88,13 @@ const Row = styled.div<{ $clickable: boolean }>`
   cursor: ${(props) => (props.$clickable ? "pointer" : "default")};
 `;
 
-const Thumb = styled.div<{ $size?: number }>`
+const Thumb = styled.img<{ $size?: number }>`
   flex-shrink: 0;
   width: ${(props) => (props.$size ? `${props.$size}px` : "100px")};
   height: ${(props) => (props.$size ? `${props.$size}px` : "136px")};
   border-radius: 12px;
-  background: linear-gradient(160deg, #b08968 0%, #6b4a30 100%);
+  object-fit: cover;
+  background-color: ${colors.gray[50]};
 `;
 
 const Info = styled.div`

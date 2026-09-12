@@ -1,6 +1,7 @@
 import React from "react";
 import styled, { css } from "styled-components";
 import { colors } from "../styles/colors";
+import noneImage from "../../assets/img/NoneImage.png";
 
 export interface PhotoCardProps {
   name: string;
@@ -8,6 +9,7 @@ export interface PhotoCardProps {
   description?: string;
   large?: boolean;
   fluid?: boolean;
+  photoUrl?: string;
   onClick?: () => void;
 }
 
@@ -17,11 +19,12 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
   description,
   large = false,
   fluid = false,
+  photoUrl,
   onClick,
 }) => {
   return (
     <Wrapper $large={large} $fluid={fluid} onClick={onClick} $clickable={!!onClick}>
-      <Thumb $large={large} />
+      <Thumb $large={large} src={photoUrl ?? noneImage} alt="" />
       <Body $large={large}>
         <Name>{name}</Name>
         <Region>{region}</Region>
@@ -48,11 +51,12 @@ const Wrapper = styled.div<{ $large: boolean; $fluid: boolean; $clickable: boole
     props.$fluid ? "width: 100%;" : `flex-shrink: 0; width: ${props.$large ? "220px" : "120px"};`}
 `;
 
-const Thumb = styled.div<{ $large: boolean }>`
+const Thumb = styled.img<{ $large: boolean }>`
   width: 100%;
   height: ${(props) => (props.$large ? "180px" : "120px")};
   border-radius: ${(props) => (props.$large ? "0" : "12px")};
-  background: linear-gradient(160deg, #8a6a4a 0%, #4a3626 100%);
+  object-fit: cover;
+  background-color: ${colors.gray[50]};
 `;
 
 const Body = styled.div<{ $large: boolean }>`
