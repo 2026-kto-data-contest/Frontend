@@ -42,6 +42,38 @@ export function usePersistentState<T>(key: string, initialValue: T) {
   return [state, update] as const;
 }
 
+/**
+ * usePersistentState와 달리 브라우저 localStorage에 저장해, 새로고침·재방문 후에도
+ * 값이 남아있어야 하는 상태(예: 로그인 전 로컬 최근 검색어)에 씁니다.
+ */
+export function useLocalStorageState<T>(key: string, initialValue: T) {
+  const [state, setState] = useState<T>(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw != null ? (JSON.parse(raw) as T) : initialValue;
+    } catch {
+      return initialValue;
+    }
+  });
+
+  const update = useCallback(
+    (value: T | ((prev: T) => T)) => {
+      setState((prev) => {
+        const next = typeof value === "function" ? (value as (prev: T) => T)(prev) : value;
+        try {
+          localStorage.setItem(key, JSON.stringify(next));
+        } catch {
+          // 저장 공간이 없거나 접근이 막힌 환경에서는 조용히 무시합니다.
+        }
+        return next;
+      });
+    },
+    [key]
+  );
+
+  return [state, update] as const;
+}
+
 export function useScrollRestoration(pathname: string) {
   const store = usePageStateStore();
   const ref = useRef<HTMLDivElement>(null);
