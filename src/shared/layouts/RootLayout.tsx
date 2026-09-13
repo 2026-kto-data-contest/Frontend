@@ -5,6 +5,9 @@ import { useScrollRestoration } from "../lib/pageState";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
+// 실제 휴대폰 화면 너비는 대부분 390~430px 사이라, 이 폭까지는 "실제 기기"로 보고
+// 화면 전체를 그대로 채운다. 그보다 넓으면(데스크탑 등) 고정 크기 박스로 보여준다.
+const MOBILE_BREAKPOINT = 480;
 
 export const Layout = () => {
   const { pathname } = useLocation();
@@ -47,9 +50,10 @@ const Backdrop = styled.div`
   justify-content: center;
   align-items: center;
   min-height: 100vh;
+  min-height: 100dvh;
   background-color: #e5e5e5;
 
-  @media (max-width: ${PHONE_WIDTH}px) {
+  @media (max-width: ${MOBILE_BREAKPOINT}px) {
     align-items: stretch;
     background-color: #ffffff;
   }
@@ -65,17 +69,10 @@ const PhoneFrame = styled.div`
   position: relative;
   transform: translateZ(0);
 
-  @media (min-width: ${PHONE_WIDTH + 1}px) {
-    margin: 32px 0;
-    border-radius: 32px;
-    box-shadow:
-      0 0 0 1px rgba(0, 0, 0, 0.06),
-      0 24px 48px rgba(0, 0, 0, 0.18);
-  }
-
-  @media (max-width: ${PHONE_WIDTH}px) {
+  @media (max-width: ${MOBILE_BREAKPOINT}px) {
     width: 100%;
     height: 100vh;
+    height: 100dvh;
   }
 `;
 
