@@ -406,16 +406,30 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCourseMode, focusId]);
 
-  // 양조장 정보를 늦게(비동기로) 받아온 경우, 준비된 지도 중심을 다시 맞춰줍니다.
+  // 양조장 정보·코스 정거장이 (비동기로) 준비되면, 양조장과 코스 장소가 모두 한 화면에
+  // 들어오도록 지도 범위를 다시 맞춰줍니다. 정거장이 아직 없으면 양조장 중심으로만 맞춥니다.
   useEffect(() => {
     if (!isCourseMode || loadState !== "ready" || !focusWinery?.lat || !focusWinery?.lng) return;
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
-    if (kakao && map) {
+    if (!kakao || !map) return;
+
+    const validStops = courseStops.filter(
+      (stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude)
+    );
+
+    if (validStops.length === 0) {
       map.setCenter(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
       map.setLevel(FOCUS_LEVEL);
+      return;
     }
-  }, [isCourseMode, loadState, focusWinery]);
+
+    const bounds = new kakao.LatLngBounds();
+    bounds.extend(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
+    validStops.forEach((stop) => bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude)));
+    // 하단 시트가 지도 아래쪽 절반 가까이 덮으므로, 핀이 시트 뒤에 가려지지 않게 아래쪽 여백을 넉넉히 둡니다.
+    map.setBounds(bounds, 80, 40, 260, 40);
+  }, [isCourseMode, loadState, focusWinery, courseStops]);
 
   // 바텀시트 높이 계산의 기준이 되는 지도 영역 실측 높이를 추적합니다.
   useEffect(() => {
