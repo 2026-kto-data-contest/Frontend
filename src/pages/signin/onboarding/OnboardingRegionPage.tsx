@@ -9,7 +9,8 @@ import { OnboardingLayout } from "./OnboardingLayout";
 import { KoreaMap } from "./KoreaMap";
 import { finishOnboarding } from "./finishOnboarding";
 
-const REGION_OPTIONS = ["수도권", "충청", "강원", "경상", "전라", "제주", "전국"];
+export const REAL_REGIONS = ["수도권", "충청", "강원", "경상", "전라", "제주"];
+const REGION_OPTIONS = [...REAL_REGIONS, "전국"];
 
 export default function OnboardingRegionPage() {
   const navigate = useNavigate();
@@ -20,7 +21,14 @@ export default function OnboardingRegionPage() {
   const [isSkipping, setIsSkipping] = useState(false);
   const [skipError, setSkipError] = useState<string | null>(null);
 
+  const isNationwide = REAL_REGIONS.every((region) => selected.includes(region));
+
   const toggle = (region: string) => {
+    if (region === "전국") {
+      // 이미 전 지역이 선택돼 있으면 전체 해제, 아니면 전 지역을 선택 상태로 만듭니다.
+      setSelected(isNationwide ? [] : [...REAL_REGIONS]);
+      return;
+    }
     setSelected((prev) =>
       prev.includes(region) ? prev.filter((item) => item !== region) : [...prev, region]
     );
@@ -68,7 +76,7 @@ export default function OnboardingRegionPage() {
             <Chip
               key={region}
               label={region === "전국" ? "🇰🇷 전국" : region}
-              active={selected.includes(region)}
+              active={region === "전국" ? isNationwide : selected.includes(region)}
               onClick={() => toggle(region)}
             />
           ))}

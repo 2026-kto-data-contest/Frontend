@@ -8,6 +8,7 @@ import { OnboardingLayout } from "./OnboardingLayout";
 import { OptionRow } from "./OptionRow";
 import { finishOnboarding, finishOnboardingWithPreferences } from "./finishOnboarding";
 import { TASTE_OPTIONS } from "./OnboardingTastePage";
+import { REAL_REGIONS } from "./OnboardingRegionPage";
 import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import type { AlcoholLevel } from "../../../shared/api/api";
 import lightIcon from "../../../assets/icon/Light.svg";
@@ -18,6 +19,12 @@ const ALCOHOL_LEVEL_MAP: Record<string, AlcoholLevel> = {
   light: "LIGHT",
   medium: "MEDIUM",
   strong: "STRONG",
+};
+
+export const ALCOHOL_LEVEL_TO_ID: Record<AlcoholLevel, string> = {
+  LIGHT: "light",
+  MEDIUM: "medium",
+  STRONG: "strong",
 };
 
 export const STRENGTH_OPTIONS = [
@@ -58,7 +65,9 @@ export default function OnboardingStrengthPage() {
         )
       )
     );
-    const regions = selectedRegion.filter((region) => region !== "전국");
+    // "전국"으로 전 지역을 선택한 경우, 백엔드 규약대로 빈 배열을 보내 전국 취급이 되게 합니다.
+    const isNationwide = REAL_REGIONS.every((region) => selectedRegion.includes(region));
+    const regions = isNationwide ? [] : selectedRegion;
 
     const result = await finishOnboardingWithPreferences(auth, navigate, from, {
       // "어떤 맛이든 좋아요"만 고른 경우처럼 특정 주종이 없으면 전체 주종을 선호하는 것으로 보냅니다.
