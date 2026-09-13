@@ -29,7 +29,7 @@ import {
 } from "../../shared/api/searchApi";
 import type { SearchSuggestion, RecentSearch, RecentSearchInput } from "../../shared/api/searchApi";
 import { useAuth } from "../../shared/lib/authContext";
-import { usePersistentState } from "../../shared/lib/pageState";
+import { usePersistentState, useLocalStorageState } from "../../shared/lib/pageState";
 import { findMatchRange } from "../../shared/lib/hangul";
 
 type Phase = "idle" | "typing" | "loading" | "results" | "empty" | "error";
@@ -58,7 +58,7 @@ export default function SearchPage() {
   const [query, setQuery] = usePersistentState("search:query", "");
   const [submittedQuery, setSubmittedQuery] = usePersistentState("search:submittedQuery", "");
   const [phase, setPhase] = usePersistentState<Phase>("search:phase", "idle");
-  const [localRecent, setLocalRecent] = usePersistentState<string[]>(
+  const [localRecent, setLocalRecent] = useLocalStorageState<string[]>(
     "search:recentSearches",
     INITIAL_RECENT
   );

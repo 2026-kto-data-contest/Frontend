@@ -17,6 +17,7 @@ export interface KakaoLatLng {
 export interface KakaoLatLngBounds {
   getSouthWest(): KakaoLatLng;
   getNorthEast(): KakaoLatLng;
+  extend(latlng: KakaoLatLng): void;
 }
 
 export interface KakaoMapInstance {
@@ -24,6 +25,13 @@ export interface KakaoMapInstance {
   setLevel(level: number): void;
   getLevel(): number;
   getBounds(): KakaoLatLngBounds;
+  setBounds(
+    bounds: KakaoLatLngBounds,
+    paddingTop?: number,
+    paddingRight?: number,
+    paddingBottom?: number,
+    paddingLeft?: number
+  ): void;
   relayout(): void;
 }
 
@@ -38,6 +46,7 @@ export interface KakaoCustomOverlayInstance {
 export interface KakaoMapsNamespace {
   load(callback: () => void): void;
   LatLng: new (lat: number, lng: number) => KakaoLatLng;
+  LatLngBounds: new () => KakaoLatLngBounds;
   Map: new (
     container: HTMLElement,
     options: { center: KakaoLatLng; level?: number }

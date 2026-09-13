@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { Button } from "../../shared/components/Button";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
@@ -28,6 +27,11 @@ export default function MyPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (auth.isLoading || auth.isLoggedIn) return;
+    navigate("/login?from=%2Fmypage", { replace: true });
+  }, [auth.isLoading, auth.isLoggedIn, navigate]);
 
   useEffect(() => {
     if (!auth.isLoggedIn) return;
@@ -82,24 +86,10 @@ export default function MyPage() {
     }
   };
 
-  if (auth.isLoading) {
+  if (auth.isLoading || !auth.isLoggedIn) {
     return (
       <PageContainer>
         <Header>마이</Header>
-      </PageContainer>
-    );
-  }
-
-  if (!auth.isLoggedIn) {
-    return (
-      <PageContainer>
-        <Header>마이</Header>
-        <EmptyState>
-          <EmptyText>로그인하고 전통주로의 다양한 기능을 이용해보세요.</EmptyText>
-          <Button variant="primary" onClick={() => navigate("/login?from=%2Fmypage")}>
-            로그인
-          </Button>
-        </EmptyState>
       </PageContainer>
     );
   }
@@ -492,23 +482,6 @@ const AccountRow = styled.button`
   color: ${colors.gray[700]};
   cursor: pointer;
   text-align: left;
-`;
-
-const EmptyState = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 24px;
-`;
-
-const EmptyText = styled.p`
-  margin: 0;
-  font-size: 0.9375rem;
-  color: ${colors.gray[500]};
-  text-align: center;
 `;
 
 const ModalOverlay = styled.div`
