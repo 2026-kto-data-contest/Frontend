@@ -146,6 +146,18 @@ export async function saveOnboardingPreferences(
   return response.json();
 }
 
+/** 현재 회원에게 저장된 취향(주종/지역/도수)을 조회합니다. */
+export async function fetchOnboardingPreferences(
+  signal?: AbortSignal
+): Promise<OnboardingPreferencesData> {
+  const response = await fetch(`${API_BASE_URL}/api/v1/onboarding/preferences`, {
+    credentials: "include",
+    signal,
+  });
+  if (!response.ok) throw new ApiError(response.status, "취향 정보를 불러오지 못했습니다.");
+  return response.json();
+}
+
 /** 온보딩 완료 처리. 취향(주종/지역/도수) 저장은 saveOnboardingPreferences로 먼저 호출해야 합니다. */
 export async function completeOnboardingApi(): Promise<NextPathResponse> {
   const response = await apiWithCsrf("/api/v1/onboarding/complete", { method: "POST" });

@@ -5,10 +5,13 @@ import { Button } from "../../shared/components/Button";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
-import { usePersistentState } from "../../shared/lib/pageState";
-import { fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
-import { TASTE_OPTIONS } from "../signin/onboarding/OnboardingTastePage";
-import { STRENGTH_OPTIONS } from "../signin/onboarding/OnboardingStrengthPage";
+import {
+  fetchTerms,
+  fetchOnboardingPreferences,
+  updateOptionalAgreement,
+} from "../../shared/api/api";
+import type { OnboardingPreferencesData } from "../../shared/api/api";
+import { STRENGTH_OPTIONS, ALCOHOL_LEVEL_TO_ID } from "../signin/onboarding/OnboardingStrengthPage";
 import bannerBeforeIcon from "../../assets/icon/BannerBefore.svg";
 import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 
@@ -18,9 +21,7 @@ const TOAST_DURATION_MS = 3000;
 export default function MyPage() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const [selectedTaste] = usePersistentState<string[]>("onboarding:taste", []);
-  const [selectedRegion] = usePersistentState<string[]>("onboarding:region", []);
-  const [selectedStrength] = usePersistentState<string>("onboarding:strength", "");
+  const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
   const [locationRecommend, setLocationRecommend] = useState(false);
   const [marketing, setMarketing] = useState(false);
   const [savingCode, setSavingCode] = useState<string | null>(null);
@@ -37,6 +38,18 @@ export default function MyPage() {
       })
       .catch((error) => console.error("약관 동의 상태 조회 실패", error));
   }, [auth.isLoggedIn]);
+
+  useEffect(() => {
+    if (!auth.isLoggedIn || !auth.hasOnboarded) return;
+    const controller = new AbortController();
+    fetchOnboardingPreferences(controller.signal)
+      .then(setPreferences)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("취향 정보 조회 실패", error);
+      });
+    return () => controller.abort();
+  }, [auth.isLoggedIn, auth.hasOnboarded]);
 
   useEffect(() => {
     return () => {
@@ -91,13 +104,16 @@ export default function MyPage() {
     );
   }
 
-  const tasteLabel = TASTE_OPTIONS.filter(
-    (option) => selectedTaste.includes(option.id) && option.type
-  )
-    .map((option) => option.type)
-    .join("·");
-  const regionLabel = selectedRegion.join("·");
-  const strengthLabel = STRENGTH_OPTIONS.find((option) => option.id === selectedStrength)?.sub;
+  const tasteLabel = preferences?.liquorTypes.join("·") ?? "";
+  const regionLabel = preferences
+    ? preferences.regions.length === 0
+      ? "전국"
+      : preferences.regions.join("·")
+    : "";
+  const strengthLabel = preferences
+    ? STRENGTH_OPTIONS.find((option) => option.id === ALCOHOL_LEVEL_TO_ID[preferences.alcoholLevel])
+        ?.sub
+    : undefined;
 
   const handleLogout = async () => {
     setLogoutOpen(false);
