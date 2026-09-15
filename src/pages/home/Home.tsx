@@ -144,6 +144,20 @@ export default function Home() {
     }
   };
 
+  const handleGreetingActionClick = () => {
+    if (!auth.isLoggedIn) return;
+    if (!auth.termsAgreed) {
+      navigate("/terms");
+    } else if (!auth.hasOnboarded) {
+      navigate("/onboarding");
+    } else {
+      navigate("/mypage");
+    }
+  };
+
+  const [greetingFirstLine, ...greetingRestLines] = (home?.header.message ?? "").split("\n");
+  const greetingActionLine = greetingRestLines.join("\n");
+
   const typeFilteredWineries = (home?.liquorTypeBreweries.breweries ?? []).slice(
     0,
     TYPE_LIST_LIMIT
@@ -176,7 +190,15 @@ export default function Home() {
       {loadState === "success" && home && (
         <>
           <Greeting>
-            <GreetingTitle>{home.header.message}</GreetingTitle>
+            <GreetingTitle>{greetingFirstLine}</GreetingTitle>
+            {greetingActionLine &&
+              (auth.isLoggedIn ? (
+                <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
+                  {greetingActionLine}
+                </GreetingActionLine>
+              ) : (
+                <GreetingTitle>{greetingActionLine}</GreetingTitle>
+              ))}
           </Greeting>
 
           {bannerItems.length > 0 && (
@@ -385,6 +407,20 @@ const GreetingTitle = styled.p`
   font-weight: 700;
   color: ${colors.gray[900]};
   white-space: pre-line;
+`;
+
+const GreetingActionLine = styled.button`
+  margin: 0;
+  border: none;
+  padding: 0;
+  background: transparent;
+  font-size: 1.0625rem;
+  font-weight: 700;
+  color: ${colors.gray[900]};
+  text-decoration: underline;
+  text-align: left;
+  white-space: pre-line;
+  cursor: pointer;
 `;
 
 const BannerCard = styled.div`
