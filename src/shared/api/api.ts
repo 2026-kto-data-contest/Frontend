@@ -1,9 +1,14 @@
 // 배포된 백엔드(카카오 로그인·약관·온보딩) 연동용 API 클라이언트입니다.
-// 인증은 백엔드가 발급하는 HttpOnly 세션 쿠키(JT_SESSION)로 처리되며,
+// 인증은 백엔드가 발급하는 HttpOnly 세션 쿠키(JT_SESSION)로 처리됩니다.
 // 카카오 REST API 키/시크릿은 백엔드에만 있고 프론트에는 필요하지 않습니다.
-
-export const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || "https://jeontongjuro-backend.onrender.com";
+//
+// 프론트(vercel.app)와 백엔드(onrender.com)가 서로 다른 도메인이면 사파리 등이
+// 로그인 쿠키를 서드파티 쿠키로 보고 차단합니다. 그래서 백엔드 주소를 직접 호출하지
+// 않고, 같은 오리진의 /api 경로로 호출한 뒤 Vercel(vercel.json)·로컬 개발 서버
+// (vite.config.ts의 proxy)가 실제 백엔드로 그대로 전달(프록시)하게 합니다.
+// 이렇게 하면 브라우저 입장에서는 쿠키를 준 곳과 요청을 보내는 곳이 항상 같은
+// 오리진이라 서드파티 쿠키 차단의 영향을 받지 않습니다.
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 export interface Member {
   id: number;
