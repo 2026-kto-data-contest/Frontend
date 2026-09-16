@@ -10,20 +10,43 @@ import { ErrorState } from "../../shared/components/ErrorState";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { WineryCard } from "../../shared/components/WineryCard";
 import { PhotoCard } from "../../shared/components/PhotoCard";
+import { DotsLoader } from "../../shared/components/DotsLoader";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState } from "../../shared/lib/pageState";
-import { ApiError } from "../../shared/api/api";
+import { ApiError, fetchOnboardingPreferences } from "../../shared/api/api";
+import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
 import type { HomeResponse } from "../../shared/api/breweriesApi";
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
+import { TASTE_OPTIONS } from "../signin/onboarding/OnboardingTastePage";
 
 const ROTATE_INTERVAL_MS = 3000;
 const TYPE_LIST_LIMIT = 3;
 const DEFAULT_TYPE_FILTER = "탁주";
 const DEFAULT_REGION_FILTER = "수도권";
+const GUEST_GREETING_TITLE = "반가워요!";
+const GUEST_GREETING_SUBTITLE = "내 취향 양조장 여행, 전통주로입니다";
+const ONBOARDING_PROMPT_LABEL = "나에게 맞는 양조장";
+const ONBOARDING_PROMPT_SUFFIX = "을 찾아볼까요?";
+const PREFERENCE_SUFFIX = "를 선호하시네요!";
 
 type LoadState = "loading" | "success" | "network-error" | "server-error";
+
+// "깔끔함" → "깔끔한"처럼, 저장된 취향 태그를 문장에 들어가는 관형형으로 바꿉니다.
+function tagToAdjective(tag: string): string {
+  if (tag.endsWith("함")) return `${tag.slice(0, -1)}한`;
+  if (tag.endsWith("움")) return `${tag.slice(0, -1)}운`;
+  return tag;
+}
+
+function buildPreferenceLine(preferences: OnboardingPreferencesData): string {
+  const regionLabel = preferences.regions.length === 0 ? "전국" : preferences.regions.join("·");
+  const primaryType = preferences.liquorTypes[0];
+  const tasteOption = TASTE_OPTIONS.find((option) => option.type === primaryType);
+  const adjective = tasteOption?.tag ? `${tagToAdjective(tasteOption.tag)} ` : "";
+  return `${regionLabel}의 ${adjective}${primaryType ?? "전통주"}${PREFERENCE_SUFFIX}`;
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -46,7 +69,10 @@ export default function Home() {
   const pointerStartX = useRef<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [filterErrorToast, setFilterErrorToast] = useState<string | null>(null);
-  const [isRefetching, setIsRefetching] = useState(false);
+  const [isTypeRefetching, setIsTypeRefetching] = useState(false);
+  const [isRegionRefetching, setIsRegionRefetching] = useState(false);
+  const prevFiltersRef = useRef({ typeFilter, regionFilter });
+  const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
 
   useEffect(() => {
     if (forcedError === "network" || forcedError === "server") {
@@ -64,14 +90,26 @@ export default function Home() {
     // 덮지 않고 기존 내용을 보여준 채로 조용히 해당 데이터만 새로 받아옵니다.
     // 다만 탭이 등록됐다는 걸 바로 보여주기 위해 목록 영역만 즉시(동기적으로) 흐리게 표시합니다.
     const isFirstLoad = !home;
-    if (isFirstLoad) setLoadState("loading");
-    else setIsRefetching(true);
+    const prevFilters = prevFiltersRef.current;
+    const typeChanged = prevFilters.typeFilter !== typeFilter;
+    const regionChanged = prevFilters.regionFilter !== regionFilter;
+    prevFiltersRef.current = { typeFilter, regionFilter };
+
+    if (isFirstLoad) {
+      setLoadState("loading");
+    } else {
+      // 바뀐 칩이 속한 섹션만 로딩 표시를 띄웁니다. 예를 들어 주종별 칩을 눌렀을 때
+      // 지역별 양조장 섹션까지 같이 로딩 처리되면 안 됩니다.
+      if (typeChanged) setIsTypeRefetching(true);
+      if (regionChanged) setIsRegionRefetching(true);
+    }
 
     fetchHome(regionFilter, typeFilter, controller.signal)
       .then((response) => {
         setHome(response);
         setLoadState("success");
-        setIsRefetching(false);
+        setIsTypeRefetching(false);
+        setIsRegionRefetching(false);
       })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -83,7 +121,8 @@ export default function Home() {
         } else {
           setFilterErrorToast("필터를 적용하지 못했어요. 다시 시도해주세요.");
         }
-        setIsRefetching(false);
+        setIsTypeRefetching(false);
+        setIsRegionRefetching(false);
       });
     return () => {
       controller.abort();
@@ -96,6 +135,21 @@ export default function Home() {
     const timer = setTimeout(() => setFilterErrorToast(null), 3000);
     return () => clearTimeout(timer);
   }, [filterErrorToast]);
+
+  useEffect(() => {
+    if (!auth.isLoggedIn || !auth.hasOnboarded) {
+      setPreferences(null);
+      return;
+    }
+    const controller = new AbortController();
+    fetchOnboardingPreferences(controller.signal)
+      .then(setPreferences)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("취향 정보 조회 실패", error);
+      });
+    return () => controller.abort();
+  }, [auth.isLoggedIn, auth.hasOnboarded]);
 
   const goToBanner = (index: number) => {
     const length = bannerItems.length;
@@ -155,8 +209,8 @@ export default function Home() {
     }
   };
 
-  const [greetingFirstLine, ...greetingRestLines] = (home?.header.message ?? "").split("\n");
-  const greetingActionLine = greetingRestLines.join("\n");
+  const greetingTitle = auth.isLoggedIn ? `${auth.nickname}님` : GUEST_GREETING_TITLE;
+  const preferenceLine = preferences ? buildPreferenceLine(preferences) : null;
 
   const typeFilteredWineries = (home?.liquorTypeBreweries.breweries ?? []).slice(
     0,
@@ -190,15 +244,22 @@ export default function Home() {
       {loadState === "success" && home && (
         <>
           <Greeting>
-            <GreetingTitle>{greetingFirstLine}</GreetingTitle>
-            {greetingActionLine &&
-              (auth.isLoggedIn ? (
+            <GreetingTitle>{greetingTitle}</GreetingTitle>
+            {!auth.isLoggedIn ? (
+              <GreetingTitle>{GUEST_GREETING_SUBTITLE}</GreetingTitle>
+            ) : !auth.hasOnboarded ? (
+              <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
+                <Underline>{ONBOARDING_PROMPT_LABEL}</Underline>
+                {ONBOARDING_PROMPT_SUFFIX}
+              </GreetingActionLine>
+            ) : (
+              preferenceLine && (
                 <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
-                  {greetingActionLine}
+                  <Underline>{preferenceLine.slice(0, -PREFERENCE_SUFFIX.length)}</Underline>
+                  {PREFERENCE_SUFFIX}
                 </GreetingActionLine>
-              ) : (
-                <GreetingTitle>{greetingActionLine}</GreetingTitle>
-              ))}
+              )
+            )}
           </Greeting>
 
           {bannerItems.length > 0 && (
@@ -264,7 +325,7 @@ export default function Home() {
               </MoreLink>
             </SectionHeader>
             <FilterRow>
-              {ALL_TYPE_FILTERS.filter((filter) => filter !== "기타").map((filter) => (
+              {ALL_TYPE_FILTERS.map((filter) => (
                 <Chip
                   key={filter}
                   label={filter}
@@ -273,15 +334,18 @@ export default function Home() {
                 />
               ))}
             </FilterRow>
-            {typeFilteredWineries.length === 0 ? (
+            {isTypeRefetching ? (
+              <DotsLoader />
+            ) : typeFilteredWineries.length === 0 ? (
               <EmptyNotice>아직 등록된 양조장이 없어요</EmptyNotice>
             ) : (
-              <WineryList $dimmed={isRefetching}>
+              <WineryList>
                 {typeFilteredWineries.map((winery) => (
                   <WineryCard
                     key={winery.breweryId}
                     winery={breweryToCardData(winery)}
                     onClick={() => navigate(`/winery/${winery.breweryId}`)}
+                    showBadges={false}
                   />
                 ))}
               </WineryList>
@@ -313,10 +377,12 @@ export default function Home() {
                 />
               ))}
             </FilterRow>
-            {regionFilteredWineries.length === 0 ? (
+            {isRegionRefetching ? (
+              <DotsLoader />
+            ) : regionFilteredWineries.length === 0 ? (
               <EmptyNotice>아직 등록된 양조장이 없어요</EmptyNotice>
             ) : (
-              <ScrollRow $dimmed={isRefetching}>
+              <ScrollRow>
                 {regionFilteredWineries.map((winery) => (
                   <PhotoCard
                     key={winery.breweryId}
@@ -361,26 +427,33 @@ export default function Home() {
 
 const HomeSkeleton = () => (
   <SkeletonWrapper>
-    <Skeleton $height="16px" $width="60%" />
-    <Skeleton $height="13px" $width="42%" />
-    <Skeleton $height="220px" $radius="16px" />
-    <Skeleton $height="16px" $width="30%" />
-    <SkeletonRow>
-      <Skeleton $height="90px" $width="90px" $radius="12px" />
-      <SkeletonCol>
-        <Skeleton $height="12px" $width="90%" />
-        <Skeleton $height="12px" $width="70%" />
-        <Skeleton $height="12px" $width="50%" />
-      </SkeletonCol>
-    </SkeletonRow>
-    <SkeletonRow>
-      <Skeleton $height="90px" $width="90px" $radius="12px" />
-      <SkeletonCol>
-        <Skeleton $height="12px" $width="90%" />
-        <Skeleton $height="12px" $width="70%" />
-        <Skeleton $height="12px" $width="50%" />
-      </SkeletonCol>
-    </SkeletonRow>
+    <SkeletonGreeting>
+      <Skeleton $height="20px" $width="70%" />
+      <Skeleton $height="20px" $width="50%" />
+    </SkeletonGreeting>
+    <Skeleton $height="400px" $radius="24px" />
+    <SkeletonSectionHeader>
+      <Skeleton $height="20px" $width="110px" />
+      <Skeleton $height="16px" $width="36px" />
+    </SkeletonSectionHeader>
+    <SkeletonChipRow>
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+      <Skeleton $height="29px" $width="52px" $radius="9999px" />
+      <Skeleton $height="29px" $width="52px" $radius="9999px" />
+    </SkeletonChipRow>
+    {[0, 1, 2].map((i) => (
+      <SkeletonRow key={i}>
+        <Skeleton $height="136px" $width="100px" $radius="8px" />
+        <SkeletonCol>
+          <Skeleton $height="12px" $width="40%" />
+          <Skeleton $height="16px" $width="80%" />
+          <Skeleton $height="14px" $width="90%" />
+          <Skeleton $height="14px" $width="60%" />
+        </SkeletonCol>
+      </SkeletonRow>
+    ))}
   </SkeletonWrapper>
 );
 
@@ -403,7 +476,8 @@ const Greeting = styled.div`
 
 const GreetingTitle = styled.p`
   margin: 0;
-  font-size: 1.0625rem;
+  font-family: "LINE Seed Sans KR";
+  font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
   white-space: pre-line;
@@ -414,13 +488,17 @@ const GreetingActionLine = styled.button`
   border: none;
   padding: 0;
   background: transparent;
-  font-size: 1.0625rem;
+  font-family: "LINE Seed Sans KR";
+  font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
-  text-decoration: underline;
   text-align: left;
   white-space: pre-line;
   cursor: pointer;
+`;
+
+const Underline = styled.span`
+  text-decoration: underline;
 `;
 
 const BannerCard = styled.div`
@@ -448,7 +526,7 @@ const BannerStackItem = styled.button<{ $offset: number }>`
   background: transparent;
   text-align: left;
   cursor: pointer;
-  border-radius: 16px;
+  border-radius: 24px;
   overflow: hidden;
   z-index: ${(props) => 3 - props.$offset};
   opacity: ${(props) => (props.$offset === 0 ? 1 : props.$offset === 1 ? 0.85 : 0.55)};
@@ -467,22 +545,22 @@ const BannerImage = styled.div`
 
 const BannerText = styled.div`
   position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 28px;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
   color: ${colors.white};
 `;
 
 const BannerRegion = styled.p`
   margin: 0 0 4px;
-  font-size: 0.75rem;
-  opacity: 0.85;
+  font-size: 1rem;
+  font-weight: 500;
 `;
 
 const BannerTitle = styled.p`
   margin: 0;
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.4;
 `;
 
@@ -517,7 +595,7 @@ const SectionHeader = styled.div`
 
 const SectionTitle = styled.h2`
   margin: 0;
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
 `;
@@ -526,7 +604,7 @@ const MoreLink = styled.button`
   border: none;
   background: transparent;
   font-size: 0.8125rem;
-  color: ${colors.gray[400]};
+  color: ${colors.gray[500]};
   cursor: pointer;
 `;
 
@@ -550,12 +628,10 @@ const EmptyNotice = styled.p`
   color: ${colors.gray[400]};
 `;
 
-const WineryList = styled.div<{ $dimmed?: boolean }>`
+const WineryList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  opacity: ${(props) => (props.$dimmed ? 0.4 : 1)};
-  transition: opacity 0.15s ease-in-out;
 `;
 
 const PromoBanner = styled.button`
@@ -579,13 +655,13 @@ const PromoBanner = styled.button`
 const PromoTextArea = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
 `;
 
 const PromoTitle = styled.p`
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 1rem;
   font-weight: 700;
   color: ${colors.gray[900]};
   line-height: 1.4;
@@ -594,8 +670,8 @@ const PromoTitle = styled.p`
 
 const PromoSubtitle = styled.p`
   margin: 0;
-  font-size: 0.8125rem;
-  color: ${colors.gray[500]};
+  font-size: 0.6875rem;
+  color: ${colors.gray[300]};
   line-height: 1.4;
 `;
 
@@ -605,7 +681,7 @@ const PromoIcon = styled.img`
   height: 68px;
 `;
 
-const ScrollRow = styled.div<{ $dimmed?: boolean }>`
+const ScrollRow = styled.div`
   display: flex;
   gap: 10px;
   overflow-x: auto;
@@ -615,8 +691,6 @@ const ScrollRow = styled.div<{ $dimmed?: boolean }>`
   width: calc(100% + 32px);
   margin-left: -16px;
   padding: 0 16px;
-  opacity: ${(props) => (props.$dimmed ? 0.4 : 1)};
-  transition: opacity 0.15s ease-in-out;
 
   &::-webkit-scrollbar {
     display: none;
@@ -632,6 +706,23 @@ const SkeletonWrapper = styled.div`
 const SkeletonRow = styled.div`
   display: flex;
   gap: 12px;
+`;
+
+const SkeletonGreeting = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const SkeletonSectionHeader = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const SkeletonChipRow = styled.div`
+  display: flex;
+  gap: 8px;
 `;
 
 const SkeletonCol = styled.div`
