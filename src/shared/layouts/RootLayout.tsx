@@ -80,6 +80,7 @@ const ScrollArea = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
 `;

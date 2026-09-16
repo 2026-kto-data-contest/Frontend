@@ -67,7 +67,7 @@ export const ALL_REGION_FILTERS = [
   "울산",
   "제주",
 ] as const;
-export const ALL_STRENGTH_FILTERS = ["7도 미만", "7도 ~ 20도", "20도 이상"] as const;
+export const ALL_STRENGTH_FILTERS = ["14도 이하", "15도 ~ 29도", "30도 이상"] as const;
 export const ALL_VISIT_CONDITION_FILTERS = ["상시 방문", "예약 방문"] as const;
 export const ALL_HISTORY_FILTERS = [
   "수상이력",

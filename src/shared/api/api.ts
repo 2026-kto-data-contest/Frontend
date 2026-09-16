@@ -10,6 +10,17 @@
 // 오리진이라 서드파티 쿠키 차단의 영향을 받지 않습니다.
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
+// 추천 코스 카드 이미지처럼 백엔드가 "/recommended-courses/BRW-001.png"같은 상대 경로로
+// 내려주는 정적 파일용입니다. /api 프록시 대상이 아니라서 이 상대 경로는 프론트 자기
+// 오리진에서 그대로 찾으면 404가 나고, 쿠키가 필요 없는 공개 정적 파일이라 API_BASE_URL과
+// 달리 프록시 없이 백엔드 주소를 직접 붙여도 문제 없습니다.
+const IMAGE_ORIGIN = "https://jeontongjuro-backend.onrender.com";
+
+export function resolveImageUrl(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  return url.startsWith("http") ? url : `${IMAGE_ORIGIN}${url}`;
+}
+
 export interface Member {
   id: number;
   nickname: string;

@@ -26,8 +26,10 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
     <Wrapper $large={large} $fluid={fluid} onClick={onClick} $clickable={!!onClick}>
       <Thumb $large={large} src={photoUrl ?? noneImage} alt="" />
       <Body $large={large}>
-        <Name>{name}</Name>
-        <Region>{region}</Region>
+        <TitleRegionGroup $large={large}>
+          <Name>{name}</Name>
+          <Region>{region}</Region>
+        </TitleRegionGroup>
         {description && <Description>{description}</Description>}
       </Body>
     </Wrapper>
@@ -44,6 +46,8 @@ const Wrapper = styled.div<{ $large: boolean; $fluid: boolean; $clickable: boole
     css`
       border-radius: 8px;
       overflow: hidden;
+      background-color: #ffffff;
+      border: 1px solid ${colors.gray[100]};
     `}
 
   ${(props) =>
@@ -61,8 +65,14 @@ const Thumb = styled.img<{ $large: boolean }>`
 const Body = styled.div<{ $large: boolean }>`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: ${(props) => (props.$large ? "8px" : "4px")};
   ${(props) => (props.$large ? "padding: 16px;" : "padding-top: 8px;")}
+`;
+
+const TitleRegionGroup = styled.div<{ $large: boolean }>`
+  display: flex;
+  flex-direction: column;
+  gap: ${(props) => (props.$large ? "0" : "4px")};
 `;
 
 const Name = styled.p`

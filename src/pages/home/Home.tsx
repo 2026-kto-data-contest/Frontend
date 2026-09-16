@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
-import styled from "styled-components";
+import styled, { css, keyframes } from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Header } from "../../shared/components/Header";
-import miniBannerIcon from "../../assets/icon/MiniBanner.svg";
+import bannerLoginIcon from "../../assets/img/BannerLogin.png";
+import bannerOnboardedIcon from "../../assets/img/BannerOnboarded.png";
 import { Chip } from "../../shared/components/Chip";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { ErrorState } from "../../shared/components/ErrorState";
@@ -14,14 +15,18 @@ import { DotsLoader } from "../../shared/components/DotsLoader";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState } from "../../shared/lib/pageState";
-import { ApiError, fetchOnboardingPreferences } from "../../shared/api/api";
+import { ApiError, fetchOnboardingPreferences, resolveImageUrl } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
-import type { HomeResponse } from "../../shared/api/breweriesApi";
+import type { HomeResponse, RecommendedCourseCard } from "../../shared/api/breweriesApi";
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
 import { TASTE_OPTIONS } from "../signin/onboarding/OnboardingTastePage";
 
 const ROTATE_INTERVAL_MS = 3000;
+const BANNER_EXIT_DURATION_MS = 700;
+// 스택 카드 이동, 나가는 카드 애니메이션이 서로 다른 시간·이징으로 움직이면 중간에 멈칫하는 것처럼
+// 보여서, 두 애니메이션 모두 같은 지속시간·이징을 씁니다.
+const BANNER_EASE = "cubic-bezier(0.4, 0, 0.2, 1)";
 const TYPE_LIST_LIMIT = 3;
 const DEFAULT_TYPE_FILTER = "탁주";
 const DEFAULT_REGION_FILTER = "수도권";
@@ -48,6 +53,31 @@ function buildPreferenceLine(preferences: OnboardingPreferencesData): string {
   return `${regionLabel}의 ${adjective}${primaryType ?? "전통주"}${PREFERENCE_SUFFIX}`;
 }
 
+// 메인 배너 카드(맨 앞 카드든 뒤에 겹친 카드든) 안의 사진+텍스트는 항상 같은 모양입니다.
+function BannerCardVisual({ item }: { item: RecommendedCourseCard }) {
+  return (
+    <>
+      <BannerImage
+        style={
+          item.imageUrl
+            ? {
+                backgroundImage: `url(${resolveImageUrl(item.imageUrl)})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
+            : undefined
+        }
+      />
+      <BannerText>
+        {item.regionLabel && <BannerRegion>{item.regionLabel}</BannerRegion>}
+        <BannerTitle>
+          {item.title} <NoWrap>- 코스 이동</NoWrap>
+        </BannerTitle>
+      </BannerText>
+    </>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -67,6 +97,13 @@ export default function Home() {
   const bannerItems = home?.recommendedCourses ?? [];
   const [activeBanner, setActiveBanner] = usePersistentState("home:activeBanner", 0);
   const pointerStartX = useRef<number | null>(null);
+  const bannerDraggedRef = useRef(false);
+  // 넘어가기 직전까지 맨 앞이었던 카드가 회전+페이드되며 빠져나가는 연출(Figma "Card/Recommand-1"
+  // 모션)을 위한 상태입니다. 새 엘리먼트를 따로 만들지 않고, 그 카드 자신(같은 key)을 계속
+  // 그리면서 애니메이션만 얹기 때문에 화면에 이미 그려져 있던 사진을 그대로 씁니다
+  // (새로 만든 엘리먼트에 사진을 다시 그리면 그 순간 한 번 더 로딩되는 것처럼 깜빡였습니다).
+  const [exitingCourseId, setExitingCourseId] = useState<string | null>(null);
+  const prevActiveBannerRef = useRef(activeBanner);
   const [reloadKey, setReloadKey] = useState(0);
   const [filterErrorToast, setFilterErrorToast] = useState<string | null>(null);
   const [isTypeRefetching, setIsTypeRefetching] = useState(false);
@@ -157,6 +194,28 @@ export default function Home() {
     setActiveBanner(((index % length) + length) % length);
   };
 
+  // 카드가 스택에서 자기 차례가 되는 순간 사진을 처음 디코딩하면 그 프레임에서만 버벅여서,
+  // 배너 목록을 받자마자 미리 브라우저 캐시에 올려둡니다.
+  useEffect(() => {
+    bannerItems.forEach((item) => {
+      if (!item.imageUrl) return;
+      const img = new Image();
+      img.src = resolveImageUrl(item.imageUrl) ?? "";
+    });
+  }, [bannerItems]);
+
+  useEffect(() => {
+    const prevIndex = prevActiveBannerRef.current;
+    prevActiveBannerRef.current = activeBanner;
+    if (prevIndex === activeBanner || bannerItems.length === 0) return;
+    const outgoingItem = bannerItems[prevIndex % bannerItems.length];
+    if (!outgoingItem) return;
+    setExitingCourseId(outgoingItem.courseId);
+    const timer = setTimeout(() => setExitingCourseId(null), BANNER_EXIT_DURATION_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBanner]);
+
   useEffect(() => {
     if (bannerItems.length === 0) return;
     const timer = setInterval(() => {
@@ -168,6 +227,13 @@ export default function Home() {
 
   const handleBannerPointerDown = (e: ReactPointerEvent) => {
     pointerStartX.current = e.clientX;
+    bannerDraggedRef.current = false;
+  };
+
+  const handleBannerPointerMove = (e: ReactPointerEvent) => {
+    if (pointerStartX.current === null) return;
+    // 살짝만 움직인 건 드래그로 치지 않습니다(탭 흔들림 정도는 카드 클릭이 그대로 동작해야 함).
+    if (Math.abs(e.clientX - pointerStartX.current) > 10) bannerDraggedRef.current = true;
   };
 
   const handleBannerPointerUp = (e: ReactPointerEvent) => {
@@ -211,6 +277,14 @@ export default function Home() {
 
   const greetingTitle = auth.isLoggedIn ? `${auth.nickname}님` : GUEST_GREETING_TITLE;
   const preferenceLine = preferences ? buildPreferenceLine(preferences) : null;
+  // Figma상 "로그인 전"과 "로그인 후·온보딩 전" 배너는 같은 스타일(주황 배경+서브타이틀+사진)이고,
+  // 온보딩을 마친 뒤(DEFAULT/PERSONALIZED)에만 다른(초록빛 배경, 서브타이틀 없음) 배너를 씁니다.
+  // 문구도 백엔드 banner.message가 아니라 Figma에 있는 문구를 그대로 씁니다.
+  const isPromptBanner =
+    home?.banner.type === "ONBOARDING" || home?.banner.type === "LOGIN";
+  const promoTitle = isPromptBanner
+    ? "내 취향에 딱 맞는\n양조장 체험이 궁금하다면?"
+    : "전국의 체험 가능한 양조장을 \n한곳에서 만나보세요";
 
   const typeFilteredWineries = (home?.liquorTypeBreweries.breweries ?? []).slice(
     0,
@@ -267,38 +341,32 @@ export default function Home() {
               <BannerCard>
                 <BannerStack
                   onPointerDown={handleBannerPointerDown}
+                  onPointerMove={handleBannerPointerMove}
                   onPointerUp={handleBannerPointerUp}
                 >
                   {bannerItems.map((item, index) => {
                     // 활성 카드 기준 몇 번째 뒤에 있는 카드인지 (0=맨 앞, 1=바로 뒤, 2=그 뒤...). 3장 이상 뒤는 안 그립니다.
                     const offset = (index - activeBanner + bannerItems.length) % bannerItems.length;
-                    if (offset > 2) return null;
+                    const isExiting = item.courseId === exitingCourseId;
+                    if (offset > 2 && !isExiting) return null;
                     return (
                       <BannerStackItem
                         key={item.courseId}
                         type="button"
-                        $offset={offset}
-                        onClick={() =>
-                          offset === 0 ? navigate(`/course/${item.courseId}`) : goToBanner(index)
-                        }
-                      >
-                        <BannerImage
-                          style={
-                            item.imageUrl
-                              ? {
-                                  backgroundImage: `url(${item.imageUrl})`,
-                                  backgroundSize: "cover",
-                                  backgroundPosition: "center",
-                                }
-                              : undefined
+                        // 방금 맨 앞에서 빠져나가는 카드는 새 offset으로 옮겨가지 않고 맨 앞 자리에
+                        // 그대로 고정해둔 채로, 회전+슬라이드+페이드 애니메이션만 그 위에 얹습니다.
+                        $offset={isExiting ? 0 : offset}
+                        $exiting={isExiting}
+                        onClick={() => {
+                          // 스와이프로 카드를 넘긴 직후에는 클릭(코스 상세 이동)이 같이 발생하지 않게 막습니다.
+                          if (bannerDraggedRef.current) {
+                            bannerDraggedRef.current = false;
+                            return;
                           }
-                        />
-                        {offset === 0 && (
-                          <BannerText>
-                            {item.regionLabel && <BannerRegion>{item.regionLabel}</BannerRegion>}
-                            <BannerTitle>{item.title}</BannerTitle>
-                          </BannerText>
-                        )}
+                          offset === 0 ? navigate(`/course/${item.courseId}`) : goToBanner(index);
+                        }}
+                      >
+                        <BannerCardVisual item={item} />
                       </BannerStackItem>
                     );
                   })}
@@ -352,12 +420,18 @@ export default function Home() {
             )}
           </Section>
 
-          <PromoBanner type="button" onClick={handlePreferenceBannerClick}>
+          <PromoBanner type="button" $prompt={isPromptBanner} onClick={handlePreferenceBannerClick}>
             <PromoTextArea>
-              <PromoTitle>{home.banner.message}</PromoTitle>
-              <PromoSubtitle>1분이면 맞춤형 양조장, 여행 코스를 추천해드려요</PromoSubtitle>
+              <PromoTitle>{promoTitle}</PromoTitle>
+              {isPromptBanner && (
+                <PromoSubtitle>1분이면 맞춤형 양조장, 여행 코스를 추천해드려요</PromoSubtitle>
+              )}
             </PromoTextArea>
-            <PromoIcon src={miniBannerIcon} alt="" />
+            <PromoIcon
+              src={isPromptBanner ? bannerLoginIcon : bannerOnboardedIcon}
+              alt=""
+              $prompt={isPromptBanner}
+            />
           </PromoBanner>
 
           <Section>
@@ -403,7 +477,7 @@ export default function Home() {
                 더보기
               </MoreLink>
             </SectionHeader>
-            <ScrollRow>
+            <ScrollRow $large>
               {recommendedWineries.map((winery) => (
                 <PhotoCard
                   key={winery.breweryId}
@@ -505,6 +579,10 @@ const BannerCard = styled.div`
   position: relative;
   height: 400px;
   margin-bottom: 10px;
+  /* 카드 위치·크기 애니메이션이 매 프레임 페이지 전체 레이아웃을 다시 계산하게 만들면
+     아래 콘텐츠가 많을수록 버벅여서(어떤 카드는 괜찮고 어떤 카드는 덜커덩거림), 이 영역
+     안에서만 레이아웃이 다시 계산되도록 가둬둡니다. */
+  contain: layout paint;
 `;
 
 const BannerStack = styled.div`
@@ -512,14 +590,39 @@ const BannerStack = styled.div`
   width: 100%;
   height: 100%;
   touch-action: pan-y;
+  /* BannerText가 카드 자기 자신(앞/중간/뒤마다 폭이 다름)이 아니라 이 폭을 기준으로
+     줄바꿈 너비를 잡게 하기 위한 기준점입니다. */
+  container-type: inline-size;
 `;
 
-const BannerStackItem = styled.button<{ $offset: number }>`
+// Figma "Card/Recommand Animation" 컴포넌트의 스택 카드 3장(맨 앞/중간/뒤) 실측 inset입니다.
+// 351x400 기준 카드 좌표(맨 앞 0,0~335,400 / 중간 43,20~343,380 / 뒤 83,40~351,360)를
+// top/right/bottom/left inset으로 그대로 옮긴 것입니다.
+const BANNER_STACK_INSETS = [
+  { top: 0, right: 16, bottom: 0, left: 0 },
+  { top: 20, right: 8, bottom: 20, left: 43 },
+  { top: 40, right: 0, bottom: 40, left: 83 },
+] as const;
+
+// Figma "Card/Recommand-1" 모션(맨 앞 카드가 넘어갈 때 빠져나가는 효과)입니다.
+// 회전과 이동을 동시에 진행해서 비스듬히 날아가듯 왼쪽 밖으로 빠지며 옅어집니다.
+const bannerExitAnimation = keyframes`
+  0% {
+    transform: translateX(0) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-100%) rotate(-15deg);
+    opacity: 0;
+  }
+`;
+
+const BannerStackItem = styled.button<{ $offset: number; $exiting: boolean }>`
   position: absolute;
-  top: ${(props) => props.$offset * 6}px;
-  bottom: ${(props) => props.$offset * 6}px;
-  left: 0;
-  right: ${(props) => (2 - props.$offset) * 12}px;
+  top: ${(props) => BANNER_STACK_INSETS[props.$offset].top}px;
+  right: ${(props) => BANNER_STACK_INSETS[props.$offset].right}px;
+  bottom: ${(props) => BANNER_STACK_INSETS[props.$offset].bottom}px;
+  left: ${(props) => BANNER_STACK_INSETS[props.$offset].left}px;
   border: none;
   padding: 0;
   margin: 0;
@@ -528,26 +631,44 @@ const BannerStackItem = styled.button<{ $offset: number }>`
   cursor: pointer;
   border-radius: 24px;
   overflow: hidden;
-  z-index: ${(props) => 3 - props.$offset};
-  opacity: ${(props) => (props.$offset === 0 ? 1 : props.$offset === 1 ? 0.85 : 0.55)};
+  z-index: ${(props) => (props.$exiting ? 4 : 3 - props.$offset)};
+  pointer-events: ${(props) => (props.$exiting ? "none" : "auto")};
+  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
+  will-change: top, right, bottom, left, transform, opacity;
   transition:
-    top 0.45s ease,
-    bottom 0.45s ease,
-    right 0.45s ease,
-    opacity 0.45s ease;
+    top ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE},
+    right ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE},
+    bottom ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE},
+    left ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE};
+  ${(props) =>
+    props.$exiting &&
+    css`
+      animation: ${bannerExitAnimation} ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE} forwards;
+    `}
 `;
 
 const BannerImage = styled.div`
+  position: relative;
   width: 100%;
   height: 100%;
   background: linear-gradient(160deg, #7a5c3e 0%, #3a2a1c 60%, #1c140c 100%);
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0) 50%, rgba(0, 0, 0, 0.5) 100%);
+  }
 `;
 
 const BannerText = styled.div`
   position: absolute;
   left: 24px;
-  right: 24px;
   bottom: 24px;
+  /* 카드마다 폭이 달라도(앞 카드 기준 폭으로 고정) 줄바꿈이 똑같이 유지되도록
+     자기 카드가 아니라 BannerStack 전체 폭을 기준으로 너비를 계산합니다.
+     그래야 커졌다 작아졌다 할 때 텍스트가 한 줄↔두 줄로 갑자기 바뀌지 않습니다. */
+  width: calc(100cqw - 64px);
   color: ${colors.white};
 `;
 
@@ -555,6 +676,7 @@ const BannerRegion = styled.p`
   margin: 0 0 4px;
   font-size: 1rem;
   font-weight: 500;
+  opacity: 0.7;
 `;
 
 const BannerTitle = styled.p`
@@ -562,6 +684,14 @@ const BannerTitle = styled.p`
   font-size: 1.25rem;
   font-weight: 600;
   line-height: 1.4;
+  /* 단어 중간(예: "화이트와인" → "화이"/"트와인")이 아니라 단어(공백) 단위로만 줄바꿈합니다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
+`;
+
+// "코스 이동"은 띄어쓰기가 있어도 줄바꿈되면 안 되는 한 단어 취급입니다.
+const NoWrap = styled.span`
+  white-space: nowrap;
 `;
 
 const Dots = styled.div`
@@ -634,7 +764,7 @@ const WineryList = styled.div`
   gap: 20px;
 `;
 
-const PromoBanner = styled.button`
+const PromoBanner = styled.button<{ $prompt: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -644,9 +774,9 @@ const PromoBanner = styled.button`
   margin-left: -16px;
   margin-right: -16px;
   border: none;
-  padding: 24px 20px;
+  padding: 20px 16px;
   border-radius: 0;
-  background-color: #fff5e6;
+  background-color: ${(props) => (props.$prompt ? colors.primary[50] : "#f3f4ec")};
   margin-bottom: 24px;
   cursor: pointer;
   text-align: left;
@@ -675,15 +805,16 @@ const PromoSubtitle = styled.p`
   line-height: 1.4;
 `;
 
-const PromoIcon = styled.img`
+const PromoIcon = styled.img<{ $prompt: boolean }>`
   flex-shrink: 0;
-  width: 82px;
-  height: 68px;
+  width: ${(props) => (props.$prompt ? "82px" : "84px")};
+  height: ${(props) => (props.$prompt ? "68px" : "60px")};
+  object-fit: contain;
 `;
 
-const ScrollRow = styled.div`
+const ScrollRow = styled.div<{ $large?: boolean }>`
   display: flex;
-  gap: 10px;
+  gap: ${(props) => (props.$large ? "20px" : "10px")};
   overflow-x: auto;
   /* PageContainer의 좌우 padding(16px) 안에서 스크롤 영역이 끝나면 카드가 화면 끝이 아니라
      패딩 안쪽에서 어중간하게 잘려 보입니다. 영역 자체를 화면 끝까지 넓히고, 안쪽 여백은

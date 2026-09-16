@@ -1262,7 +1262,9 @@ export default function Map() {
                     onCopyPhone={(phone) => copyToClipboard(phone, "전화번호를 복사했어요!")}
                     onNavigateCourse={(courseId) => navigate(`/course/${courseId}`)}
                   />
-                ) : wineryDetailLoading ? (
+                ) : wineryDetailLoading || (isCourseMode && focusWineryLoading) ? (
+                  // 코스 모드에서는 focusWinery를 별도 effect로 불러오는 중이라 wineryDetailLoading이
+                  // 아니라 focusWineryLoading이 참일 때도 "정보 없음"이 아니라 로딩으로 처리해야 합니다.
                   <DotsLoader />
                 ) : (
                   <DetailNotFound>양조장 정보를 찾을 수 없어요.</DetailNotFound>
@@ -1709,6 +1711,7 @@ const FloatingCard = styled.div`
   z-index: 9;
   max-height: 60%;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 20px 16px;
   border-radius: 20px;
   background: #ffffff;
@@ -1729,6 +1732,7 @@ const SheetScroll = styled.div`
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 0 16px 20px;
   box-sizing: border-box;
 `;

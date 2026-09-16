@@ -1,15 +1,15 @@
 import { useRef, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
-import { BackButton } from "../../shared/components/BackButton";
+import { AppBar } from "../../shared/components/AppBar";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
+import checkCircleIcon from "../../assets/icon/CheckCircle.svg";
 
 const NOTICE_ITEMS = [
-  "탈퇴 시 계정 정보와 저장된 취향, 활동 내역이 모두 삭제되며 복구할 수 없어요.",
-  "찜한 양조장, 최근 검색어 등 개인화된 데이터도 함께 삭제돼요.",
-  "탈퇴 후에는 동일한 카카오 계정으로 다시 로그인해도 이전 정보를 확인할 수 없어요.",
-  "진행 중인 예약이나 문의가 있다면 탈퇴 전에 먼저 처리해주세요.",
+  "회원 탈퇴 시 계정 정보(이메일, 닉네임), 온보딩에서 설정한 취향 정보, 서비스 이용 기록 등 회원과 관련된 개인정보가 삭제됩니다.",
+  "다만 관련 법령에 따라 일부 정보는 일정 기간 별도로 보관됩니다. 위치정보 수집·이용·제공사실 확인자료는 「위치정보법」에 따라 6개월, 서비스 접속 기록은 「통신비밀보호법」에 따라 3개월간 다른 개인정보와 분리하여 보관하며, 보관 기간이 지나면 지체 없이 파기합니다.",
+  "회원 탈퇴 시 전통주로와 연결된 카카오 계정의 연결도 함께 해제됩니다.",
 ];
 
 const TOAST_DURATION_MS = 3000;
@@ -34,13 +34,10 @@ export default function WithdrawPage() {
 
   return (
     <PageContainer>
-      <Header>
-        <BackButton onClick={() => navigate(-1)} />
-        <HeaderTitle>탈퇴하기</HeaderTitle>
-      </Header>
+      <AppBar onBack={() => navigate(-1)} title="탈퇴하기" />
 
       <Content>
-        <Lead>탈퇴하기 전에 아래 내용을 꼭 확인해주세요.</Lead>
+        <Lead>탈퇴하시면 아래 정보가 삭제되며, 삭제된 정보는 복구할 수 없습니다.</Lead>
         <NoticeList>
           {NOTICE_ITEMS.map((item) => (
             <NoticeItem key={item}>{item}</NoticeItem>
@@ -50,9 +47,7 @@ export default function WithdrawPage() {
 
       <Footer>
         <AgreeRow type="button" onClick={() => setChecked((prev) => !prev)}>
-          <CheckCircle $active={checked} aria-hidden>
-            ✓
-          </CheckCircle>
+          <CheckCircle $active={checked} aria-hidden />
           위 유의사항을 모두 확인하였고, 탈퇴 할게요
         </AgreeRow>
         <WithdrawButton type="button" disabled={!checked} onClick={handleWithdraw}>
@@ -74,30 +69,18 @@ const PageContainer = styled.div`
   background-color: #ffffff;
 `;
 
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-`;
-
-const HeaderTitle = styled.h1`
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-`;
-
 const Content = styled.div`
   flex: 1;
-  padding: 8px 16px 16px;
+  padding: 24px 16px 16px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 `;
 
 const Lead = styled.p`
-  margin: 0 0 20px;
-  font-size: 0.9375rem;
+  margin: 0 0 24px;
+  font-size: 1rem;
   font-weight: 700;
+  line-height: 1.4;
   color: ${colors.gray[900]};
 `;
 
@@ -112,10 +95,11 @@ const NoticeList = styled.ul`
 
 const NoticeItem = styled.li`
   position: relative;
-  padding-left: 14px;
-  font-size: 0.8125rem;
-  line-height: 1.6;
-  color: ${colors.gray[600]};
+  padding-left: 12px;
+  font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 1.4;
+  color: ${colors.gray[400]};
 
   &::before {
     content: "";
@@ -133,53 +117,58 @@ const Footer = styled.div`
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   padding: 16px;
-  border-top: 1px solid ${colors.gray[100]};
 `;
 
 const AgreeRow = styled.button`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 0.8125rem;
-  color: ${colors.gray[700]};
+  font-size: 0.875rem;
+  font-weight: 300;
+  color: ${colors.gray[600]};
   cursor: pointer;
   text-align: left;
 `;
 
 const CheckCircle = styled.span<{ $active: boolean }>`
   flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: ${(props) => (props.$active ? "#ffffff" : colors.gray[400])};
-  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[100])};
-  border: 1px solid ${(props) => (props.$active ? "transparent" : colors.gray[200])};
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[600])};
+  -webkit-mask-image: url("${checkCircleIcon}");
+  mask-image: url("${checkCircleIcon}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const WithdrawButton = styled.button`
   width: 100%;
-  padding: 14px;
+  padding: 10px 16px;
   border: none;
   border-radius: 8px;
-  background-color: ${colors.gray[900]};
-  color: #ffffff;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  background-color: ${colors.gray[50]};
+  color: ${colors.gray[300]};
+  font-size: 0.875rem;
+  font-weight: 300;
   cursor: pointer;
 
+  &:not(:disabled) {
+    background-color: ${colors.primary[500]};
+    color: #ffffff;
+    font-weight: 600;
+  }
+
   &:disabled {
-    background-color: ${colors.gray[200]};
-    color: ${colors.gray[400]};
     cursor: not-allowed;
   }
 `;

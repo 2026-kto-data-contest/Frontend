@@ -344,7 +344,19 @@ export default function CourseDetailPage() {
                           ))}
                         </StopMeta>
                       </StopBody>
-                      <ChevronIcon aria-hidden>›</ChevronIcon>
+                      {item.placeUrl ? (
+                        <ChevronButton
+                          type="button"
+                          aria-label={`${item.name} 카카오맵에서 보기`}
+                          onClick={() =>
+                            window.open(item.placeUrl!, "_blank", "noopener,noreferrer")
+                          }
+                        >
+                          <ChevronIcon aria-hidden>›</ChevronIcon>
+                        </ChevronButton>
+                      ) : (
+                        <ChevronIcon aria-hidden>›</ChevronIcon>
+                      )}
                     </StopRow>
                   );
                 })}
@@ -635,6 +647,18 @@ const ChevronIcon = styled.span`
   flex-shrink: 0;
   font-size: 1.25rem;
   color: ${colors.gray[200]};
+`;
+
+const ChevronButton = styled.button`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  margin: -8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
 `;
 
 const BottomSpacer = styled.div`

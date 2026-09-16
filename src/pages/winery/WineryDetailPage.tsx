@@ -24,7 +24,7 @@ import cancelIcon from "../../assets/icon/Cancel.svg";
 import liquorIcon from "../../assets/icon/Liquor.svg";
 import eventIcon from "../../assets/icon/Event.svg";
 import checkIcon from "../../assets/icon/Check.svg";
-import callIcon from "../../assets/icon/Call.svg";
+import articleIcon from "../../assets/icon/Article.svg";
 import webIcon from "../../assets/icon/Web.svg";
 import topRightIcon from "../../assets/icon/TopRight.svg";
 import awardIcon from "../../assets/icon/Award.svg";
@@ -339,7 +339,7 @@ export default function WineryDetailPage() {
               type="button"
               onClick={() => copyToClipboard(winery.phone!, "전화번호를 복사했어요!")}
             >
-              <img src={callIcon} alt="" width={16} height={16} /> 번호 복사
+              <img src={articleIcon} alt="" width={20} height={20} /> 연락처
             </ActionButton>
           )}
           {winery.homepageUrl && (
@@ -347,15 +347,15 @@ export default function WineryDetailPage() {
               type="button"
               onClick={() => window.open(winery.homepageUrl, "_blank", "noopener,noreferrer")}
             >
-              <img src={webIcon} alt="" width={16} height={16} /> 홈페이지
+              <img src={webIcon} alt="" width={20} height={20} /> 홈페이지
             </ActionButton>
           )}
-          <ActionButtonPrimary
+          <ActionButton
             type="button"
             onClick={() => navigate(`/course/${winery.id}`, { state: { winery } })}
           >
-            <TopRightIcon $src={topRightIcon} /> 코스보기
-          </ActionButtonPrimary>
+            <MaskIcon $src={topRightIcon} $size={20} /> 코스보기
+          </ActionButton>
         </ActionRow>
       </Body>
 
@@ -818,13 +818,13 @@ const ActionButton = styled.button`
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 10px;
+  padding: 10px 16px;
   border: 1px solid ${colors.gray[200]};
   border-radius: 8px;
   background-color: #ffffff;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
-  color: ${colors.gray[700]};
+  color: ${colors.gray[900]};
   cursor: pointer;
   white-space: nowrap;
 `;

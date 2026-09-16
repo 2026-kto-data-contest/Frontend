@@ -32,10 +32,10 @@ function bucketizeStrength(
   max: number | null
 ): (typeof ALL_STRENGTH_FILTERS)[number] {
   const value = max ?? min;
-  if (value == null) return "7도 ~ 20도";
-  if (value < 7) return "7도 미만";
-  if (value < 20) return "7도 ~ 20도";
-  return "20도 이상";
+  if (value == null) return "15도 ~ 29도";
+  if (value <= 14) return "14도 이하";
+  if (value <= 29) return "15도 ~ 29도";
+  return "30도 이상";
 }
 
 function formatAbv(min: number | null, max: number | null): string {

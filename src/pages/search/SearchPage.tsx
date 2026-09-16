@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { ErrorState } from "../../shared/components/ErrorState";
@@ -17,7 +17,7 @@ import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import { colors } from "../../shared/styles/colors";
 import { SUGGESTED_KEYWORDS } from "../../shared/lib/mockWineries";
-import { breweryToCardData, fetchRecommendedBreweries } from "../../shared/api/breweriesApi";
+import { breweryToCardData, fetchRecommendedBreweries, fetchBreweries } from "../../shared/api/breweriesApi";
 import type { BreweryListItem } from "../../shared/api/breweriesApi";
 import {
   searchBreweries,
@@ -30,7 +30,7 @@ import {
 import type { SearchSuggestion, RecentSearch, RecentSearchInput } from "../../shared/api/searchApi";
 import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState, useLocalStorageState } from "../../shared/lib/pageState";
-import { findMatchRange } from "../../shared/lib/hangul";
+import { findMatchRange, getChosung, isChosungOnly } from "../../shared/lib/hangul";
 
 type Phase = "idle" | "typing" | "loading" | "results" | "empty" | "error";
 
@@ -68,6 +68,9 @@ export default function SearchPage() {
   const [results, setResults] = usePersistentState<BreweryListItem[]>("search:results", []);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [recommended, setRecommended] = useState<BreweryListItem[]>([]);
+  // 백엔드 연관검색어 API는 자음(초성)만 있는 검색어는 매칭을 못 해서(예: "ㄱ" → 빈 배열),
+  // 초성만 입력했을 때는 양조장 목록을 미리 받아둔 걸로 프론트에서 직접 초성 매칭합니다.
+  const breweryCorpusRef = useRef<BreweryListItem[] | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -76,6 +79,20 @@ export default function SearchPage() {
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setRecommended([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    // 검색창을 누른 다음(초성 입력 시점)에야 불러오면 그때부터 로딩이 보여서, 검색 페이지에
+    // 들어오자마자 미리 받아둡니다.
+    const controller = new AbortController();
+    fetchBreweries({ page: 0, size: 200 }, controller.signal)
+      .then((page) => {
+        breweryCorpusRef.current = page.content;
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
       });
     return () => controller.abort();
   }, []);
@@ -96,13 +113,48 @@ export default function SearchPage() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (phase !== "typing" || !query.trim()) {
+    const trimmed = query.trim();
+    if (phase !== "typing" || !trimmed) {
       setSuggestions([]);
       return;
     }
+
+    // 초성만 입력한 경우: 백엔드가 못 하는 초성 매칭을 양조장 목록으로 직접 합니다.
+    if (isChosungOnly(trimmed)) {
+      let cancelled = false;
+      const applyChosungMatch = (corpus: BreweryListItem[]) => {
+        if (cancelled) return;
+        const matched: SearchSuggestion[] = corpus
+          .filter((brewery) => getChosung(brewery.businessName).includes(trimmed))
+          .slice(0, 10)
+          .map((brewery) => ({
+            type: "BREWERY",
+            id: brewery.breweryId,
+            keyword: brewery.businessName,
+            displayName: brewery.businessName,
+          }));
+        setSuggestions(matched);
+      };
+      if (breweryCorpusRef.current) {
+        applyChosungMatch(breweryCorpusRef.current);
+      } else {
+        fetchBreweries({ page: 0, size: 200 })
+          .then((page) => {
+            breweryCorpusRef.current = page.content;
+            applyChosungMatch(page.content);
+          })
+          .catch(() => {
+            if (!cancelled) setSuggestions([]);
+          });
+      }
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const controller = new AbortController();
     const timer = setTimeout(() => {
-      fetchSearchSuggestions(query.trim(), controller.signal)
+      fetchSearchSuggestions(trimmed, controller.signal)
         .then((list) => setSuggestions(list))
         .catch((error) => {
           if (error instanceof DOMException && error.name === "AbortError") return;
