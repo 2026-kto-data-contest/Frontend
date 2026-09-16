@@ -3,7 +3,7 @@ import styled, { css } from "styled-components";
 import { colors } from "../styles/colors";
 
 type ButtonVariant = "primary" | "secondary" | "ghost";
-type ButtonSize = "sm" | "md";
+type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -25,31 +25,29 @@ export const Button: React.FC<ButtonProps> = ({
 
 const variantStyles: Record<ButtonVariant, ReturnType<typeof css>> = {
   primary: css`
-    background-color: #ff7a00;
+    background-color: #ff8a00;
     color: ${colors.white};
-    border: 1px solid transparent;
-
-    &:hover:not(:disabled) {
-      background-color: #e66e00;
-    }
+    border: none;
 
     &:disabled {
-      background-color: ${colors.gray[300]};
+      background-color: ${colors.gray[50]};
+      color: ${colors.gray[300]};
     }
   `,
   secondary: css`
-    background-color: ${colors.white};
-    color: ${colors.gray[700]};
-    border: 1px solid ${colors.gray[300]};
+    background-color: ${colors.gray[50]};
+    color: ${colors.gray[900]};
+    border: none;
 
-    &:hover:not(:disabled) {
+    &:disabled {
       background-color: ${colors.gray[50]};
+      color: ${colors.gray[300]};
     }
   `,
   ghost: css`
     background-color: transparent;
-    color: #ff7a00;
-    border: 1px solid transparent;
+    color: #ff8a00;
+    border: none;
 
     &:hover:not(:disabled) {
       background-color: #fff3e6;
@@ -59,12 +57,19 @@ const variantStyles: Record<ButtonVariant, ReturnType<typeof css>> = {
 
 const sizeStyles: Record<ButtonSize, ReturnType<typeof css>> = {
   sm: css`
-    padding: 6px 12px;
+    padding: 8px 12px;
     font-size: 0.8125rem;
+    font-weight: 700;
   `,
   md: css`
     padding: 10px 16px;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  `,
+  lg: css`
+    padding: 12px 16px;
+    font-size: 1rem;
+    font-weight: 700;
   `,
 };
 
@@ -72,18 +77,14 @@ const StyledButton = styled.button<{ $variant: ButtonVariant; $size: ButtonSize 
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  border-radius: 8px;
-  font-weight: 600;
+  gap: 4px;
+  border-radius: 9999px;
   cursor: pointer;
   outline: none;
-  transition:
-    background-color 0.2s ease-in-out,
-    color 0.2s ease-in-out;
+  transition: background-color 0.2s ease-in-out;
 
   &:disabled {
     cursor: not-allowed;
-    opacity: 0.5;
   }
 
   ${(props) => sizeStyles[props.$size]}

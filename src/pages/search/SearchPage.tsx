@@ -236,7 +236,7 @@ export default function SearchPage() {
             </ClearButton>
           )}
         </InputWrapper>
-        {(phase === "idle" || phase === "typing") && (
+        {phase === "idle" && (
           <IconButton type="button" aria-label="검색" onClick={() => runSearch(query)}>
             <img src={searchIcon} alt="" width={19} height={19} />
           </IconButton>
@@ -473,7 +473,7 @@ const SearchInput = styled.input`
   color: ${colors.gray[900]};
   outline: none;
   box-sizing: border-box;
-  caret-color: #ff7a00;
+  caret-color: ${colors.primary[500]};
 
   &::placeholder {
     color: ${colors.gray[400]};
@@ -592,11 +592,11 @@ const SuggestRow = styled.div`
 const SuggestTag = styled.button`
   border: none;
   border-radius: 9999px;
-  padding: 8px 14px;
-  background-color: #fdf0e2;
-  color: #b5691a;
+  padding: 8px 12px;
+  background-color: #fff5e6;
+  color: ${colors.primary[500]};
   font-size: 0.8125rem;
-  font-weight: 500;
+  font-weight: 400;
   cursor: pointer;
 `;
 
@@ -623,7 +623,7 @@ const AutocompleteText = styled.span`
 `;
 
 const Highlight = styled.span`
-  color: #ff7a00;
+  color: ${colors.primary[500]};
   font-weight: 600;
 `;
 
@@ -684,7 +684,7 @@ const MapButton = styled.button`
   border: none;
   border-radius: 9999px;
   padding: 10px 20px;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: ${colors.white};
   font-size: 0.8125rem;
   font-weight: 700;

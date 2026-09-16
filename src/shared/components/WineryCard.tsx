@@ -22,6 +22,7 @@ export interface WineryCardProps {
   onClick?: () => void;
   showDescription?: boolean;
   showTags?: boolean;
+  showBadges?: boolean;
   nameFirst?: boolean;
   thumbSize?: number;
 }
@@ -31,6 +32,7 @@ export const WineryCard: React.FC<WineryCardProps> = ({
   onClick,
   showDescription = true,
   showTags = true,
+  showBadges = true,
   nameFirst = false,
   thumbSize,
 }) => {
@@ -70,7 +72,7 @@ export const WineryCard: React.FC<WineryCardProps> = ({
             {hiddenTagCount > 0 && <Tag label={`+${hiddenTagCount}`} />}
           </TagRow>
         )}
-        {winery.badges && winery.badges.length > 0 && (
+        {showBadges && winery.badges && winery.badges.length > 0 && (
           <BadgeRow>
             {winery.badges.map((badge) => (
               <Badge key={badge} label={badge} tone="gray" />
@@ -92,7 +94,7 @@ const Thumb = styled.img<{ $size?: number }>`
   flex-shrink: 0;
   width: ${(props) => (props.$size ? `${props.$size}px` : "100px")};
   height: ${(props) => (props.$size ? `${props.$size}px` : "136px")};
-  border-radius: 12px;
+  border-radius: 8px;
   object-fit: cover;
   background-color: ${colors.gray[50]};
 `;
@@ -108,7 +110,7 @@ const Info = styled.div`
 const Region = styled.p`
   margin: 0;
   font-size: 0.75rem;
-  color: ${colors.gray[400]};
+  color: ${colors.gray[500]};
 `;
 
 const Name = styled.p`
@@ -132,8 +134,8 @@ const Description = styled.p`
 
 const TagRow = styled.div`
   display: flex;
-  gap: 8px;
-  margin-top: 2px;
+  gap: 4px;
+  margin-top: 8px;
 `;
 
 const BadgeRow = styled.div`

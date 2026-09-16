@@ -1,5 +1,6 @@
 import React from "react";
 import styled, { css } from "styled-components";
+import { colors } from "../styles/colors";
 
 export interface ChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   /** 칩에 표시될 텍스트 */
@@ -52,10 +53,10 @@ const StyledChip = styled.button<StyledChipProps>`
   justify-content: center;
   flex-shrink: 0;
   gap: 6px;
-  padding: 8px 18px;
+  padding: 6px 10px;
   border-radius: 9999px;
-  font-size: 15px;
-  font-weight: 500;
+  font-size: 0.75rem;
+  font-weight: 400;
   line-height: 1;
   white-space: nowrap;
   cursor: pointer;
@@ -64,23 +65,16 @@ const StyledChip = styled.button<StyledChipProps>`
   transition: all 0.2s ease-in-out;
 
   background-color: #ffffff;
-  color: #4a5568;
-  border: 1px solid #e2e8f0;
-
-  &:hover {
-    background-color: #f7fafc;
-  }
+  color: ${colors.gray[500]};
+  border: 1px solid ${colors.gray[200]};
 
   ${({ $active }) =>
     $active &&
     css`
-      background-color: #ff7a00;
+      background-color: ${colors.primary[500]};
       color: #ffffff;
+      font-weight: 700;
       border-color: transparent;
-
-      &:hover {
-        background-color: #e66e00;
-      }
     `}
 `;
 

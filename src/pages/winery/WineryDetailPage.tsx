@@ -6,6 +6,7 @@ import { colors } from "../../shared/styles/colors";
 import { BackButton } from "../../shared/components/BackButton";
 import { Badge } from "../../shared/components/Badge";
 import { Snackbar } from "../../shared/components/Snackbar";
+import { DotsLoader } from "../../shared/components/DotsLoader";
 import { useLocalPreferences } from "../../shared/lib/preferences";
 import {
   WINERIES,
@@ -187,7 +188,7 @@ export default function WineryDetailPage() {
         </PlainHeader>
         <NotFoundWrap>
           {remoteLoading ? (
-            <NotFoundTitle>양조장 정보를 불러오는 중이에요...</NotFoundTitle>
+            <DotsLoader />
           ) : (
             <>
               <NotFoundTitle>양조장을 찾을 수 없어요</NotFoundTitle>
@@ -830,7 +831,7 @@ const ActionButton = styled.button`
 
 const ActionButtonPrimary = styled(ActionButton)`
   border-color: transparent;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
 
   &:disabled {
@@ -980,7 +981,7 @@ const AwardInline = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #ff7a00;
+  color: ${colors.primary[500]};
   font-size: 0.8125rem;
   font-weight: 700;
   white-space: nowrap;
@@ -1263,7 +1264,7 @@ const LinkCopyButton = styled.button`
   padding: 8px 14px;
   border: none;
   border-radius: 9999px;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
   font-size: 0.8125rem;
   font-weight: 700;

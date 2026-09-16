@@ -13,11 +13,11 @@ const StyledTag = styled.span`
   display: inline-flex;
   align-items: center;
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border-radius: 9999px;
-  background-color: ${colors.gray[100]};
-  color: ${colors.gray[700]};
+  background-color: ${colors.info.bg};
+  color: ${colors.info.text};
   font-size: 0.75rem;
-  font-weight: 500;
+  font-weight: 400;
   white-space: nowrap;
 `;

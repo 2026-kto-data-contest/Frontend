@@ -32,7 +32,7 @@ const Row = styled.button<{ $active: boolean }>`
   width: 100%;
   padding: 16px;
   border-radius: 12px;
-  border: 1.5px solid ${(props) => (props.$active ? "#ff7a00" : colors.gray[200])};
+  border: 1.5px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
   background: #ffffff;
   cursor: pointer;
   text-align: left;
@@ -46,7 +46,7 @@ const IconWrap = styled.span<{ $active: boolean }>`
   flex-shrink: 0;
   width: 24px;
   height: 24px;
-  color: ${(props) => (props.$active ? "#ff7a00" : colors.gray[700])};
+  color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[700])};
 `;
 
 const IconMask = styled.span<{ $src: string }>`
@@ -75,7 +75,7 @@ const TextWrap = styled.span`
 const Label = styled.span<{ $active: boolean }>`
   font-size: 0.9375rem;
   font-weight: 700;
-  color: ${(props) => (props.$active ? "#ff7a00" : colors.gray[900])};
+  color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[900])};
 `;
 
 const Sub = styled.span`
@@ -90,9 +90,9 @@ const Indicator = styled.span<{ $active: boolean; $shape: "check" | "radio" }>`
   border-radius: 50%;
   box-sizing: border-box;
   position: relative;
-  border: 1.5px solid ${(props) => (props.$active ? "#ff7a00" : colors.gray[200])};
+  border: 1.5px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
   background-color: ${(props) =>
-    props.$active && props.$shape === "check" ? "#ff7a00" : "#ffffff"};
+    props.$active && props.$shape === "check" ? colors.primary[500] : "#ffffff"};
 
   ${(props) =>
     props.$active &&
@@ -123,7 +123,7 @@ const Indicator = styled.span<{ $active: boolean; $shape: "check" | "radio" }>`
         width: 10px;
         height: 10px;
         border-radius: 50%;
-        background-color: #ff7a00;
+        background-color: ${colors.primary[500]};
         transform: translate(-50%, -50%);
       }
     `}

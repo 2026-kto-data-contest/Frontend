@@ -86,7 +86,7 @@ const ProgressSegment = styled.div<{ $active: boolean }>`
   flex: 1;
   height: 4px;
   border-radius: 9999px;
-  background-color: ${(props) => (props.$active ? "#ff7a00" : colors.gray[200])};
+  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
 `;
 
 const Title = styled.h1`

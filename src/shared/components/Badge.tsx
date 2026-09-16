@@ -19,8 +19,8 @@ const toneStyles: Record<BadgeTone, ReturnType<typeof css>> = {
     color: ${colors.primary[600]};
   `,
   gray: css`
-    background-color: ${colors.gray[100]};
-    color: ${colors.gray[600]};
+    background-color: ${colors.info.bg};
+    color: ${colors.info.text};
   `,
   danger: css`
     background-color: #fee2e2;

@@ -78,6 +78,7 @@ export default function OnboardingTastePage() {
       footer={
         <Button
           variant="primary"
+          size="lg"
           disabled={selected.length === 0}
           style={{ width: "100%" }}
           onClick={() => navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)}

@@ -62,6 +62,7 @@ export default function OnboardingRegionPage() {
       footer={
         <Button
           variant="primary"
+          size="lg"
           disabled={selected.length === 0}
           style={{ width: "100%" }}
           onClick={() => navigate(`/onboarding/strength?from=${encodeURIComponent(from)}`)}

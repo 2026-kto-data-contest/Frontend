@@ -109,6 +109,7 @@ export default function OnboardingStrengthPage() {
       footer={
         <Button
           variant="primary"
+          size="lg"
           disabled={!selectedStrength || isSubmitting}
           style={{ width: "100%" }}
           onClick={handleFinish}
