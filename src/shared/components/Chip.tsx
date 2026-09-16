@@ -11,8 +11,6 @@ export interface ChipProps extends React.ButtonHTMLAttributes<HTMLButtonElement>
   deletable?: boolean;
   /** 취소 버튼(X) 클릭 시 호출되는 함수 */
   onDelete?: (e: React.MouseEvent<HTMLSpanElement>) => void;
-  /** 라벨 옆에 표시할 개수 (있을 때만 표시) */
-  count?: number;
 }
 
 export const Chip: React.FC<ChipProps> = ({
@@ -21,7 +19,6 @@ export const Chip: React.FC<ChipProps> = ({
   deletable = false,
   onDelete,
   onClick,
-  count,
   ...props
 }) => {
   const handleDeleteClick = (e: React.MouseEvent<HTMLSpanElement>) => {
@@ -32,7 +29,6 @@ export const Chip: React.FC<ChipProps> = ({
   return (
     <StyledChip $active={active} onClick={onClick} {...props}>
       <Label>{label}</Label>
-      {count != null && <Count>{count}</Count>}
       {deletable && (
         <DeleteButton
           role="button"
@@ -84,11 +80,6 @@ const StyledChip = styled.button<StyledChipProps>`
 
 const Label = styled.span`
   display: inline-block;
-`;
-
-const Count = styled.span`
-  display: inline-block;
-  opacity: 0.6;
 `;
 
 const DeleteButton = styled.span`
