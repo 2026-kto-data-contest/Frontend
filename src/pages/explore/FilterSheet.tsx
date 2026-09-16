@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { Chip } from "../../shared/components/Chip";
 import { colors } from "../../shared/styles/colors";
+import { fetchBreweryFilters } from "../../shared/api/breweriesApi";
+import type { BreweryFilterOption } from "../../shared/api/breweriesApi";
 import {
   ALL_TYPE_FILTERS,
   ALL_REGION_FILTERS,
@@ -69,6 +71,27 @@ export const FilterSheet = ({
     histories: null,
   });
   const contentRef = useRef<HTMLDivElement>(null);
+  const [typeCounts, setTypeCounts] = useState<BreweryFilterOption[]>([]);
+  const [regionCounts, setRegionCounts] = useState<BreweryFilterOption[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    fetchBreweryFilters(controller.signal)
+      .then((filters) => {
+        setTypeCounts(filters.liquorTypes);
+        setRegionCounts(filters.regions);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      });
+    return () => controller.abort();
+  }, [open]);
+
+  const countsBySection: Partial<Record<SectionKey, BreweryFilterOption[]>> = {
+    types: typeCounts,
+    regions: regionCounts,
+  };
 
   useEffect(() => {
     if (open) {
@@ -141,6 +164,8 @@ export const FilterSheet = ({
                   <Chip
                     key={option}
                     label={option}
+                    count={countsBySection[section.key]?.find((item) => item.value === option)
+                      ?.breweryCount}
                     active={draft[section.key].includes(option)}
                     onClick={() => toggle(section.key, option)}
                   />

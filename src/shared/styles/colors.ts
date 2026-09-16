@@ -11,7 +11,7 @@ export const colors = {
     restaurant: "#6e7852",
     attraction: "#607478",
     cafe: "#b27060",
-    lodging: "#7c3aed",
+    lodging: "#8a8a88",
   },
   gray: {
     50: "#f7f7f5",

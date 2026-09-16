@@ -13,7 +13,10 @@ import type { Winery } from "../../shared/lib/mockWineries";
 import {
   fetchMapPlaces,
   fetchRecommendedCourse,
-  fetchRecommendedBreweries,
+  fetchMapRecommendedBreweries,
+  fetchMapAwardedLiquors,
+  fetchMapMenus,
+  fetchMapMenuPlaces,
   fetchBreweryDetail,
   fetchBreweryProducts,
 } from "../../shared/api/breweriesApi";
@@ -21,7 +24,9 @@ import type {
   MapPlace,
   MapPlaceCategory,
   RecommendedCourseStop,
-  BreweryListItem,
+  MapRecommendedBrewery,
+  MapAwardedLiquor,
+  MapMenu,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
@@ -38,6 +43,7 @@ import bedIcon from "../../assets/icon/Bed.svg";
 import cafeIcon from "../../assets/icon/Cafe.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
 import restaurantIcon from "../../assets/icon/Restaurant.svg";
+import awardIcon from "../../assets/icon/Award.svg";
 import noneImage from "../../assets/img/NoneImage.png";
 
 type CategoryKey = "brewery" | "restaurants" | "attractions" | "cafes" | "lodging";
@@ -105,6 +111,13 @@ interface SimplePlaceInfo {
   phone?: string;
   mapUrl?: string;
   note?: string;
+}
+
+// 예: ["증류주","탁주","약주"] → "증류주/탁주 외 1"
+function formatLiquorTypes(types: string[]): string {
+  const shown = types.slice(0, 2).join("/");
+  const rest = types.length - 2;
+  return rest > 0 ? `${shown} 외 ${rest}` : shown;
 }
 
 function placeToInfo(place: MapPlace): SimplePlaceInfo {
@@ -268,7 +281,10 @@ export default function Map() {
   const [places, setPlaces] = useState<MapPlace[]>([]);
   const [placesLoadState, setPlacesLoadState] = useState<PlacesLoadState>("idle");
   const [courseStops, setCourseStops] = useState<RecommendedCourseStop[]>([]);
-  const [recommendedBreweries, setRecommendedBreweries] = useState<BreweryListItem[]>([]);
+  const [recommendedBreweries, setRecommendedBreweries] = useState<MapRecommendedBrewery[]>([]);
+  const [awardedLiquors, setAwardedLiquors] = useState<MapAwardedLiquor[]>([]);
+  const [mapMenus, setMapMenus] = useState<MapMenu[]>([]);
+  const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
 
   const [toast, setToast] = useState<string | null>(null);
 
@@ -338,17 +354,53 @@ export default function Map() {
     userPositionRef.current = userPosition;
   }, [userPosition]);
 
-  // 지도에 양조장이 하나도 안 보일 때 목록 대신 보여줄 추천 양조장입니다.
+  // 지도에 양조장이 하나도 안 보일 때 목록 대신 보여줄 기본 콘텐츠(추천 양조장·수상 전통주·추천 메뉴)입니다.
   useEffect(() => {
     const controller = new AbortController();
-    fetchRecommendedBreweries(0, 6, controller.signal)
+    fetchMapRecommendedBreweries(0, 4, controller.signal)
       .then((page) => setRecommendedBreweries(page.content))
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setRecommendedBreweries([]);
       });
+    fetchMapAwardedLiquors(0, 4, controller.signal)
+      .then((page) => setAwardedLiquors(page.content))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setAwardedLiquors([]);
+      });
+    fetchMapMenus(controller.signal)
+      .then(setMapMenus)
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setMapMenus([]);
+      });
     return () => controller.abort();
   }, []);
+
+  // 추천 메뉴 칩을 고르면 그 메뉴를 파는 장소로 목록·핀을 바꿔 보여줍니다(양조장 카테고리 목록과 동일한 자리를 씁니다).
+  function handleSelectMenu(menu: string) {
+    if (selectedMenu === menu) {
+      setSelectedMenu(null);
+      refetchPlaces(activeCategory);
+      return;
+    }
+    setSelectedMenu(menu);
+    placesAbortRef.current?.abort();
+    const controller = new AbortController();
+    placesAbortRef.current = controller;
+    setPlacesLoadState("loading");
+    fetchMapMenuPlaces(menu, userPositionRef.current ?? undefined, 0, 20, controller.signal)
+      .then((page) => {
+        setPlaces(page.content);
+        setPlacesLoadState("ready");
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("메뉴별 장소 조회 실패", error);
+        setPlacesLoadState("error");
+      });
+  }
 
   // 양조장 리스트가 보이는 동안, 각 행에 표시할 이력 뱃지를 백그라운드로 채워둡니다.
   useEffect(() => {
@@ -871,16 +923,16 @@ export default function Map() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  if (isCourseMode && !focusWinery) {
+  // 양조장 정보를 아직 못 찾은 게 "로딩 중"이 아니라 "완전히 실패"했을 때만 지도를 아예 안 그립니다.
+  // 로딩 중에는 아래 메인 렌더가 그대로 진행되어야 <MapEl>이 마운트되고 카카오맵이 초기화됩니다
+  // (여기서 일찍 return하면 <MapEl>이 없는 채로 지도 초기화 effect가 한 번만 실행되고 끝나버려,
+  // 나중에 양조장 정보가 도착해도 지도가 영영 뜨지 않습니다).
+  if (isCourseMode && !focusWinery && !focusWineryLoading) {
     return (
       <PageContainer>
         <AppBar onBack={() => navigate(-1)} title="코스" />
         <NotFoundArea>
-          {focusWineryLoading ? (
-            <DotsLoader />
-          ) : (
-            <NotFoundText>코스 정보를 찾을 수 없어요</NotFoundText>
-          )}
+          <NotFoundText>코스 정보를 찾을 수 없어요</NotFoundText>
         </NotFoundArea>
       </PageContainer>
     );
@@ -903,17 +955,19 @@ export default function Map() {
       {isCourseMode ? (
         <AppBar
           onBack={() => navigate(-1)}
-          title={`${focusWinery!.name} 코스`}
+          title={focusWinery ? `${focusWinery.name} 코스` : "코스"}
           trailing={
-            <ShareButton
-              type="button"
-              aria-label="공유하기"
-              onClick={() => handleShareWinery(focusWinery!)}
-            >
-              <ShareIcon viewBox="0 0 24 24" aria-hidden>
-                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
-              </ShareIcon>
-            </ShareButton>
+            focusWinery && (
+              <ShareButton
+                type="button"
+                aria-label="공유하기"
+                onClick={() => handleShareWinery(focusWinery)}
+              >
+                <ShareIcon viewBox="0 0 24 24" aria-hidden>
+                  <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
+                </ShareIcon>
+              </ShareButton>
+            )
           }
         />
       ) : null}
@@ -1016,7 +1070,12 @@ export default function Map() {
                           key={key}
                           type="button"
                           $active={active}
-                          onClick={() => setActiveCategory(key)}
+                          onClick={() => {
+                            const wasMenuMode = selectedMenu != null;
+                            setSelectedMenu(null);
+                            setActiveCategory(key);
+                            if (wasMenuMode) refetchPlaces(key);
+                          }}
                         >
                           {pinIcon ? (
                             <ChipIcon
@@ -1048,27 +1107,90 @@ export default function Map() {
                     places.length === 0 &&
                     (activeCategory === "brewery" ? (
                       recommendedBreweries.length > 0 ? (
-                        <RecommendedSection>
-                          <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
-                          <RecommendedGrid>
-                            {recommendedBreweries.map((item) => (
-                              <PhotoCard
-                                key={item.breweryId}
-                                fluid
-                                name={item.businessName}
-                                region={
-                                  item.sigungu
-                                    ? `${item.sido ?? ""} ${item.sigungu}`.trim()
-                                    : (item.sido ?? item.region ?? "")
-                                }
-                                photoUrl={item.mainImage?.url}
-                                onClick={() => navigate(`/winery/${item.breweryId}`)}
-                              />
-                            ))}
-                          </RecommendedGrid>
-                        </RecommendedSection>
+                        <>
+                          <RecommendedSection>
+                            <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
+                            <RecommendedGrid>
+                              {recommendedBreweries.map((item) => {
+                                const region = item.address.split(" ").slice(0, 2).join(" ");
+                                return (
+                                  <PhotoCard
+                                    key={item.breweryId}
+                                    fluid
+                                    name={item.businessName}
+                                    region={
+                                      item.liquorTypes.length > 0
+                                        ? `${formatLiquorTypes(item.liquorTypes)} · ${region}`
+                                        : region
+                                    }
+                                    photoUrl={item.mainImage?.url}
+                                    onClick={() => navigate(`/winery/${item.breweryId}`)}
+                                  />
+                                );
+                              })}
+                            </RecommendedGrid>
+                          </RecommendedSection>
+
+                          {awardedLiquors.length > 0 && (
+                            <AwardSection>
+                              <RecommendedTitle>수상받은 전통주</RecommendedTitle>
+                              <AwardRow>
+                                {awardedLiquors.map((item) => (
+                                  <AwardCard
+                                    key={item.productId}
+                                    type="button"
+                                    onClick={() => navigate(`/winery/${item.breweryId}`)}
+                                  >
+                                    <AwardThumb
+                                      src={item.image?.url ?? noneImage}
+                                      alt=""
+                                    />
+                                    <AwardBadgeLine>
+                                      <img src={awardIcon} alt="" width={14} height={14} />
+                                      {item.awardBadge}
+                                    </AwardBadgeLine>
+                                    <AwardName>{item.productName}</AwardName>
+                                    <AwardMetaPrimary>
+                                      {item.breweryName}
+                                      {item.address
+                                        ? ` · ${item.address.split(" ").slice(0, 2).join(" ")}`
+                                        : ""}
+                                    </AwardMetaPrimary>
+                                    <AwardMetaSecondary>
+                                      {[
+                                        item.alcoholMin != null ? `${item.alcoholMin}도` : null,
+                                        item.volume,
+                                        item.liquorTypes[0],
+                                      ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </AwardMetaSecondary>
+                                  </AwardCard>
+                                ))}
+                              </AwardRow>
+                            </AwardSection>
+                          )}
+
+                          {mapMenus.length > 0 && (
+                            <RecommendedSection>
+                              <RecommendedTitle>지금 찾아보면 좋은 메뉴</RecommendedTitle>
+                              <MenuChipRow>
+                                {mapMenus.map((item) => (
+                                  <MenuChip
+                                    key={item.menu}
+                                    type="button"
+                                    $active={selectedMenu === item.menu}
+                                    onClick={() => handleSelectMenu(item.menu)}
+                                  >
+                                    {item.displayName}
+                                  </MenuChip>
+                                ))}
+                              </MenuChipRow>
+                            </RecommendedSection>
+                          )}
+                        </>
                       ) : (
-                        // 양조장은 "정보가 없어요" 문구 대신, 추천 양조장이 도착할 때까지 로딩 표시로 대신합니다.
+                        // 양조장은 "정보가 없어요" 문구 대신, 추천 콘텐츠가 도착할 때까지 로딩 표시로 대신합니다.
                         <DotsLoader />
                       )
                     ) : (
@@ -1666,7 +1788,7 @@ const RecommendedSection = styled.div`
 
 const RecommendedTitle = styled.h2`
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
 `;
@@ -1674,11 +1796,98 @@ const RecommendedTitle = styled.h2`
 const RecommendedGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 16px;
 
   img {
     height: 200px;
   }
+`;
+
+const AwardSection = styled(RecommendedSection)`
+  background-color: ${colors.info.bg};
+  margin: 0 -16px;
+  padding: 20px 16px;
+`;
+
+const AwardRow = styled.div`
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  margin: 0 -16px;
+  padding: 0 16px 4px;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+`;
+
+const AwardCard = styled.button`
+  flex-shrink: 0;
+  width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+`;
+
+const AwardThumb = styled.img`
+  width: 150px;
+  height: 200px;
+  border-radius: 8px;
+  object-fit: cover;
+  background-color: ${colors.gray[100]};
+  margin-bottom: 8px;
+`;
+
+const AwardBadgeLine = styled.p`
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: ${colors.primary[700]};
+`;
+
+const AwardName = styled.p`
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${colors.gray[900]};
+`;
+
+const AwardMetaPrimary = styled.p`
+  margin: 0;
+  font-size: 0.8125rem;
+  color: ${colors.gray[500]};
+`;
+
+const AwardMetaSecondary = styled.p`
+  margin: 0;
+  font-size: 0.75rem;
+  color: ${colors.info.text};
+`;
+
+const MenuChipRow = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+`;
+
+const MenuChip = styled.button<{ $active: boolean }>`
+  border: none;
+  border-radius: 9999px;
+  padding: 8px 12px;
+  background-color: ${(props) => (props.$active ? colors.primary[500] : "#fff5e6")};
+  color: ${(props) => (props.$active ? "#ffffff" : colors.primary[500])};
+  font-size: 0.8125rem;
+  font-weight: 400;
+  cursor: pointer;
 `;
 
 const PlaceList = styled.div`

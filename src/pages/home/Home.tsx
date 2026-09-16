@@ -16,8 +16,8 @@ import { useAuth } from "../../shared/lib/authContext";
 import { usePersistentState } from "../../shared/lib/pageState";
 import { ApiError, fetchOnboardingPreferences } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
-import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
-import type { HomeResponse } from "../../shared/api/breweriesApi";
+import { fetchHome, fetchBreweryFilters, breweryToCardData } from "../../shared/api/breweriesApi";
+import type { HomeResponse, BreweryFilterOption } from "../../shared/api/breweriesApi";
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
 import { TASTE_OPTIONS } from "../signin/onboarding/OnboardingTastePage";
 
@@ -73,6 +73,21 @@ export default function Home() {
   const [isRegionRefetching, setIsRegionRefetching] = useState(false);
   const prevFiltersRef = useRef({ typeFilter, regionFilter });
   const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
+  const [typeCounts, setTypeCounts] = useState<BreweryFilterOption[]>([]);
+  const [regionCounts, setRegionCounts] = useState<BreweryFilterOption[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchBreweryFilters(controller.signal)
+      .then((filters) => {
+        setTypeCounts(filters.liquorTypes);
+        setRegionCounts(filters.regions);
+      })
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     if (forcedError === "network" || forcedError === "server") {
@@ -329,6 +344,7 @@ export default function Home() {
                 <Chip
                   key={filter}
                   label={filter}
+                  count={typeCounts.find((item) => item.value === filter)?.breweryCount}
                   active={filter === typeFilter}
                   onClick={() => setTypeFilter(filter)}
                 />
@@ -372,6 +388,7 @@ export default function Home() {
                 <Chip
                   key={filter}
                   label={filter}
+                  count={regionCounts.find((item) => item.value === filter)?.breweryCount}
                   active={filter === regionFilter}
                   onClick={() => setRegionFilter(filter)}
                 />
