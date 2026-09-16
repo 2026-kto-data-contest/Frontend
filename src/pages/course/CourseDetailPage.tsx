@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
-import { BackButton } from "../../shared/components/BackButton";
+import { AppBar } from "../../shared/components/AppBar";
+import { DotsLoader } from "../../shared/components/DotsLoader";
 import { WINERIES } from "../../shared/lib/mockWineries";
 import type { Winery } from "../../shared/lib/mockWineries";
 import { ApiError } from "../../shared/api/api";
@@ -19,12 +20,12 @@ type CategoryKey = "restaurants" | "attractions" | "cafes" | "lodging";
 type CourseLoadState = "loading" | "ready" | "not_found" | "error";
 
 const CATEGORY_META: Record<CategoryKey, { label: string; icon: string; color: string }> = {
-  restaurants: { label: "함께 먹기 좋은 곳", icon: "🍴", color: "#3b82f6" },
-  attractions: { label: "가볼 만한 곳", icon: "🚩", color: "#22c55e" },
-  cafes: { label: "쉬어가기", icon: "☕", color: "#92400e" },
+  restaurants: { label: "함께 먹기 좋은 곳", icon: "🍴", color: "#6E7852" },
+  attractions: { label: "가볼 만한 곳", icon: "🚩", color: "#607478" },
+  cafes: { label: "쉬어가기", icon: "☕", color: "#B27060" },
   lodging: { label: "묵어가기", icon: "🛏", color: "#7c3aed" },
 };
-const BREWERY_COLOR = "#ff7a00";
+const BREWERY_COLOR = "#FF8A00";
 const BREWERY_ICON = "🍶";
 
 // 관광공사 세부 분류를 화면 카테고리 4종으로 정규화합니다. 문화시설·전통시장·기타는 '가볼 만한 곳'에 포함합니다.
@@ -183,10 +184,8 @@ export default function CourseDetailPage() {
   if (wineryLoading) {
     return (
       <PageContainer>
-        <Header>
-          <BackButton onClick={() => navigate(-1)} />
-        </Header>
-        <NotFound>코스 정보를 불러오는 중이에요...</NotFound>
+        <AppBar onBack={() => navigate(-1)} />
+        <DotsLoader />
       </PageContainer>
     );
   }
@@ -194,9 +193,7 @@ export default function CourseDetailPage() {
   if (!winery) {
     return (
       <PageContainer>
-        <Header>
-          <BackButton onClick={() => navigate(-1)} />
-        </Header>
+        <AppBar onBack={() => navigate(-1)} />
         <NotFound>코스 정보를 찾을 수 없어요</NotFound>
       </PageContainer>
     );
@@ -251,15 +248,17 @@ export default function CourseDetailPage() {
 
   return (
     <PageContainer>
-      <Header>
-        <BackButton onClick={() => navigate(-1)} />
-        <HeaderTitle>{course?.title ?? `${winery.name} 코스`}</HeaderTitle>
-        <ShareButton type="button" aria-label="공유하기" onClick={handleShare}>
-          <ShareIcon viewBox="0 0 24 24" aria-hidden>
-            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
-          </ShareIcon>
-        </ShareButton>
-      </Header>
+      <AppBar
+        onBack={() => navigate(-1)}
+        title={course?.title ?? `${winery.name} 코스`}
+        trailing={
+          <ShareButton type="button" aria-label="공유하기" onClick={handleShare}>
+            <ShareIcon viewBox="0 0 24 24" aria-hidden>
+              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
+            </ShareIcon>
+          </ShareButton>
+        }
+      />
 
       <MapPreview
         type="button"
@@ -326,7 +325,7 @@ export default function CourseDetailPage() {
         </DetailButton>
       </WinerySummary>
 
-      {courseState === "loading" && <NotFound>추천 코스를 불러오는 중이에요...</NotFound>}
+      {courseState === "loading" && <DotsLoader />}
       {courseState === "not_found" && (
         <NotFound>아직 이 양조장의 추천 코스가 준비되지 않았어요</NotFound>
       )}
@@ -389,21 +388,6 @@ const PageContainer = styled.div`
   flex-direction: column;
   box-sizing: border-box;
   background-color: #ffffff;
-`;
-
-const Header = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-`;
-
-const HeaderTitle = styled.h1`
-  flex: 1;
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
 `;
 
 const ShareButton = styled.button`
@@ -589,7 +573,7 @@ const PairingNote = styled.p`
   margin: 0 0 2px;
   font-size: 0.6875rem;
   font-weight: 600;
-  color: #ff7a00;
+  color: ${colors.primary[500]};
 `;
 
 const StopName = styled.p`
@@ -626,7 +610,7 @@ const MapFab = styled.button`
   padding: 12px 20px;
   border: none;
   border-radius: 9999px;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
   font-size: 0.875rem;
   font-weight: 700;

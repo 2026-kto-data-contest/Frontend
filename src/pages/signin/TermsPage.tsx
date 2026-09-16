@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../shared/components/Button";
+import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
 import { fetchTerms, saveTermsAgreements, continueAuth, ApiError } from "../../shared/api/api";
 import type { TermItem } from "../../shared/api/api";
@@ -142,6 +143,7 @@ export default function TermsPage() {
 
       <Button
         variant="primary"
+        size="lg"
         disabled={!canContinue || isSubmitting}
         style={{ marginTop: 32, width: "100%" }}
         onClick={handleSubmit}
@@ -255,7 +257,7 @@ const CheckCircle = styled.span<{ $active: boolean; $size: number }>`
   font-size: ${(props) => props.$size * 0.6}px;
   font-weight: 700;
   color: ${(props) => (props.$active ? "#ffffff" : "#9ca3af")};
-  background-color: ${(props) => (props.$active ? "#ff7a00" : "#f3f4f6")};
+  background-color: ${(props) => (props.$active ? colors.primary[500] : "#f3f4f6")};
   border: 1px solid ${(props) => (props.$active ? "transparent" : "#e5e7eb")};
 `;
 

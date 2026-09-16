@@ -237,7 +237,7 @@ const Dot = styled.span`
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
 `;
 
 const Content = styled.div`
@@ -320,7 +320,7 @@ const ApplyButton = styled.button`
   flex: 1;
   border: none;
   border-radius: 8px;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
   font-size: 0.9375rem;
   font-weight: 700;

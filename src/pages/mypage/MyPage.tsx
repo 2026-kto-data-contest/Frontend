@@ -434,7 +434,7 @@ const Switch = styled.button<{ $on: boolean }>`
   padding: 0;
   border: none;
   border-radius: 9999px;
-  background-color: ${(props) => (props.$on ? "#ff7a00" : colors.gray[200])};
+  background-color: ${(props) => (props.$on ? colors.primary[500] : colors.gray[200])};
   cursor: pointer;
   transition: background-color 0.2s ease-in-out;
 

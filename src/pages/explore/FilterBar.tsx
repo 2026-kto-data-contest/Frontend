@@ -138,7 +138,7 @@ const ActiveChip = styled.button`
   padding: 8px 8px 8px 12px;
   border-radius: 9999px;
   border: 1px solid transparent;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   font-size: 0.8125rem;
   font-weight: 600;
   color: #ffffff;

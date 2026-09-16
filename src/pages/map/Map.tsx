@@ -3,8 +3,9 @@ import type { PointerEvent as ReactPointerEvent } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
-import { BackButton } from "../../shared/components/BackButton";
+import { AppBar } from "../../shared/components/AppBar";
 import { Snackbar } from "../../shared/components/Snackbar";
+import { DotsLoader } from "../../shared/components/DotsLoader";
 import {
   WINERIES,
   getRepresentativeTypeLabel,
@@ -34,21 +35,33 @@ import callIcon from "../../assets/icon/Call.svg";
 import webIcon from "../../assets/icon/Web.svg";
 import checkIcon from "../../assets/icon/Check.svg";
 import topRightIcon from "../../assets/icon/TopRight.svg";
+import liquorIcon from "../../assets/icon/Liquor.svg";
+import bedIcon from "../../assets/icon/Bed.svg";
+import cafeIcon from "../../assets/icon/Cafe.svg";
+import flagIcon from "../../assets/icon/Flag.svg";
 
 type CategoryKey = "brewery" | "restaurants" | "attractions" | "cafes" | "lodging";
 type LoadState = "loading" | "ready" | "error";
 type SheetMode = "list" | "detail";
 type DetailKind = "winery" | "place" | "stop";
-type PlacesLoadState = "idle" | "loading" | "ready" | "error";
+type PlacesLoadState = "idle" | "loading" | "ready" | "error" | "zoomed_out";
 
 const CATEGORY_ORDER: CategoryKey[] = ["brewery", "restaurants", "attractions", "cafes", "lodging"];
 
 const CATEGORY_META: Record<CategoryKey, { label: string; icon: string; color: string }> = {
-  brewery: { label: "양조장", icon: "🍶", color: "#ff7a00" },
-  restaurants: { label: "식당", icon: "🍴", color: "#3b82f6" },
-  attractions: { label: "관광지", icon: "🚩", color: "#22c55e" },
-  cafes: { label: "카페", icon: "☕", color: "#92400e" },
-  lodging: { label: "숙소", icon: "🛏", color: "#7c3aed" },
+  brewery: { label: "양조장", icon: "🍶", color: colors.category.brewery },
+  restaurants: { label: "식당", icon: "🍴", color: colors.category.restaurant },
+  attractions: { label: "관광지", icon: "🚩", color: colors.category.attraction },
+  cafes: { label: "카페", icon: "☕", color: colors.category.cafe },
+  lodging: { label: "숙소", icon: "🛏", color: colors.category.lodging },
+};
+
+// 지도 위 핀 마커 전용 아이콘입니다. 여기 없는 카테고리(식당)는 기존 이모지 핀을 그대로 씁니다.
+const CATEGORY_PIN_ICON: Partial<Record<CategoryKey, string>> = {
+  brewery: liquorIcon,
+  attractions: flagIcon,
+  cafes: cafeIcon,
+  lodging: bedIcon,
 };
 
 const MAP_PLACE_CATEGORY: Record<CategoryKey, MapPlaceCategory> = {
@@ -76,6 +89,10 @@ const DEFAULT_LEVEL = 7;
 const FOCUS_LEVEL = 5;
 const USER_LOCATION_LEVEL = 6;
 const TOAST_DURATION_MS = 3000;
+// 식당·카페·숙소·관광지는 전국에 워낙 많아서, 넓게 축소한 상태로 조회하면 특정 지역(수도권 등)
+// 결과가 한쪽에 몰려 찍히면서 마치 그 지역 것만 보여주는 것처럼 보입니다. 양조장은 수가 적어
+// 전국을 봐도 문제없어서 그대로 두고, 나머지 카테고리만 일정 축척 이상에서는 조회를 건너뜁니다.
+const PLACE_DENSITY_ZOOM_LIMIT = 12;
 
 interface SimplePlaceInfo {
   name: string;
@@ -124,7 +141,9 @@ function getSnapPoints(mode: SheetMode, areaHeight: number) {
     };
   }
   return {
-    collapsed: Math.min(104, full),
+    // 핸들 + 카테고리 칩 줄까지만 보이고, 그 아래 "지금 지도에 보이는 ..." 목록은
+    // 안 보여야 해서 칩 줄 바로 아래에서 딱 잘리는 높이로 맞췄습니다.
+    collapsed: Math.min(96, full),
     half: Math.min(Math.round(safeHeight * 0.48), full),
     full,
   };
@@ -132,12 +151,13 @@ function getSnapPoints(mode: SheetMode, areaHeight: number) {
 
 function createPinElement(options: {
   emoji: string;
+  iconSrc?: string;
   color: string;
   label: string;
   selected: boolean;
   dimmed: boolean;
 }): HTMLDivElement {
-  const { emoji, color, label, selected, dimmed } = options;
+  const { emoji, iconSrc, color, label, selected, dimmed } = options;
   const wrap = document.createElement("div");
   wrap.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;opacity:${
     dimmed ? 0.45 : 1
@@ -147,13 +167,27 @@ function createPinElement(options: {
   const circle = document.createElement("div");
   circle.style.cssText = `
     width:${circleSize}px;height:${circleSize}px;border-radius:50%;
-    background:${color};display:flex;align-items:center;justify-content:center;
+    background:${iconSrc ? "#ffffff" : color};display:flex;align-items:center;justify-content:center;
     font-size:${selected ? 18 : 14}px;
     box-shadow:0 2px 6px rgba(0,0,0,0.25);
-    border:${selected ? "3px" : "2px"} solid #ffffff;
+    border:${selected ? "3px" : "2px"} solid ${iconSrc ? color : "#ffffff"};
     ${selected ? `outline:2px solid ${color};` : ""}
   `;
-  circle.textContent = emoji;
+  if (iconSrc) {
+    const iconSize = selected ? 20 : 16;
+    const icon = document.createElement("span");
+    icon.style.cssText = `
+      display:block;width:${iconSize}px;height:${iconSize}px;
+      background-color:${color};
+      -webkit-mask-image:url("${iconSrc}");mask-image:url("${iconSrc}");
+      -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+      -webkit-mask-position:center;mask-position:center;
+      -webkit-mask-size:contain;mask-size:contain;
+    `;
+    circle.appendChild(icon);
+  } else {
+    circle.textContent = emoji;
+  }
 
   const text = document.createElement("span");
   text.textContent = label;
@@ -293,6 +327,13 @@ export default function Map() {
 
     // 지도를 계속 움직이면 'idle'마다 새 요청이 쌓일 수 있어, 이전 요청은 항상 끊고 최신 것만 남깁니다.
     placesAbortRef.current?.abort();
+
+    if (category !== "brewery" && map.getLevel() >= PLACE_DENSITY_ZOOM_LIMIT) {
+      setPlaces([]);
+      setPlacesLoadState("zoomed_out");
+      return;
+    }
+
     const controller = new AbortController();
     placesAbortRef.current = controller;
 
@@ -501,6 +542,7 @@ export default function Map() {
     const isSelected = detailKind === "winery";
     const el = createPinElement({
       emoji: CATEGORY_META.brewery.icon,
+      iconSrc: CATEGORY_PIN_ICON.brewery,
       color: CATEGORY_META.brewery.color,
       label: focusWinery.name,
       selected: isSelected,
@@ -536,6 +578,7 @@ export default function Map() {
           : detailKind === "place" && selectedPlace?.placeId === place.placeId;
       const el = createPinElement({
         emoji: CATEGORY_META[activeCategory].icon,
+        iconSrc: CATEGORY_PIN_ICON[activeCategory],
         color: CATEGORY_META[activeCategory].color,
         label: place.placeName,
         selected: isSelected,
@@ -569,6 +612,7 @@ export default function Map() {
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
       const el = createPinElement({
         emoji: CATEGORY_META[category].icon,
+        iconSrc: CATEGORY_PIN_ICON[category],
         color: CATEGORY_META[category].color,
         label: stop.name,
         selected: isSelected,
@@ -806,16 +850,13 @@ export default function Map() {
   if (isCourseMode && !focusWinery) {
     return (
       <PageContainer>
-        <CourseHeader>
-          <BackButton onClick={() => navigate(-1)} />
-          <CourseHeaderTitle>코스</CourseHeaderTitle>
-        </CourseHeader>
+        <AppBar onBack={() => navigate(-1)} title="코스" />
         <NotFoundArea>
-          <NotFoundText>
-            {focusWineryLoading
-              ? "양조장 정보를 불러오는 중이에요..."
-              : "코스 정보를 찾을 수 없어요"}
-          </NotFoundText>
+          {focusWineryLoading ? (
+            <DotsLoader />
+          ) : (
+            <NotFoundText>코스 정보를 찾을 수 없어요</NotFoundText>
+          )}
         </NotFoundArea>
       </PageContainer>
     );
@@ -828,19 +869,21 @@ export default function Map() {
   return (
     <PageContainer>
       {isCourseMode ? (
-        <CourseHeader>
-          <BackButton onClick={() => navigate(-1)} />
-          <CourseHeaderTitle>{focusWinery!.name} 코스</CourseHeaderTitle>
-          <ShareButton
-            type="button"
-            aria-label="공유하기"
-            onClick={() => handleShareWinery(focusWinery!)}
-          >
-            <ShareIcon viewBox="0 0 24 24" aria-hidden>
-              <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
-            </ShareIcon>
-          </ShareButton>
-        </CourseHeader>
+        <AppBar
+          onBack={() => navigate(-1)}
+          title={`${focusWinery!.name} 코스`}
+          trailing={
+            <ShareButton
+              type="button"
+              aria-label="공유하기"
+              onClick={() => handleShareWinery(focusWinery!)}
+            >
+              <ShareIcon viewBox="0 0 24 24" aria-hidden>
+                <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
+              </ShareIcon>
+            </ShareButton>
+          }
+        />
       ) : null}
 
       <MapArea ref={areaRef}>
@@ -858,7 +901,7 @@ export default function Map() {
 
         {loadState === "loading" && (
           <StatusOverlay style={{ bottom: activeSheetHeight }}>
-            <StatusText>지도를 불러오는 중이에요...</StatusText>
+            <DotsLoader />
           </StatusOverlay>
         )}
         {loadState === "error" && (
@@ -870,12 +913,15 @@ export default function Map() {
 
         {loadState === "ready" && (
           <MapControls style={{ bottom: activeSheetHeight + 12 }}>
-            <ControlButton type="button" aria-label="확대" onClick={handleZoomIn}>
-              +
-            </ControlButton>
-            <ControlButton type="button" aria-label="축소" onClick={handleZoomOut}>
-              −
-            </ControlButton>
+            <ZoomControl>
+              <ZoomButton type="button" aria-label="확대" onClick={handleZoomIn}>
+                +
+              </ZoomButton>
+              <ZoomDivider />
+              <ZoomButton type="button" aria-label="축소" onClick={handleZoomOut}>
+                −
+              </ZoomButton>
+            </ZoomControl>
             <LocationButton
               type="button"
               aria-label="현재 위치로 이동"
@@ -930,23 +976,32 @@ export default function Map() {
               {sheetMode === "list" && (
                 <>
                   <ChipRow>
-                    {CATEGORY_ORDER.map((key) => (
-                      <CategoryChip
-                        key={key}
-                        type="button"
-                        $active={activeCategory === key}
-                        $color={CATEGORY_META[key].color}
-                        onClick={() => setActiveCategory(key)}
-                      >
-                        <span aria-hidden>{CATEGORY_META[key].icon}</span>
-                        {CATEGORY_META[key].label}
-                      </CategoryChip>
-                    ))}
+                    {CATEGORY_ORDER.map((key) => {
+                      const pinIcon = CATEGORY_PIN_ICON[key];
+                      return (
+                        <CategoryChip
+                          key={key}
+                          type="button"
+                          $active={activeCategory === key}
+                          onClick={() => setActiveCategory(key)}
+                        >
+                          {pinIcon ? (
+                            <ChipIcon aria-hidden $src={pinIcon} />
+                          ) : (
+                            <span aria-hidden>{CATEGORY_META[key].icon}</span>
+                          )}
+                          {CATEGORY_META[key].label}
+                        </CategoryChip>
+                      );
+                    })}
                   </ChipRow>
 
                   <ListTitle>지금 지도에 보이는 {CATEGORY_META[activeCategory].label}</ListTitle>
-                  {placesLoadState === "loading" && (
-                    <EmptyCategoryNotice>불러오는 중이에요...</EmptyCategoryNotice>
+                  {placesLoadState === "loading" && <DotsLoader />}
+                  {placesLoadState === "zoomed_out" && (
+                    <EmptyCategoryNotice>
+                      지도를 조금 더 확대하면 {CATEGORY_META[activeCategory].label} 정보가 보여요.
+                    </EmptyCategoryNotice>
                   )}
                   {placesLoadState === "error" && (
                     <EmptyCategoryNotice>
@@ -995,7 +1050,7 @@ export default function Map() {
                     onNavigateCourse={(courseId) => navigate(`/course/${courseId}`)}
                   />
                 ) : wineryDetailLoading ? (
-                  <DetailNotFound>양조장 정보를 불러오는 중이에요...</DetailNotFound>
+                  <DotsLoader />
                 ) : (
                   <DetailNotFound>양조장 정보를 찾을 수 없어요.</DetailNotFound>
                 ))}
@@ -1191,22 +1246,6 @@ const PageContainer = styled.div`
   background-color: #ffffff;
 `;
 
-const CourseHeader = styled.div`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-`;
-
-const CourseHeaderTitle = styled.h1`
-  flex: 1;
-  margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-`;
-
 const ShareButton = styled.button`
   flex-shrink: 0;
   display: flex;
@@ -1308,18 +1347,49 @@ const MapControls = styled.div`
   z-index: 6;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
   transition: bottom 0.25s ease;
+`;
+
+const ZoomControl = styled.div`
+  display: flex;
+  flex-direction: column;
+  width: 44px;
+  border-radius: 22px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+`;
+
+const ZoomButton = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: #ffffff;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: ${colors.gray[700]};
+  cursor: pointer;
+`;
+
+const ZoomDivider = styled.div`
+  height: 1px;
+  margin: 0 10px;
+  background: ${colors.gray[100]};
 `;
 
 const ControlButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border: none;
-  border-radius: 8px;
+  border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   font-size: 1rem;
@@ -1329,13 +1399,12 @@ const ControlButton = styled.button`
 `;
 
 const LocationButton = styled(ControlButton)<{ $active: boolean }>`
-  border-radius: 50%;
   color: ${(props) => (props.$active ? "#3b82f6" : colors.gray[700])};
 `;
 
 const LocationGlyph = styled.svg`
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -1350,7 +1419,7 @@ const ConsentSheet = styled.div`
   z-index: 8;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   padding: 8px 20px 24px;
   border-radius: 20px 20px 0 0;
   background: #ffffff;
@@ -1360,6 +1429,7 @@ const ConsentSheet = styled.div`
 
 const SheetHandle = styled.span`
   display: block;
+  align-self: center;
   width: 36px;
   height: 4px;
   margin: 6px 0 14px;
@@ -1372,7 +1442,7 @@ const ConsentTitle = styled.p`
   font-size: 1.0625rem;
   font-weight: 700;
   line-height: 1.4;
-  text-align: center;
+  text-align: left;
   color: ${colors.gray[900]};
 `;
 
@@ -1380,14 +1450,14 @@ const ConsentDesc = styled.p`
   margin: 8px 0 0;
   font-size: 0.8125rem;
   color: ${colors.gray[400]};
-  text-align: center;
+  text-align: left;
 `;
 
 const ConsentError = styled.p`
   margin: 8px 0 0;
   font-size: 0.75rem;
   color: ${colors.danger};
-  text-align: center;
+  text-align: left;
 `;
 
 const ConsentAgreeButton = styled.button`
@@ -1396,7 +1466,7 @@ const ConsentAgreeButton = styled.button`
   padding: 14px;
   border: none;
   border-radius: 12px;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
   font-size: 0.9375rem;
   font-weight: 700;
@@ -1409,6 +1479,7 @@ const ConsentAgreeButton = styled.button`
 `;
 
 const ConsentSkipButton = styled.button`
+  align-self: center;
   margin-top: 10px;
   border: none;
   background: transparent;
@@ -1460,20 +1531,35 @@ const ChipRow = styled.div`
   }
 `;
 
-const CategoryChip = styled.button<{ $active: boolean; $color: string }>`
+const CategoryChip = styled.button<{ $active: boolean }>`
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
   border-radius: 9999px;
-  border: 1px solid ${(props) => (props.$active ? props.$color : colors.gray[200])};
-  background: ${(props) => (props.$active ? props.$color : "#ffffff")};
+  border: 1px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
+  background: ${(props) => (props.$active ? colors.primary[500] : "#ffffff")};
   color: ${(props) => (props.$active ? "#ffffff" : colors.gray[600])};
   font-size: 0.8125rem;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+`;
+
+const ChipIcon = styled.span<{ $src: string }>`
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask-image: url("${(props) => props.$src}");
+  mask-image: url("${(props) => props.$src}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const ListTitle = styled.h2`
@@ -1625,7 +1711,7 @@ const PlaceNote = styled.p`
   margin: 6px 0 0;
   font-size: 0.75rem;
   font-weight: 600;
-  color: #ff7a00;
+  color: ${colors.primary[500]};
 `;
 
 const DetailActionRow = styled.div`
@@ -1652,7 +1738,7 @@ const DetailAction = styled.button`
 
 const DetailActionPrimary = styled(DetailAction)`
   border-color: transparent;
-  background-color: #ff7a00;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
 `;
 

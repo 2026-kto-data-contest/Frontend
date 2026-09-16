@@ -42,8 +42,7 @@ const Wrapper = styled.div<{ $large: boolean; $fluid: boolean; $clickable: boole
   ${(props) =>
     props.$large &&
     css`
-      border: 0.5px solid ${colors.gray[200]};
-      border-radius: 12px;
+      border-radius: 8px;
       overflow: hidden;
     `}
 
@@ -54,7 +53,7 @@ const Wrapper = styled.div<{ $large: boolean; $fluid: boolean; $clickable: boole
 const Thumb = styled.img<{ $large: boolean }>`
   width: 100%;
   height: ${(props) => (props.$large ? "180px" : "120px")};
-  border-radius: ${(props) => (props.$large ? "0" : "12px")};
+  border-radius: ${(props) => (props.$large ? "0" : "8px")};
   object-fit: cover;
   background-color: ${colors.gray[50]};
 `;
@@ -63,7 +62,7 @@ const Body = styled.div<{ $large: boolean }>`
   display: flex;
   flex-direction: column;
   gap: 4px;
-  ${(props) => (props.$large ? "padding: 12px;" : "padding-top: 8px;")}
+  ${(props) => (props.$large ? "padding: 16px;" : "padding-top: 8px;")}
 `;
 
 const Name = styled.p`
@@ -76,14 +75,14 @@ const Name = styled.p`
 const Region = styled.p`
   margin: 0;
   font-size: 12px;
-  color: ${colors.gray[400]};
+  color: ${colors.gray[500]};
 `;
 
 const Description = styled.p`
   margin: 0;
   font-size: 14px;
   font-weight: 300;
-  color: ${colors.gray[900]};
+  color: ${colors.gray[600]};
   line-height: 1.4;
   margin: 4px 0;
   overflow: hidden;

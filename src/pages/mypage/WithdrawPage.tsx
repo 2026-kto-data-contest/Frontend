@@ -162,7 +162,7 @@ const CheckCircle = styled.span<{ $active: boolean }>`
   font-size: 0.6875rem;
   font-weight: 700;
   color: ${(props) => (props.$active ? "#ffffff" : colors.gray[400])};
-  background-color: ${(props) => (props.$active ? "#ff7a00" : colors.gray[100])};
+  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[100])};
   border: 1px solid ${(props) => (props.$active ? "transparent" : colors.gray[200])};
 `;
 
