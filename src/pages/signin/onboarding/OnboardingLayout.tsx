@@ -107,6 +107,7 @@ const Content = styled.div`
   flex: 1;
   margin-top: 24px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 `;
 
 const Footer = styled.div`

@@ -30,9 +30,9 @@ const CATEGORY_KEYS: SectionKey[] = [
 // 도수 버킷 → API의 minAbv/maxAbv 근사 범위. API는 구간 하나만 받기 때문에
 // 여러 버킷을 동시에 고르면 서버 응답은 넉넉하게 받아온 뒤 아래 matchesFilters로 정확히 좁힙니다.
 const STRENGTH_BOUNDS: Record<string, [number, number]> = {
-  "7도 미만": [0, 6.999],
-  "7도 ~ 20도": [7, 19.999],
-  "20도 이상": [20, 100],
+  "14도 이하": [0, 14],
+  "15도 ~ 29도": [15, 29],
+  "30도 이상": [30, 100],
 };
 
 function buildBreweryParams(filters: WineryFilters): BreweryListParams {

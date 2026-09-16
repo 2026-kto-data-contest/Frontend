@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { Chip } from "../../shared/components/Chip";
 import { colors } from "../../shared/styles/colors";
+import retryIcon from "../../assets/icon/Retry.svg";
 import {
   ALL_TYPE_FILTERS,
   ALL_REGION_FILTERS,
@@ -40,7 +41,7 @@ export const SECTION_SHORT_LABELS: Record<SectionKey, string> = {
   types: "주종",
   regions: "지역",
   strengths: "도수",
-  visitConditions: "방문건",
+  visitConditions: "방문조건",
   histories: "이력",
 };
 
@@ -128,25 +129,27 @@ export const FilterSheet = ({
         </TabRow>
 
         <Content ref={contentRef}>
-          {SECTIONS.map((section) => (
-            <Section
-              key={section.key}
-              ref={(el) => {
-                sectionRefs.current[section.key] = el;
-              }}
-            >
-              <SectionTitle>{section.label}</SectionTitle>
-              <ChipGrid>
-                {section.options.map((option) => (
-                  <Chip
-                    key={option}
-                    label={option}
-                    active={draft[section.key].includes(option)}
-                    onClick={() => toggle(section.key, option)}
-                  />
-                ))}
-              </ChipGrid>
-            </Section>
+          {SECTIONS.map((section, index) => (
+            <Fragment key={section.key}>
+              {index > 0 && <SectionDivider />}
+              <Section
+                ref={(el) => {
+                  sectionRefs.current[section.key] = el;
+                }}
+              >
+                <SectionTitle>{section.label}</SectionTitle>
+                <ChipGrid>
+                  {section.options.map((option) => (
+                    <Chip
+                      key={option}
+                      label={option}
+                      active={draft[section.key].includes(option)}
+                      onClick={() => toggle(section.key, option)}
+                    />
+                  ))}
+                </ChipGrid>
+              </Section>
+            </Fragment>
           ))}
         </Content>
 
@@ -167,7 +170,7 @@ export const FilterSheet = ({
 
         <Footer>
           <ResetButton type="button" onClick={resetDraft}>
-            <span aria-hidden>↻</span> 초기화
+            <ResetIcon aria-hidden /> 초기화
           </ResetButton>
           <ApplyButton
             type="button"
@@ -225,9 +228,9 @@ const TabButton = styled.button<{ $active: boolean }>`
   padding: 14px 10px;
   border: none;
   background: transparent;
-  font-size: 0.875rem;
-  font-weight: ${(props) => (props.$active ? "700" : "500")};
-  color: ${(props) => (props.$active ? colors.gray[900] : colors.gray[400])};
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${(props) => (props.$active ? colors.gray[900] : colors.gray[500])};
   border-bottom: 2px solid ${(props) => (props.$active ? colors.gray[900] : "transparent")};
   white-space: nowrap;
   cursor: pointer;
@@ -243,22 +246,30 @@ const Dot = styled.span`
 const Content = styled.div`
   flex: 1;
   overflow-y: auto;
-  padding: 4px 16px;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 32px 16px 16px;
 `;
 
 const Section = styled.div`
-  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
 
-  & + & {
-    border-top: 1px solid ${colors.gray[100]};
-  }
+const SectionDivider = styled.div`
+  flex-shrink: 0;
+  height: 1px;
+  background-color: ${colors.gray[100]};
 `;
 
 const SectionTitle = styled.h3`
-  margin: 0 0 12px;
-  font-size: 0.9375rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: ${colors.gray[500]};
 `;
 
 const ChipGrid = styled.div`
@@ -298,31 +309,52 @@ const SelectedChip = styled.button`
 const Footer = styled.div`
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
-  padding: 12px 16px 20px;
+  gap: 12px;
+  padding: 12px 16px 40px;
 `;
 
 const ResetButton = styled.button`
+  flex-shrink: 0;
+  width: 103px;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 12px 18px;
-  border: none;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px 16px;
+  border: 1px solid ${colors.gray[200]};
   border-radius: 8px;
-  background-color: ${colors.gray[900]};
-  color: #ffffff;
-  font-size: 0.875rem;
-  font-weight: 600;
+  background-color: #ffffff;
+  color: ${colors.gray[900]};
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
+`;
+
+const ResetIcon = styled.span`
+  flex-shrink: 0;
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  background-color: ${colors.gray[900]};
+  -webkit-mask-image: url("${retryIcon}");
+  mask-image: url("${retryIcon}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const ApplyButton = styled.button`
   flex: 1;
+  padding: 12px 16px;
   border: none;
   border-radius: 8px;
   background-color: ${colors.primary[500]};
   color: #ffffff;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 700;
   cursor: pointer;
 
