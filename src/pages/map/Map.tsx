@@ -6,16 +6,14 @@ import { colors } from "../../shared/styles/colors";
 import { AppBar } from "../../shared/components/AppBar";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { DotsLoader } from "../../shared/components/DotsLoader";
-import {
-  WINERIES,
-  getRepresentativeTypeLabel,
-  getWineryVisitLabel,
-  buildSummaryBullets,
-} from "../../shared/lib/mockWineries";
+import { Badge } from "../../shared/components/Badge";
+import { PhotoCard } from "../../shared/components/PhotoCard";
+import { WINERIES, getRepresentativeTypeLabel, getWineryVisitLabel } from "../../shared/lib/mockWineries";
 import type { Winery } from "../../shared/lib/mockWineries";
 import {
   fetchMapPlaces,
   fetchRecommendedCourse,
+  fetchRecommendedBreweries,
   fetchBreweryDetail,
   fetchBreweryProducts,
 } from "../../shared/api/breweriesApi";
@@ -23,6 +21,7 @@ import type {
   MapPlace,
   MapPlaceCategory,
   RecommendedCourseStop,
+  BreweryListItem,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
@@ -33,12 +32,13 @@ import type {
 } from "../../shared/api/kakaoMaps";
 import callIcon from "../../assets/icon/Call.svg";
 import webIcon from "../../assets/icon/Web.svg";
-import checkIcon from "../../assets/icon/Check.svg";
 import topRightIcon from "../../assets/icon/TopRight.svg";
 import liquorIcon from "../../assets/icon/Liquor.svg";
 import bedIcon from "../../assets/icon/Bed.svg";
 import cafeIcon from "../../assets/icon/Cafe.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
+import restaurantIcon from "../../assets/icon/Restaurant.svg";
+import noneImage from "../../assets/img/NoneImage.png";
 
 type CategoryKey = "brewery" | "restaurants" | "attractions" | "cafes" | "lodging";
 type LoadState = "loading" | "ready" | "error";
@@ -59,6 +59,7 @@ const CATEGORY_META: Record<CategoryKey, { label: string; icon: string; color: s
 // 지도 위 핀 마커 전용 아이콘입니다. 여기 없는 카테고리(식당)는 기존 이모지 핀을 그대로 씁니다.
 const CATEGORY_PIN_ICON: Partial<Record<CategoryKey, string>> = {
   brewery: liquorIcon,
+  restaurants: restaurantIcon,
   attractions: flagIcon,
   cafes: cafeIcon,
   lodging: bedIcon,
@@ -93,6 +94,8 @@ const TOAST_DURATION_MS = 3000;
 // 결과가 한쪽에 몰려 찍히면서 마치 그 지역 것만 보여주는 것처럼 보입니다. 양조장은 수가 적어
 // 전국을 봐도 문제없어서 그대로 두고, 나머지 카테고리만 일정 축척 이상에서는 조회를 건너뜁니다.
 const PLACE_DENSITY_ZOOM_LIMIT = 12;
+// 양조장을 선택했을 때 바텀시트의 기본 높이입니다. 사용자가 핸들로 직접 늘리거나 줄일 수 있습니다.
+const DETAIL_SHEET_HEIGHT = 320;
 
 interface SimplePlaceInfo {
   name: string;
@@ -130,21 +133,14 @@ function stopToInfo(stop: RecommendedCourseStop): SimplePlaceInfo {
   };
 }
 
-function getSnapPoints(mode: SheetMode, areaHeight: number) {
+// 바텀시트는 리스트·상세 모드 구분 없이 딱 세 가지 높이만 가집니다:
+// collapsed(핸들+카테고리 칩 줄까지만), mid(320px), full(검색바까지 가리는 최대 높이).
+function getSnapPoints(areaHeight: number) {
   const safeHeight = areaHeight || 600;
   const full = Math.max(260, safeHeight - 72);
-  if (mode === "detail") {
-    return {
-      collapsed: Math.min(226, full),
-      half: Math.min(Math.round(safeHeight * 0.56), full),
-      full,
-    };
-  }
   return {
-    // 핸들 + 카테고리 칩 줄까지만 보이고, 그 아래 "지금 지도에 보이는 ..." 목록은
-    // 안 보여야 해서 칩 줄 바로 아래에서 딱 잘리는 높이로 맞췄습니다.
     collapsed: Math.min(96, full),
-    half: Math.min(Math.round(safeHeight * 0.48), full),
+    mid: Math.min(DETAIL_SHEET_HEIGHT, full),
     full,
   };
 }
@@ -163,38 +159,39 @@ function createPinElement(options: {
     dimmed ? 0.45 : 1
   };`;
 
-  const circleSize = selected ? 40 : 30;
+  const circleSize = selected ? 32 : 22;
   const circle = document.createElement("div");
   circle.style.cssText = `
     width:${circleSize}px;height:${circleSize}px;border-radius:50%;
-    background:${iconSrc ? "#ffffff" : color};display:flex;align-items:center;justify-content:center;
-    font-size:${selected ? 18 : 14}px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.25);
-    border:${selected ? "3px" : "2px"} solid ${iconSrc ? color : "#ffffff"};
-    ${selected ? `outline:2px solid ${color};` : ""}
+    background:${color};display:flex;align-items:center;justify-content:center;
+    box-sizing:border-box;
+    border:${selected ? "2.5px" : "1.5px"} solid #ffffff;
+    ${selected ? `box-shadow:0 0 8px ${color};` : ""}
   `;
   if (iconSrc) {
-    const iconSize = selected ? 20 : 16;
+    const iconSize = selected ? 18 : 12;
     const icon = document.createElement("span");
     icon.style.cssText = `
       display:block;width:${iconSize}px;height:${iconSize}px;
-      background-color:${color};
+      background-color:#ffffff;
       -webkit-mask-image:url("${iconSrc}");mask-image:url("${iconSrc}");
       -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
       -webkit-mask-position:center;mask-position:center;
-      -webkit-mask-size:contain;mask-size:contain;
+      -webkit-mask-size:60% 60%;mask-size:60% 60%;
     `;
     circle.appendChild(icon);
   } else {
+    circle.style.fontSize = selected ? "16px" : "11px";
     circle.textContent = emoji;
   }
 
   const text = document.createElement("span");
   text.textContent = label;
   text.style.cssText = `
-    font-size:10px;font-weight:${selected ? "700" : "600"};color:#1f2937;
-    background:rgba(255,255,255,0.85);padding:1px 5px;border-radius:6px;
+    font-size:${selected ? 12 : 11}px;font-weight:${selected ? "700" : "400"};color:#171716;
     white-space:nowrap;
+    -webkit-text-stroke:3px #ffffff;
+    paint-order:stroke fill;
   `;
 
   wrap.appendChild(circle);
@@ -271,12 +268,34 @@ export default function Map() {
   const [places, setPlaces] = useState<MapPlace[]>([]);
   const [placesLoadState, setPlacesLoadState] = useState<PlacesLoadState>("idle");
   const [courseStops, setCourseStops] = useState<RecommendedCourseStop[]>([]);
+  const [recommendedBreweries, setRecommendedBreweries] = useState<BreweryListItem[]>([]);
 
   const [toast, setToast] = useState<string | null>(null);
 
   const [fetchedWineries, setFetchedWineries] = useState<Record<string, Winery>>({});
   const [wineryDetailLoading, setWineryDetailLoading] = useState(false);
   const wineryFetchInFlightRef = useRef<Set<string>>(new Set());
+
+  // 양조장 리스트 행에 보여줄 이력 뱃지(수상이력 등)만 가볍게 따로 캐시합니다.
+  // (products까지 조회하는 ensureWineryLoaded는 핀을 눌러 상세를 열 때만 씁니다.)
+  const [breweryBadges, setBreweryBadges] = useState<Record<string, string[]>>({});
+  const badgeFetchInFlightRef = useRef<Set<string>>(new Set());
+
+  function ensureBreweryBadgesLoaded(id: string) {
+    if (breweryBadges[id] !== undefined) return;
+    if (badgeFetchInFlightRef.current.has(id)) return;
+    badgeFetchInFlightRef.current.add(id);
+    fetchBreweryDetail(id)
+      .then((detail) => {
+        setBreweryBadges((prev) => ({ ...prev, [id]: detail.featureTags ?? [] }));
+      })
+      .catch(() => {
+        setBreweryBadges((prev) => ({ ...prev, [id]: [] }));
+      })
+      .finally(() => {
+        badgeFetchInFlightRef.current.delete(id);
+      });
+  }
 
   // 목데이터에 없는 실제 양조장(코스 모드의 focusWinery, 지도에서 선택한 실제 양조장 핀)도 함께 찾습니다.
   function findWineryById(id: string): Winery | undefined {
@@ -318,6 +337,25 @@ export default function Map() {
   useEffect(() => {
     userPositionRef.current = userPosition;
   }, [userPosition]);
+
+  // 지도에 양조장이 하나도 안 보일 때 목록 대신 보여줄 추천 양조장입니다.
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchRecommendedBreweries(0, 6, controller.signal)
+      .then((page) => setRecommendedBreweries(page.content))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRecommendedBreweries([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  // 양조장 리스트가 보이는 동안, 각 행에 표시할 이력 뱃지를 백그라운드로 채워둡니다.
+  useEffect(() => {
+    if (activeCategory !== "brewery" || placesLoadState !== "ready") return;
+    places.forEach((place) => ensureBreweryBadgesLoaded(place.placeId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [places, activeCategory, placesLoadState]);
 
   function refetchPlaces(category: CategoryKey) {
     const mapCategory = MAP_PLACE_CATEGORY[category];
@@ -486,8 +524,8 @@ export default function Map() {
   useEffect(() => {
     if (sheetInitialized.current || areaHeight === 0) return;
     sheetInitialized.current = true;
-    const points = getSnapPoints(sheetMode, areaHeight);
-    setSheetHeight(isCourseMode ? points.half : points.collapsed);
+    const points = getSnapPoints(areaHeight);
+    setSheetHeight(isCourseMode ? points.mid : points.collapsed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaHeight]);
 
@@ -728,74 +766,60 @@ export default function Map() {
     if (map) map.setLevel(map.getLevel() + 1);
   };
 
+  // 바텀시트가 지도 아래쪽을 덮는 만큼, 핀이 "시트를 제외한 나머지 지도 영역"의 가운데 오도록
+  // 시트 높이의 절반만큼 지도를 아래로 더 이동시켜(panBy) 핀이 화면상 더 위쪽에 보이게 합니다.
+  function focusMapOn(lat: number, lng: number, coveredBottom = 0) {
+    const kakao = kakaoRef.current;
+    const map = mapInstanceRef.current;
+    if (kakao && map) {
+      map.setCenter(new kakao.LatLng(lat, lng));
+      map.setLevel(FOCUS_LEVEL);
+      if (coveredBottom > 0) map.panBy(0, coveredBottom / 2);
+    }
+  }
+
   function handleSelectWinery(id: string) {
     setSelectedId(id);
     setDetailKind("winery");
     setSheetMode("detail");
-    const points = getSnapPoints("detail", areaHeight);
-    setSheetHeight(points.half);
+    setSheetHeight(getSnapPoints(areaHeight).mid);
     const winery = WINERIES.find((item) => item.id === id);
-    const kakao = kakaoRef.current;
-    const map = mapInstanceRef.current;
-    if (kakao && map && winery?.lat && winery?.lng) {
-      map.setCenter(new kakao.LatLng(winery.lat, winery.lng));
-      map.setLevel(FOCUS_LEVEL);
-    }
+    if (winery?.lat && winery?.lng) focusMapOn(winery.lat, winery.lng, DETAIL_SHEET_HEIGHT);
   }
 
+  // 양조장 핀·목록만 지도 포커스를 옮깁니다. 그 외 장소(식당·카페 등)는 이미 화면에 보이는
+  // 상태에서 누른 것이므로 별도 카드(FloatingCard)만 띄우고 지도는 그대로 둡니다.
   function handleSelectPlace(place: MapPlace) {
     if (place.category === "BREWERY") {
       setSelectedId(place.placeId);
       setDetailKind("winery");
       ensureWineryLoaded(place.placeId);
-    } else {
-      setSelectedPlace(place);
-      setDetailKind("place");
+      setSheetMode("detail");
+      setSheetHeight(getSnapPoints(areaHeight).mid);
+      focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
+      return;
     }
-    setSheetMode("detail");
-    const points = getSnapPoints("detail", areaHeight);
-    setSheetHeight(points.half);
-    const kakao = kakaoRef.current;
-    const map = mapInstanceRef.current;
-    if (kakao && map) {
-      map.setCenter(new kakao.LatLng(place.latitude, place.longitude));
-      map.setLevel(FOCUS_LEVEL);
-    }
+    setSelectedPlace(place);
+    setDetailKind("place");
   }
 
   function handleSelectStop(stop: RecommendedCourseStop) {
     setSelectedStop(stop);
     setDetailKind("stop");
-    setSheetMode("detail");
-    const points = getSnapPoints("detail", areaHeight);
-    setSheetHeight(points.half);
-    const kakao = kakaoRef.current;
-    const map = mapInstanceRef.current;
-    if (kakao && map) {
-      map.setCenter(new kakao.LatLng(stop.latitude, stop.longitude));
-      map.setLevel(FOCUS_LEVEL);
-    }
   }
 
   const handleCloseDetail = () => {
-    if (isCourseMode) {
-      // 코스 모드에서는 목록이 따로 없어 정거장 카드를 닫으면 양조장 카드로 되돌아갑니다.
-      setDetailKind("winery");
-      setSelectedStop(null);
-      const kakao = kakaoRef.current;
-      const map = mapInstanceRef.current;
-      if (kakao && map && focusWinery?.lat && focusWinery?.lng) {
-        map.setCenter(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
-        map.setLevel(FOCUS_LEVEL);
-      }
-      return;
-    }
     setSelectedId(null);
-    setSelectedPlace(null);
     setDetailKind("winery");
     setSheetMode("list");
-    const points = getSnapPoints("list", areaHeight);
-    setSheetHeight(points.half);
+    setSheetHeight(getSnapPoints(areaHeight).collapsed);
+  };
+
+  // 장소(식당·카페 등)·코스 정거장 카드를 닫습니다. 바텀시트 자체는 건드리지 않습니다.
+  const handleCloseFloating = () => {
+    setSelectedPlace(null);
+    setSelectedStop(null);
+    setDetailKind("winery");
   };
 
   const handleDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -806,7 +830,7 @@ export default function Map() {
 
   const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
-    const points = getSnapPoints(sheetMode, areaHeight);
+    const points = getSnapPoints(areaHeight);
     const delta = dragRef.current.startY - e.clientY;
     const next = Math.min(
       points.full,
@@ -819,8 +843,8 @@ export default function Map() {
     if (!dragRef.current) return;
     dragRef.current = null;
     setIsDragging(false);
-    const points = getSnapPoints(sheetMode, areaHeight);
-    const candidates = [points.collapsed, points.half, points.full];
+    const points = getSnapPoints(areaHeight);
+    const candidates = [points.collapsed, points.mid, points.full];
     setSheetHeight((current) =>
       candidates.reduce((a, b) => (Math.abs(b - current) < Math.abs(a - current) ? b : a))
     );
@@ -863,8 +887,16 @@ export default function Map() {
   }
 
   const consentActive = !isCourseMode && showLocationConsent;
-  const activeSheetHeight = consentActive ? 190 : sheetHeight;
-  const showDetailClose = detailKind !== "winery" || !isCourseMode;
+  const floatingInfo =
+    detailKind === "place" && selectedPlace
+      ? placeToInfo(selectedPlace)
+      : detailKind === "stop" && selectedStop
+        ? stopToInfo(selectedStop)
+        : null;
+  // 장소 카드(FloatingCard)가 떠 있을 때는 바텀시트 자체가 사라지므로 피해야 할 높이가 없습니다.
+  const activeSheetHeight = consentActive ? 190 : floatingInfo ? 0 : sheetHeight;
+  const isSheetFullyExpanded =
+    !consentActive && !floatingInfo && sheetHeight >= getSnapPoints(areaHeight).full - 2;
 
   return (
     <PageContainer>
@@ -889,7 +921,7 @@ export default function Map() {
       <MapArea ref={areaRef}>
         <MapEl ref={mapElRef} />
 
-        {!isCourseMode && (
+        {!isCourseMode && !isSheetFullyExpanded && (
           <SearchBarButton type="button" onClick={() => navigate("/search")}>
             <SearchGlyph viewBox="0 0 24 24" aria-hidden>
               <circle cx="11" cy="11" r="6" />
@@ -959,7 +991,7 @@ export default function Map() {
           </ConsentSheet>
         )}
 
-        {!consentActive && (
+        {!consentActive && !floatingInfo && (
           <Sheet
             style={{ height: sheetHeight, transition: isDragging ? "none" : "height 0.25s ease" }}
           >
@@ -978,15 +1010,20 @@ export default function Map() {
                   <ChipRow>
                     {CATEGORY_ORDER.map((key) => {
                       const pinIcon = CATEGORY_PIN_ICON[key];
+                      const active = activeCategory === key;
                       return (
                         <CategoryChip
                           key={key}
                           type="button"
-                          $active={activeCategory === key}
+                          $active={active}
                           onClick={() => setActiveCategory(key)}
                         >
                           {pinIcon ? (
-                            <ChipIcon aria-hidden $src={pinIcon} />
+                            <ChipIcon
+                              aria-hidden
+                              $src={pinIcon}
+                              $color={active ? "#ffffff" : CATEGORY_META[key].color}
+                            />
                           ) : (
                             <span aria-hidden>{CATEGORY_META[key].icon}</span>
                           )}
@@ -996,7 +1033,6 @@ export default function Map() {
                     })}
                   </ChipRow>
 
-                  <ListTitle>지금 지도에 보이는 {CATEGORY_META[activeCategory].label}</ListTitle>
                   {placesLoadState === "loading" && <DotsLoader />}
                   {placesLoadState === "zoomed_out" && (
                     <EmptyCategoryNotice>
@@ -1008,30 +1044,85 @@ export default function Map() {
                       목록을 불러오지 못했어요. 지도를 조금 움직여보세요.
                     </EmptyCategoryNotice>
                   )}
-                  {placesLoadState === "ready" && places.length === 0 && (
-                    <EmptyCategoryNotice>
-                      이 지역에는 {CATEGORY_META[activeCategory].label} 정보가 없어요.
-                    </EmptyCategoryNotice>
-                  )}
-                  {places.length > 0 && (
+                  {placesLoadState === "ready" &&
+                    places.length === 0 &&
+                    (activeCategory === "brewery" ? (
+                      recommendedBreweries.length > 0 ? (
+                        <RecommendedSection>
+                          <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
+                          <RecommendedGrid>
+                            {recommendedBreweries.map((item) => (
+                              <PhotoCard
+                                key={item.breweryId}
+                                fluid
+                                name={item.businessName}
+                                region={
+                                  item.sigungu
+                                    ? `${item.sido ?? ""} ${item.sigungu}`.trim()
+                                    : (item.sido ?? item.region ?? "")
+                                }
+                                photoUrl={item.mainImage?.url}
+                                onClick={() => navigate(`/winery/${item.breweryId}`)}
+                              />
+                            ))}
+                          </RecommendedGrid>
+                        </RecommendedSection>
+                      ) : (
+                        // 양조장은 "정보가 없어요" 문구 대신, 추천 양조장이 도착할 때까지 로딩 표시로 대신합니다.
+                        <DotsLoader />
+                      )
+                    ) : (
+                      <EmptyCategoryNotice>
+                        이 지역에는 {CATEGORY_META[activeCategory].label} 정보가 없어요.
+                      </EmptyCategoryNotice>
+                    ))}
+                  {placesLoadState === "ready" && places.length > 0 && (
                     <PlaceList>
-                      {places.map((place) => (
-                        <PlaceRow
-                          key={place.placeId}
-                          type="button"
-                          onClick={() => handleSelectPlace(place)}
-                        >
-                          <PlaceIcon aria-hidden>{CATEGORY_META[activeCategory].icon}</PlaceIcon>
-                          <PlaceBody>
-                            <PlaceName>{place.placeName}</PlaceName>
-                            <PlaceMeta>
-                              {place.roadAddressName ?? ""}
-                              {place.distance != null ? ` · ${place.distance.toFixed(1)}km` : ""}
-                            </PlaceMeta>
-                          </PlaceBody>
-                          <ChevronIcon aria-hidden>›</ChevronIcon>
-                        </PlaceRow>
-                      ))}
+                      {places.map((place) => {
+                        const subtitleParts = [
+                          place.categoryName || undefined,
+                          place.distance != null
+                            ? `${place.distance.toFixed(1)}km`
+                            : place.roadAddressName || undefined,
+                        ].filter((part): part is string => Boolean(part));
+                        const thumbSrc =
+                          place.imageUrl ?? (place.category === "BREWERY" ? noneImage : null);
+                        const badges =
+                          place.category === "BREWERY" ? breweryBadges[place.placeId] : undefined;
+                        return (
+                          <PlaceRow
+                            key={place.placeId}
+                            type="button"
+                            onClick={() => handleSelectPlace(place)}
+                          >
+                            {thumbSrc ? (
+                              <PlaceThumb src={thumbSrc} alt="" />
+                            ) : (
+                              <PlaceThumbFallback aria-hidden>
+                                {CATEGORY_META[activeCategory].icon}
+                              </PlaceThumbFallback>
+                            )}
+                            <PlaceBody>
+                              <PlaceName>{place.placeName}</PlaceName>
+                              <PlaceMeta>
+                                {subtitleParts.map((part, index) => (
+                                  <PlaceMetaPart key={part}>
+                                    {index > 0 && <PlaceMetaDot aria-hidden />}
+                                    {part}
+                                  </PlaceMetaPart>
+                                ))}
+                              </PlaceMeta>
+                              {badges && badges.length > 0 && (
+                                <PlaceBadgeRow>
+                                  {badges.map((badge) => (
+                                    <Badge key={badge} label={badge} tone="gray" />
+                                  ))}
+                                </PlaceBadgeRow>
+                              )}
+                            </PlaceBody>
+                          </PlaceRow>
+                        );
+                      })}
                     </PlaceList>
                   )}
                 </>
@@ -1042,7 +1133,7 @@ export default function Map() {
                 (selectedWinery ? (
                   <DetailContent
                     winery={selectedWinery}
-                    showClose={showDetailClose}
+                    showClose={!isCourseMode}
                     onClose={handleCloseDetail}
                     onShare={handleShareWinery}
                     onDirections={handleDirections}
@@ -1054,26 +1145,19 @@ export default function Map() {
                 ) : (
                   <DetailNotFound>양조장 정보를 찾을 수 없어요.</DetailNotFound>
                 ))}
-
-              {sheetMode === "detail" && detailKind === "place" && selectedPlace && (
-                <SimplePlaceDetail
-                  info={placeToInfo(selectedPlace)}
-                  showClose={showDetailClose}
-                  onClose={handleCloseDetail}
-                  onCopy={copyToClipboard}
-                />
-              )}
-
-              {sheetMode === "detail" && detailKind === "stop" && selectedStop && (
-                <SimplePlaceDetail
-                  info={stopToInfo(selectedStop)}
-                  showClose={showDetailClose}
-                  onClose={handleCloseDetail}
-                  onCopy={copyToClipboard}
-                />
-              )}
             </SheetScroll>
           </Sheet>
+        )}
+
+        {!consentActive && floatingInfo && (
+          <FloatingCard>
+            <SimplePlaceDetail
+              info={floatingInfo}
+              showClose
+              onClose={handleCloseFloating}
+              onCopy={copyToClipboard}
+            />
+          </FloatingCard>
         )}
       </MapArea>
 
@@ -1101,8 +1185,8 @@ function DetailContent({
 }) {
   const representativeType = getRepresentativeTypeLabel(winery);
   const visitLabel = getWineryVisitLabel(winery);
-  const summaryBullets = buildSummaryBullets(winery);
   const experienceCount = winery.experiences?.length ?? 0;
+  const photoUrls = winery.photoUrls && winery.photoUrls.length > 0 ? winery.photoUrls : [noneImage];
 
   return (
     <DetailWrap>
@@ -1147,26 +1231,16 @@ function DetailContent({
         </DetailAction>
       </DetailActionRow>
 
-      {summaryBullets.length > 0 && (
-        <DetailSummaryCard>
-          <DetailSummaryTitle>이 양조장의 한 줄 요약</DetailSummaryTitle>
-          <DetailSummaryList>
-            {summaryBullets.map((bullet) => (
-              <DetailSummaryItem key={bullet}>
-                <img src={checkIcon} alt="" width={12} height={12} /> {bullet}
-              </DetailSummaryItem>
-            ))}
-          </DetailSummaryList>
-        </DetailSummaryCard>
-      )}
-
-      {winery.photoUrls && winery.photoUrls.length > 0 && (
-        <DetailPhotoRow>
-          {winery.photoUrls.map((url) => (
-            <DetailPhoto key={url} src={url} alt="" />
-          ))}
-        </DetailPhotoRow>
-      )}
+      <DetailPhotoRow>
+        {photoUrls.map((url, index) => (
+          <DetailPhoto
+            key={`${url}-${index}`}
+            src={url}
+            alt=""
+            $single={photoUrls.length === 1}
+          />
+        ))}
+      </DetailPhotoRow>
     </DetailWrap>
   );
 }
@@ -1291,7 +1365,7 @@ const SearchBarButton = styled.button`
   border: none;
   border-radius: 9999px;
   background: #ffffff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   text-align: left;
 `;
@@ -1348,31 +1422,31 @@ const MapControls = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   transition: bottom 0.25s ease;
 `;
 
 const ZoomControl = styled.div`
   display: flex;
   flex-direction: column;
-  width: 44px;
-  border-radius: 22px;
+  width: 36px;
+  border-radius: 999px;
   overflow: hidden;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
 `;
 
 const ZoomButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: none;
   background: #ffffff;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
   font-weight: 700;
-  color: ${colors.gray[700]};
+  color: ${colors.gray[900]};
   cursor: pointer;
 `;
 
@@ -1386,20 +1460,20 @@ const ControlButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border: none;
   border-radius: 50%;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
   font-size: 1rem;
   font-weight: 700;
-  color: ${colors.gray[700]};
+  color: ${colors.gray[900]};
   cursor: pointer;
 `;
 
 const LocationButton = styled(ControlButton)<{ $active: boolean }>`
-  color: ${(props) => (props.$active ? "#3b82f6" : colors.gray[700])};
+  color: ${(props) => (props.$active ? "#3b82f6" : colors.gray[900])};
 `;
 
 const LocationGlyph = styled.svg`
@@ -1503,6 +1577,23 @@ const Sheet = styled.div`
   overflow: hidden;
 `;
 
+// 양조장 이외의 장소·코스 정거장은 드래그 가능한 바텀시트 대신, 내용 크기에 맞는
+// 이 카드로 지도 위에 떠서 보여줍니다(뒤의 목록/시트는 그대로 유지됩니다).
+const FloatingCard = styled.div`
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 9;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 20px 16px;
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-sizing: border-box;
+`;
+
 const SheetHandleArea = styled.div`
   flex-shrink: 0;
   display: flex;
@@ -1540,18 +1631,18 @@ const CategoryChip = styled.button<{ $active: boolean }>`
   border-radius: 9999px;
   border: 1px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
   background: ${(props) => (props.$active ? colors.primary[500] : "#ffffff")};
-  color: ${(props) => (props.$active ? "#ffffff" : colors.gray[600])};
+  color: ${(props) => (props.$active ? "#ffffff" : colors.gray[500])};
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: ${(props) => (props.$active ? 700 : 400)};
   white-space: nowrap;
   cursor: pointer;
 `;
 
-const ChipIcon = styled.span<{ $src: string }>`
+const ChipIcon = styled.span<{ $src: string; $color: string }>`
   display: inline-block;
   width: 14px;
   height: 14px;
-  background-color: currentColor;
+  background-color: ${(props) => props.$color};
   -webkit-mask-image: url("${(props) => props.$src}");
   mask-image: url("${(props) => props.$src}");
   -webkit-mask-repeat: no-repeat;
@@ -1562,18 +1653,32 @@ const ChipIcon = styled.span<{ $src: string }>`
   mask-size: contain;
 `;
 
-const ListTitle = styled.h2`
-  margin: 4px 0 14px;
-  font-size: 1rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-`;
-
 const EmptyCategoryNotice = styled.p`
   margin: 32px 0;
   text-align: center;
   font-size: 0.875rem;
   color: ${colors.gray[400]};
+`;
+
+const RecommendedSection = styled.div`
+  padding: 12px 0 24px;
+`;
+
+const RecommendedTitle = styled.h2`
+  margin: 0 0 12px;
+  font-size: 1rem;
+  font-weight: 700;
+  color: ${colors.gray[900]};
+`;
+
+const RecommendedGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+
+  img {
+    height: 200px;
+  }
 `;
 
 const PlaceList = styled.div`
@@ -1585,8 +1690,8 @@ const PlaceList = styled.div`
 const PlaceRow = styled.button`
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 16px;
+  padding: 15px 0;
   border: none;
   border-top: 1px solid ${colors.gray[100]};
   background: transparent;
@@ -1598,16 +1703,25 @@ const PlaceRow = styled.button`
   }
 `;
 
-const PlaceIcon = styled.span`
+const PlaceThumb = styled.img`
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  background-color: ${colors.gray[50]};
+`;
+
+const PlaceThumbFallback = styled.span`
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
   background-color: ${colors.gray[50]};
-  font-size: 1rem;
+  font-size: 1.5rem;
 `;
 
 const PlaceBody = styled.div`
@@ -1618,20 +1732,30 @@ const PlaceBody = styled.div`
 const PlaceName = styled.p`
   margin: 0;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 600;
   color: ${colors.gray[900]};
 `;
 
 const PlaceMeta = styled.p`
-  margin: 2px 0 0;
-  font-size: 0.75rem;
-  color: ${colors.gray[400]};
+  display: flex;
+  align-items: center;
+  margin: 4px 0 0;
+  font-size: 0.6875rem;
+  color: ${colors.gray[500]};
 `;
 
-const ChevronIcon = styled.span`
-  flex-shrink: 0;
-  font-size: 1.25rem;
-  color: ${colors.gray[300]};
+const PlaceMetaPart = styled.span`
+  display: flex;
+  align-items: center;
+`;
+
+const PlaceMetaDot = styled.span`
+  display: inline-block;
+  width: 2px;
+  height: 2px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background-color: ${colors.gray[500]};
 `;
 
 const DetailWrap = styled.div`
@@ -1647,8 +1771,8 @@ const DetailHeaderRow = styled.div`
 const DetailName = styled.h2`
   flex: 1;
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
+  font-size: 1.25rem;
+  font-weight: 600;
   color: ${colors.gray[900]};
 `;
 
@@ -1669,7 +1793,7 @@ const DetailCloseButton = styled.button`
 
 const DetailMetaLine = styled.p`
   margin: 6px 0 0;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: ${colors.gray[500]};
 `;
 
@@ -1684,7 +1808,7 @@ const DetailAddressText = styled.p`
   flex: 1;
   min-width: 0;
   margin: 0;
-  font-size: 0.8125rem;
+  font-size: 0.75rem;
   color: ${colors.gray[600]};
 `;
 
@@ -1714,23 +1838,36 @@ const PlaceNote = styled.p`
   color: ${colors.primary[500]};
 `;
 
-const DetailActionRow = styled.div`
+const PlaceBadgeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+`;
+
+const DetailActionRow = styled.div`
+  display: flex;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 14px;
+  overflow-x: auto;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
 `;
 
 const DetailAction = styled.button`
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   gap: 4px;
   padding: 8px 12px;
-  border: 1px solid ${colors.gray[200]};
+  border: 1px solid ${colors.border};
   border-radius: 9999px;
   background: #ffffff;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8125rem;
+  font-weight: 400;
   color: ${colors.gray[700]};
   cursor: pointer;
   white-space: nowrap;
@@ -1740,6 +1877,7 @@ const DetailActionPrimary = styled(DetailAction)`
   border-color: transparent;
   background-color: ${colors.primary[500]};
   color: #ffffff;
+  font-weight: 600;
 `;
 
 const DetailActionFull = styled(DetailAction)`
@@ -1768,37 +1906,6 @@ const MaskIcon = styled.span<{ $src: string }>`
   mask-size: contain;
 `;
 
-const DetailSummaryCard = styled.div`
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 12px;
-  background-color: ${colors.gray[50]};
-`;
-
-const DetailSummaryTitle = styled.p`
-  margin: 0 0 8px;
-  font-size: 0.8125rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-`;
-
-const DetailSummaryList = styled.ul`
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-`;
-
-const DetailSummaryItem = styled.li`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 0.75rem;
-  color: ${colors.gray[600]};
-  line-height: 1.5;
-`;
 
 const DetailPhotoRow = styled.div`
   display: flex;
@@ -1811,10 +1918,10 @@ const DetailPhotoRow = styled.div`
   }
 `;
 
-const DetailPhoto = styled.img`
+const DetailPhoto = styled.img<{ $single: boolean }>`
   flex-shrink: 0;
-  width: 96px;
-  height: 96px;
+  width: ${(props) => (props.$single ? "100%" : "150px")};
+  height: ${(props) => (props.$single ? "200px" : "180px")};
   border-radius: 10px;
   object-fit: cover;
   background-color: ${colors.gray[50]};

@@ -33,6 +33,8 @@ export interface KakaoMapInstance {
     paddingLeft?: number
   ): void;
   relayout(): void;
+  /** 지도를 픽셀 단위로 이동합니다(마우스 드래그와 동일한 효과). */
+  panBy(dx: number, dy: number): void;
 }
 
 export interface KakaoMarkerInstance {
