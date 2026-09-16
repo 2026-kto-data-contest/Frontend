@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
@@ -14,19 +14,25 @@ import type {
   CourseStopType,
 } from "../../shared/api/breweriesApi";
 import pinIcon from "../../assets/icon/Pin.svg";
-import topRightIcon from "../../assets/icon/TopRight.svg";
+import mapIcon from "../../assets/icon/Map.svg";
+import restaurantIcon from "../../assets/icon/Restaurant.svg";
+import flagIcon from "../../assets/icon/Flag.svg";
+import cafeIcon from "../../assets/icon/Cafe.svg";
+import bedIcon from "../../assets/icon/Bed.svg";
+import liquorIcon from "../../assets/icon/Liquor.svg";
+import verifiedIcon from "../../assets/icon/Verified.svg";
 
 type CategoryKey = "restaurants" | "attractions" | "cafes" | "lodging";
 type CourseLoadState = "loading" | "ready" | "not_found" | "error";
 
 const CATEGORY_META: Record<CategoryKey, { label: string; icon: string; color: string }> = {
-  restaurants: { label: "함께 먹기 좋은 곳", icon: "🍴", color: "#6E7852" },
-  attractions: { label: "가볼 만한 곳", icon: "🚩", color: "#607478" },
-  cafes: { label: "쉬어가기", icon: "☕", color: "#B27060" },
-  lodging: { label: "묵어가기", icon: "🛏", color: "#7c3aed" },
+  restaurants: { label: "식당", icon: restaurantIcon, color: "#6E7852" },
+  attractions: { label: "관광지", icon: flagIcon, color: "#607478" },
+  cafes: { label: "카페·디저트", icon: cafeIcon, color: "#B27060" },
+  lodging: { label: "숙소", icon: bedIcon, color: "#8A8A88" },
 };
 const BREWERY_COLOR = "#FF8A00";
-const BREWERY_ICON = "🍶";
+const BREWERY_ICON = liquorIcon;
 
 // 관광공사 세부 분류를 화면 카테고리 4종으로 정규화합니다. 문화시설·전통시장·기타는 '가볼 만한 곳'에 포함합니다.
 const CATEGORY_BY_STOP_TYPE: Partial<Record<CourseStopType, CategoryKey>> = {
@@ -64,13 +70,6 @@ export default function CourseDetailPage() {
   const [wineryLoading, setWineryLoading] = useState(true);
   const [course, setCourse] = useState<RecommendedCourseDetail | null>(null);
   const [courseState, setCourseState] = useState<CourseLoadState>("loading");
-
-  const sectionRefs = useRef<Record<CategoryKey, HTMLElement | null>>({
-    restaurants: null,
-    attractions: null,
-    cafes: null,
-    lodging: null,
-  });
 
   useEffect(() => {
     if (!id) return;
@@ -152,12 +151,6 @@ export default function CourseDetailPage() {
   const categorySections = (Object.keys(CATEGORY_META) as CategoryKey[])
     .map((key) => ({ key, items: stopsByCategory[key] }))
     .filter((section) => section.items.length > 0);
-
-  const visibleLegend: CategoryKey[] = categorySections.map((section) => section.key);
-
-  const scrollToSection = (key: CategoryKey) => {
-    sectionRefs.current[key]?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   const handleShare = async () => {
     if (!winery) return;
@@ -269,7 +262,7 @@ export default function CourseDetailPage() {
       >
         {projected.length === 0 ? (
           <MapPin aria-hidden $bg={BREWERY_COLOR} style={{ left: "50%", top: "50%" }}>
-            {BREWERY_ICON}
+            <MapPinIcon $src={BREWERY_ICON} />
           </MapPin>
         ) : (
           projected.map((point) => (
@@ -280,7 +273,7 @@ export default function CourseDetailPage() {
               $bg={point.color}
               style={{ left: `${point.left}%`, top: `${point.top}%` }}
             >
-              {point.icon}
+              <MapPinIcon $src={point.icon} $small={point.muted} />
             </MapPin>
           ))
         )}
@@ -290,29 +283,6 @@ export default function CourseDetailPage() {
           </ExpandIcon>
         </MapExpandButton>
       </MapPreview>
-
-      {visibleLegend.length > 0 && (
-        <LegendRow>
-          <LegendItem
-            type="button"
-            onClick={() =>
-              sectionRefs.current[visibleLegend[0]]?.scrollIntoView({
-                behavior: "smooth",
-                block: "start",
-              })
-            }
-          >
-            <LegendDot style={{ backgroundColor: BREWERY_COLOR }} />
-            양조장
-          </LegendItem>
-          {visibleLegend.map((key) => (
-            <LegendItem key={key} type="button" onClick={() => scrollToSection(key)}>
-              <LegendDot style={{ backgroundColor: CATEGORY_META[key].color }} />
-              {CATEGORY_META[key].label}
-            </LegendItem>
-          ))}
-        </LegendRow>
-      )}
 
       <WinerySummary>
         <img src={pinIcon} alt="" width={20} height={20} />
@@ -334,37 +304,54 @@ export default function CourseDetailPage() {
       )}
 
       {courseState === "ready" &&
-        categorySections.map((section) => (
-          <Section
-            key={section.key}
-            ref={(el) => {
-              sectionRefs.current[section.key] = el;
-            }}
-          >
-            <SectionTitle>{CATEGORY_META[section.key].label}</SectionTitle>
-            <StopList>
-              {section.items.map((item) => {
-                const distanceKm = formatDistanceKm(item.distanceMeters);
-                const badge = item.subcategoryName || item.categoryName;
-                const note = item.pairingComment || item.recommendationReason;
-                return (
-                  <StopRow key={item.contentId}>
-                    <StopIcon aria-hidden>{CATEGORY_META[section.key].icon}</StopIcon>
-                    <StopBody>
-                      {note && <PairingNote>{note}</PairingNote>}
-                      <StopName>{item.name}</StopName>
-                      <StopMeta>
-                        {badge ? `${badge} · ` : ""}
-                        {distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음"}
-                      </StopMeta>
-                    </StopBody>
-                    <ChevronIcon aria-hidden>›</ChevronIcon>
-                  </StopRow>
-                );
-              })}
-            </StopList>
-          </Section>
-        ))}
+        categorySections.map((section) => {
+          const categoryColor = CATEGORY_META[section.key].color;
+          return (
+            <Section key={section.key}>
+              <SectionTitle>{CATEGORY_META[section.key].label}</SectionTitle>
+              <StopList>
+                {section.items.map((item) => {
+                  const distanceKm = formatDistanceKm(item.distanceMeters);
+                  const badge = item.subcategoryName || item.categoryName;
+                  const note = item.pairingComment || item.recommendationReason;
+                  const metaParts = [
+                    distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음",
+                    badge || undefined,
+                  ].filter((part): part is string => Boolean(part));
+                  return (
+                    <StopRow key={item.contentId}>
+                      {item.imageUrl ? (
+                        <StopThumb src={item.imageUrl} alt="" />
+                      ) : (
+                        <StopThumbFallback aria-hidden $color={categoryColor}>
+                          <StopThumbIcon $src={CATEGORY_META[section.key].icon} />
+                        </StopThumbFallback>
+                      )}
+                      <StopBody>
+                        {note && (
+                          <PairingNote $color={categoryColor}>
+                            <PairingIcon $src={verifiedIcon} $color={categoryColor} />
+                            {note}
+                          </PairingNote>
+                        )}
+                        <StopName>{item.name}</StopName>
+                        <StopMeta>
+                          {metaParts.map((part, index) => (
+                            <StopMetaPart key={part}>
+                              {index > 0 && <StopMetaDot aria-hidden />}
+                              {part}
+                            </StopMetaPart>
+                          ))}
+                        </StopMeta>
+                      </StopBody>
+                      <ChevronIcon aria-hidden>›</ChevronIcon>
+                    </StopRow>
+                  );
+                })}
+              </StopList>
+            </Section>
+          );
+        })}
 
       <BottomSpacer />
 
@@ -374,7 +361,7 @@ export default function CourseDetailPage() {
           navigate(`/map?focus=${winery.id}`, { state: { courseStops: course?.stops } })
         }
       >
-        <FabIcon $src={topRightIcon} aria-hidden />
+        <img src={mapIcon} alt="" width={20} height={20} />
         {courseState === "ready" ? "지도에서 코스 보기" : "지도에서 보기"}
       </MapFab>
     </PageContainer>
@@ -427,12 +414,27 @@ const MapPin = styled.span<{ $muted?: boolean; $bg: string }>`
   align-items: center;
   justify-content: center;
   transform: translate(-50%, -50%);
-  width: ${(props) => (props.$muted ? "28px" : "36px")};
-  height: ${(props) => (props.$muted ? "28px" : "36px")};
+  width: ${(props) => (props.$muted ? "22px" : "32px")};
+  height: ${(props) => (props.$muted ? "22px" : "32px")};
   border-radius: 50%;
   background-color: ${(props) => props.$bg};
+  border: ${(props) => (props.$muted ? "1.5px" : "2.5px")} solid #ffffff;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
-  font-size: ${(props) => (props.$muted ? "0.8125rem" : "1.125rem")};
+`;
+
+const MapPinIcon = styled.span<{ $src: string; $small?: boolean }>`
+  display: block;
+  width: ${(props) => (props.$small ? "12px" : "18px")};
+  height: ${(props) => (props.$small ? "12px" : "18px")};
+  background-color: #ffffff;
+  -webkit-mask-image: url("${(props) => props.$src}");
+  mask-image: url("${(props) => props.$src}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: 60% 60%;
+  mask-size: 60% 60%;
 `;
 
 const MapExpandButton = styled.span`
@@ -458,45 +460,15 @@ const ExpandIcon = styled.svg`
   stroke-linejoin: round;
 `;
 
-const LegendRow = styled.div`
-  display: flex;
-  gap: 12px;
-  padding: 12px 16px;
-  overflow-x: auto;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-`;
-
-const LegendItem = styled.button`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
-  background: transparent;
-  padding: 0;
-  font-size: 0.75rem;
-  color: ${colors.gray[600]};
-  cursor: pointer;
-  white-space: nowrap;
-`;
-
-const LegendDot = styled.span`
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-`;
-
 const WinerySummary = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 0 16px 8px;
+  margin: 12px 16px 8px;
   padding: 14px;
-  border: 1px solid ${colors.gray[100]};
-  border-radius: 12px;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.25);
 `;
 
 const WinerySummaryText = styled.div`
@@ -506,8 +478,8 @@ const WinerySummaryText = styled.div`
 
 const WineryName = styled.p`
   margin: 0;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
   color: ${colors.gray[900]};
 `;
 
@@ -520,12 +492,12 @@ const WineryAddress = styled.p`
 const DetailButton = styled.button`
   flex-shrink: 0;
   padding: 8px 12px;
-  border: 1px solid ${colors.gray[200]};
-  border-radius: 8px;
-  background: #ffffff;
+  border: none;
+  border-radius: 4px;
+  background: ${colors.gray[50]};
   font-size: 0.8125rem;
-  font-weight: 600;
-  color: ${colors.gray[700]};
+  font-weight: 400;
+  color: ${colors.gray[900]};
   cursor: pointer;
 `;
 
@@ -535,7 +507,7 @@ const Section = styled.section`
 
 const SectionTitle = styled.h2`
   margin: 0 0 12px;
-  font-size: 1rem;
+  font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
 `;
@@ -543,25 +515,55 @@ const SectionTitle = styled.h2`
 const StopList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
 `;
 
 const StopRow = styled.div`
   display: flex;
   align-items: center;
   gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid ${colors.gray[100]};
+
+  &:first-child {
+    border-top: none;
+    padding-top: 0;
+  }
 `;
 
-const StopIcon = styled.span`
+const StopThumb = styled.img`
+  flex-shrink: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  object-fit: cover;
+  background-color: ${colors.gray[50]};
+`;
+
+const StopThumbFallback = styled.span<{ $color: string }>`
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
   background-color: ${colors.gray[50]};
-  font-size: 1.125rem;
+  color: ${(props) => props.$color};
+`;
+
+const StopThumbIcon = styled.span<{ $src: string }>`
+  display: block;
+  width: 24px;
+  height: 24px;
+  background-color: currentColor;
+  -webkit-mask-image: url("${(props) => props.$src}");
+  mask-image: url("${(props) => props.$src}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const StopBody = styled.div`
@@ -569,30 +571,70 @@ const StopBody = styled.div`
   min-width: 0;
 `;
 
-const PairingNote = styled.p`
-  margin: 0 0 2px;
+const PairingNote = styled.p<{ $color: string }>`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 0 4px;
   font-size: 0.6875rem;
-  font-weight: 600;
-  color: ${colors.primary[500]};
+  font-weight: 400;
+  color: ${(props) => props.$color};
+`;
+
+const PairingIcon = styled.span<{ $src: string; $color: string }>`
+  flex-shrink: 0;
+  display: block;
+  width: 12px;
+  height: 12px;
+  background-color: ${(props) => props.$color};
+  -webkit-mask-image: url("${(props) => props.$src}");
+  mask-image: url("${(props) => props.$src}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const StopName = styled.p`
   margin: 0;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 600;
   color: ${colors.gray[900]};
 `;
 
 const StopMeta = styled.p`
+  display: flex;
+  align-items: center;
   margin: 2px 0 0;
-  font-size: 0.75rem;
-  color: ${colors.gray[400]};
+  font-size: 0.6875rem;
+  color: ${colors.gray[600]};
+`;
+
+const StopMetaPart = styled.span`
+  display: flex;
+  align-items: center;
+  color: ${colors.gray[500]};
+
+  &:first-child {
+    color: ${colors.gray[600]};
+  }
+`;
+
+const StopMetaDot = styled.span`
+  display: inline-block;
+  width: 2px;
+  height: 2px;
+  margin: 0 6px;
+  border-radius: 50%;
+  background-color: ${colors.gray[500]};
 `;
 
 const ChevronIcon = styled.span`
   flex-shrink: 0;
   font-size: 1.25rem;
-  color: ${colors.gray[300]};
+  color: ${colors.gray[200]};
 `;
 
 const BottomSpacer = styled.div`
@@ -613,26 +655,10 @@ const MapFab = styled.button`
   background-color: ${colors.primary[500]};
   color: #ffffff;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 600;
   box-shadow: 0 6px 16px rgba(255, 122, 0, 0.35);
   cursor: pointer;
   z-index: 30;
-`;
-
-const FabIcon = styled.span<{ $src: string }>`
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  background-color: currentColor;
-  -webkit-mask-image: url("${(props) => props.$src}");
-  mask-image: url("${(props) => props.$src}");
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-  transform: rotate(180deg);
 `;
 
 const NotFound = styled.p`

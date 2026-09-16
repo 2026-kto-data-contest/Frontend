@@ -265,6 +265,84 @@ export function fetchMapPlaces(
   return getJson<PageResponse<MapPlace>>("/api/v1/map/places", qs, signal);
 }
 
+// 지도 기본 화면(양조장 핀이 하나도 안 보일 때) 대체 콘텐츠용 전용 엔드포인트입니다.
+export interface MapRecommendedBrewery {
+  breweryId: string;
+  businessName: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  liquorTypes: string[];
+  featureTags: string[];
+  mainImage: MainImage | null;
+}
+
+export function fetchMapRecommendedBreweries(
+  page = 0,
+  size = 4,
+  signal?: AbortSignal
+): Promise<PageResponse<MapRecommendedBrewery>> {
+  const qs = new URLSearchParams({ page: String(page), size: String(size) });
+  return getJson<PageResponse<MapRecommendedBrewery>>(
+    "/api/v1/map/recommended-breweries",
+    qs,
+    signal
+  );
+}
+
+export interface MapAwardedLiquor {
+  productId: number;
+  productName: string;
+  breweryId: string;
+  breweryName: string;
+  awardBadge: string;
+  liquorTypes: string[];
+  alcoholMin: number | null;
+  alcoholMax: number | null;
+  volume: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  image: MainImage | null;
+}
+
+export function fetchMapAwardedLiquors(
+  page = 0,
+  size = 4,
+  signal?: AbortSignal
+): Promise<PageResponse<MapAwardedLiquor>> {
+  const qs = new URLSearchParams({ page: String(page), size: String(size) });
+  return getJson<PageResponse<MapAwardedLiquor>>("/api/v1/map/awarded-liquors", qs, signal);
+}
+
+export interface MapMenu {
+  menu: string;
+  displayName: string;
+}
+
+export function fetchMapMenus(signal?: AbortSignal): Promise<MapMenu[]> {
+  return getJson<MapMenu[]>("/api/v1/map/menus", undefined, signal);
+}
+
+export function fetchMapMenuPlaces(
+  menu: string,
+  userPosition?: { lat: number; lng: number },
+  page = 0,
+  size = 20,
+  signal?: AbortSignal
+): Promise<PageResponse<MapPlace>> {
+  const qs = new URLSearchParams({ page: String(page), size: String(size) });
+  if (userPosition) {
+    qs.set("userLatitude", String(userPosition.lat));
+    qs.set("userLongitude", String(userPosition.lng));
+  }
+  return getJson<PageResponse<MapPlace>>(
+    `/api/v1/map/menus/${encodeURIComponent(menu)}/places`,
+    qs,
+    signal
+  );
+}
+
 export type CourseStopType =
   | "BREWERY"
   | "RESTAURANT"
@@ -312,6 +390,21 @@ export function fetchRecommendedCourse(
     undefined,
     signal
   );
+}
+
+export interface BreweryFilterOption {
+  value: string;
+  breweryCount: number;
+}
+
+export interface BreweryFilters {
+  liquorTypes: BreweryFilterOption[];
+  regions: BreweryFilterOption[];
+}
+
+// 주종·지역 필터 칩 옆에 표시할 양조장 개수입니다.
+export function fetchBreweryFilters(signal?: AbortSignal): Promise<BreweryFilters> {
+  return getJson<BreweryFilters>("/api/v1/metadata/brewery-filters", undefined, signal);
 }
 
 // 양조장 목록 카드(WineryCard)가 그대로 그릴 수 있는 최소 형태로 변환합니다.
