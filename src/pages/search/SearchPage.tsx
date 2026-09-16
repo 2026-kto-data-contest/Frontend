@@ -226,7 +226,7 @@ export default function SearchPage() {
               if (e.key === "Enter") runSearch(query);
             }}
           />
-          {query && (
+          {query ? (
             <ClearButton
               type="button"
               aria-label="입력 지우기"
@@ -234,13 +234,12 @@ export default function SearchPage() {
             >
               <img src={cancelIcon} alt="" width={18} height={18} />
             </ClearButton>
+          ) : (
+            <ClearButton type="button" aria-label="검색" onClick={() => runSearch(query)}>
+              <img src={searchIcon} alt="" width={18} height={18} />
+            </ClearButton>
           )}
         </InputWrapper>
-        {phase === "idle" && (
-          <IconButton type="button" aria-label="검색" onClick={() => runSearch(query)}>
-            <img src={searchIcon} alt="" width={19} height={19} />
-          </IconButton>
-        )}
       </SearchHeader>
 
       {phase === "idle" && (
@@ -444,18 +443,6 @@ const SearchHeader = styled.div`
   padding: 12px 16px;
 `;
 
-const IconButton = styled.button`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-`;
-
 const InputWrapper = styled.div`
   position: relative;
   flex: 1;
@@ -465,11 +452,11 @@ const InputWrapper = styled.div`
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 10px 32px 10px 12px;
-  border: 1px solid ${colors.gray[200]};
+  padding: 9px 40px 9px 12px;
+  border: none;
   border-radius: 8px;
   background-color: ${colors.gray[50]};
-  font-size: 0.875rem;
+  font-size: 1rem;
   color: ${colors.gray[900]};
   outline: none;
   box-sizing: border-box;
@@ -544,7 +531,7 @@ const RecentItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 13px 0;
 `;
 
 const RecentLeft = styled.button`
