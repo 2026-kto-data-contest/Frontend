@@ -392,21 +392,6 @@ export function fetchRecommendedCourse(
   );
 }
 
-export interface BreweryFilterOption {
-  value: string;
-  breweryCount: number;
-}
-
-export interface BreweryFilters {
-  liquorTypes: BreweryFilterOption[];
-  regions: BreweryFilterOption[];
-}
-
-// 주종·지역 필터 칩 옆에 표시할 양조장 개수입니다.
-export function fetchBreweryFilters(signal?: AbortSignal): Promise<BreweryFilters> {
-  return getJson<BreweryFilters>("/api/v1/metadata/brewery-filters", undefined, signal);
-}
-
 // 양조장 목록 카드(WineryCard)가 그대로 그릴 수 있는 최소 형태로 변환합니다.
 // 목록 페이지·홈 화면 등 BreweryListItem을 카드로 보여주는 모든 곳에서 재사용합니다.
 export function breweryToCardData(item: BreweryListItem): {
