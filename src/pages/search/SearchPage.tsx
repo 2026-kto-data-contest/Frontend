@@ -294,21 +294,24 @@ export default function SearchPage() {
     setConfirmingClearAll(false);
   };
 
+  const visibleRecent = recentExpanded ? recentItems : recentItems.slice(0, RECENT_VISIBLE_COUNT);
+
   const resetToIdle = () => {
     setQuery("");
     setSubmittedQuery("");
     setPhase("idle");
   };
 
-  // 검색을 시작하는 순간(입력·결과 화면) 더미 히스토리를 하나 쌓아두고, 뒤로가기(물리
-  // 버튼/제스처)가 눌리면 검색 페이지를 완전히 벗어나기 전에 먼저 입력 화면으로 되돌립니다.
+  // 검색을 시작하면(입력·결과 화면) 더미 히스토리를 하나만 쌓아두고, 뒤로가기(물리 버튼/
+  // 제스처/인앱 버튼)가 눌리면 검색 페이지를 완전히 벗어나기 전에 먼저 입력 화면으로
+  // 돌아옵니다. 검색을 여러 번 반복해도 더미 엔트리가 항상 최대 1개만 쌓이도록,
+  // 뒤로가기가 아니라 직접 검색어를 지워 idle로 돌아온 경우에는 그 즉시(같은 URL이라
+  // 화면엔 안 보임) 더미를 소비해 정리합니다.
   const historyGuardedRef = useRef(false);
 
   const handleBack = () => {
     if (phase !== "idle" || query) {
       if (historyGuardedRef.current) {
-        // 쌓아둔 더미 히스토리를 실제로 소비해야, 다음 뒤로가기에서 상태와 브라우저
-        // 히스토리가 다시 어긋나지 않습니다.
         window.history.back();
       } else {
         resetToIdle();
@@ -323,8 +326,9 @@ export default function SearchPage() {
     if (leavingIdle && !historyGuardedRef.current) {
       historyGuardedRef.current = true;
       window.history.pushState({ searchGuard: true }, "", window.location.href);
-    } else if (!leavingIdle) {
+    } else if (!leavingIdle && historyGuardedRef.current) {
       historyGuardedRef.current = false;
+      window.history.back();
     }
   }, [phase, query]);
 
@@ -338,8 +342,6 @@ export default function SearchPage() {
     return () => window.removeEventListener("popstate", onPopState);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const visibleRecent = recentExpanded ? recentItems : recentItems.slice(0, RECENT_VISIBLE_COUNT);
 
   return (
     <PageContainer>
@@ -676,6 +678,7 @@ const EmptyRecent = styled.p`
   letter-spacing: -0.32px;
   line-height: 140%;
   color: ${colors.gray[900]};
+  text-align: center;
 `;
 
 const RecentList = styled.div`
