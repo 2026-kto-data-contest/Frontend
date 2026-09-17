@@ -15,6 +15,10 @@ body {
     "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   color: #111;
+  /* Figma 캔버스보다 브라우저가 굵은 글씨를 더 두껍게 그려서(특히 Bold 한글), 디자인 도구와
+     비슷하게 보이도록 안티앨리어싱을 조정합니다. */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {

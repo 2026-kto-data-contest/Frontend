@@ -1,6 +1,6 @@
 // 실제 배포 백엔드의 양조장 목록/상세/제품 조회 API 클라이언트입니다.
-// 모두 로그인 없이 조회 가능한 공개 API라 credentials를 보내지 않습니다
-// (쿠키를 실어 보내면 백엔드가 와일드카드 CORS를 쓸 경우 브라우저가 응답 자체를 막아버릴 수 있어요).
+// 로그인 없이도 조회 가능한 공개 API지만, /api/v1/home처럼 로그인 상태에 따라 취향 반영
+// 추천이 달라지는 API도 있어서 세션 쿠키를 실어 보냅니다.
 import { API_BASE_URL, ApiError } from "./api";
 
 export type VisitState = "Y" | "N" | "UNKNOWN";
@@ -108,7 +108,7 @@ async function getJson<T>(
 ): Promise<T> {
   const query = params?.toString();
   const response = await fetch(`${API_BASE_URL}${path}${query ? `?${query}` : ""}`, {
-    credentials: "omit",
+    credentials: "include",
     signal,
   });
   if (!response.ok) {

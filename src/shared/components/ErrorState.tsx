@@ -22,8 +22,10 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
   return (
     <Wrapper>
       <ErrorIcon src={errorIcon} alt="" />
-      <Title>{title}</Title>
-      <Description>{description}</Description>
+      <TextGroup>
+        <Title>{title}</Title>
+        <Description>{description}</Description>
+      </TextGroup>
       {onRetry && (
         <RetryButton type="button" onClick={onRetry}>
           {retryIcon ? (
@@ -44,28 +46,38 @@ const Wrapper = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 16px;
   padding: 80px 24px;
   text-align: center;
 `;
 
 const ErrorIcon = styled.img`
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
+`;
+
+const TextGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 `;
 
 const Title = styled.p`
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${colors.gray[900]};
 `;
 
 const Description = styled.p`
   margin: 0;
-  font-size: 0.8125rem;
-  color: ${colors.gray[500]};
-  line-height: 1.5;
+  font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[400]};
   white-space: pre-line;
 `;
 
@@ -81,5 +93,7 @@ const RetryButton = styled.button`
   color: ${colors.white};
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   cursor: pointer;
 `;

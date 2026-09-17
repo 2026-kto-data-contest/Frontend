@@ -19,8 +19,8 @@ const StyledButton = styled.button<{ $onDark: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   border: none;
   background: transparent;
   padding: 0;
@@ -41,8 +41,8 @@ const StyledButton = styled.button<{ $onDark: boolean }>`
 `;
 
 const Icon = styled.img<{ $onDark: boolean }>`
-  width: 8px;
-  height: 15px;
+  width: 10px;
+  height: 19px;
   ${(props) =>
     props.$onDark &&
     css`

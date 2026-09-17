@@ -112,6 +112,7 @@ const LogoIcon = styled.svg`
 `;
 
 const LogoText = styled.span`
+  font-family: "LINE Seed Sans KR";
   font-size: 1.5rem;
   font-weight: 700;
 `;
