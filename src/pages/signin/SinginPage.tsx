@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { KakaoLoginButton } from "../../shared/components/KakaoLoginButton";
@@ -21,7 +22,15 @@ export default function SinginPage() {
     ? ERROR_MESSAGES[kakaoError] || "로그인에 실패했어요. 다시 시도해주세요."
     : null;
 
+  const [redirecting, setRedirecting] = useState(false);
+  // 버튼을 연달아 누르면 로그인 시작 요청이 두 번 나가서, 백엔드가 두 번째 state로 덮어쓴
+  // 쿠키와 먼저 도착한 요청의 카카오 인가 URL(state)이 서로 어긋나 로그인이 깨질 수 있습니다.
+  const redirectingRef = useRef(false);
+
   const handleKakaoLogin = () => {
+    if (redirectingRef.current) return;
+    redirectingRef.current = true;
+    setRedirecting(true);
     loginWithKakao(from);
   };
 
@@ -53,7 +62,9 @@ export default function SinginPage() {
       <BottomContent>
         {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
         <Subtext>로그인하고 나만의 전통주 여행을 이어가세요</Subtext>
-        <KakaoLoginButton onClick={handleKakaoLogin}>카카오로 로그인</KakaoLoginButton>
+        <KakaoLoginButton onClick={handleKakaoLogin} disabled={redirecting}>
+          카카오로 로그인
+        </KakaoLoginButton>
       </BottomContent>
     </PageContainer>
   );
