@@ -81,7 +81,26 @@ export default function SearchPage() {
   useEffect(() => {
     const controller = new AbortController();
     fetchRecommendedBreweries(0, 6, controller.signal)
-      .then((page) => setRecommended(page.content))
+      .then((page) => {
+        if (page.content.length >= 6) {
+          setRecommended(page.content);
+          return;
+        }
+        // 추천 양조장이 6개보다 적게 오면, 일반 목록에서 무작위로 채워 항상 6개를 보여줍니다.
+        const usedIds = new Set(page.content.map((item) => item.breweryId));
+        fetchBreweries({ page: 0, size: 50 }, controller.signal)
+          .then((fallback) => {
+            const extras = fallback.content
+              .filter((item) => !usedIds.has(item.breweryId))
+              .sort(() => Math.random() - 0.5)
+              .slice(0, 6 - page.content.length);
+            setRecommended([...page.content, ...extras]);
+          })
+          .catch((error) => {
+            if (error instanceof DOMException && error.name === "AbortError") return;
+            setRecommended(page.content);
+          });
+      })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setRecommended([]);
