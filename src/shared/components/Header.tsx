@@ -176,7 +176,7 @@ const LogoIcon = styled.svg<{ $scale: number }>`
 `;
 
 const LogoWordmark = styled.svg<{ $scale: number }>`
-  width: ${(props) => 68.545 * props.$scale}px;
+  width: ${(props) => 78.545 * props.$scale}px;
   height: ${(props) => 20.793 * props.$scale}px;
   flex-shrink: 0;
 `;
