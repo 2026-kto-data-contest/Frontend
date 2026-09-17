@@ -107,6 +107,7 @@ export default function SearchPage() {
       .then(setRemoteRecent)
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("최근 검색어 조회 실패", error);
         setRemoteRecent([]);
       });
     return () => controller.abort();
@@ -206,8 +207,9 @@ export default function SearchPage() {
             ].slice(0, RECENT_MAX_COUNT)
           );
         })
-        .catch(() => {
-          // 저장 실패는 검색 결과 화면에 영향 없이 조용히 무시합니다.
+        .catch((error) => {
+          // 검색 결과 화면에는 영향 없이 넘어가지만, 원인 파악을 위해 콘솔에는 남깁니다.
+          console.error("최근 검색어 저장 실패", error);
         });
     } else {
       setLocalRecent((prev) =>
@@ -252,15 +254,44 @@ export default function SearchPage() {
     setConfirmingClearAll(false);
   };
 
+  const resetToIdle = () => {
+    setQuery("");
+    setSubmittedQuery("");
+    setPhase("idle");
+  };
+
   const handleBack = () => {
     if (phase !== "idle" || query) {
-      setQuery("");
-      setSubmittedQuery("");
-      setPhase("idle");
+      resetToIdle();
       return;
     }
     navigate(-1);
   };
+
+  // 검색을 시작하는 순간(입력·결과 화면) 더미 히스토리를 하나 쌓아두고, 뒤로가기(물리
+  // 버튼/제스처)가 눌리면 검색 페이지를 완전히 벗어나기 전에 먼저 입력 화면으로 되돌립니다.
+  const historyGuardedRef = useRef(false);
+
+  useEffect(() => {
+    const leavingIdle = phase !== "idle" || query.length > 0;
+    if (leavingIdle && !historyGuardedRef.current) {
+      historyGuardedRef.current = true;
+      window.history.pushState({ searchGuard: true }, "", window.location.href);
+    } else if (!leavingIdle) {
+      historyGuardedRef.current = false;
+    }
+  }, [phase, query]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (!historyGuardedRef.current) return;
+      historyGuardedRef.current = false;
+      resetToIdle();
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const visibleRecent = recentExpanded ? recentItems : recentItems.slice(0, RECENT_VISIBLE_COUNT);
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useNavigationType, useSearchParams } from "react-router-dom";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { ErrorState } from "../../shared/components/ErrorState";
 import { WineryCard } from "../../shared/components/WineryCard";
@@ -94,6 +94,7 @@ export default function WineryListPage() {
   const [filterOrder, setFilterOrder] = usePersistentState<SectionKey[]>("explore:filterOrder", []);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetSection, setSheetSection] = useState<SectionKey>("types");
+  const navigationType = useNavigationType();
 
   useEffect(() => {
     const urlType = searchParams.get("type");
@@ -104,6 +105,12 @@ export default function WineryListPage() {
         types: urlType ? [urlType] : prev.types,
         regions: urlRegion ? [urlRegion] : prev.regions,
       }));
+    } else if (navigationType !== "POP") {
+      // 홈 화면 칩에서 "더보기"로 넘어올 때(?type=..)만 필터가 적용되어야 하고, 뒤로가기로
+      // 돌아온 게 아니라 하단 네비 등으로 새로 들어온 경우에는 예전에 남아있던 필터가
+      // 이어지면 안 되므로 초기화합니다.
+      setFilters(EMPTY_FILTERS);
+      setFilterOrder([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -252,8 +259,6 @@ export default function WineryListPage() {
                 }}
               />
 
-              <ResultCount>양조장 {filtered.length}곳</ResultCount>
-
               <List>
                 {filtered.map((item) => (
                   <WineryCard
@@ -317,18 +322,11 @@ const SearchButton = styled.button`
   cursor: pointer;
 `;
 
-const ResultCount = styled.p`
-  margin: 16px 16px 12px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-`;
-
 const List = styled.div`
   display: flex;
   flex-direction: column;
   gap: 20px;
-  padding: 0 16px 24px;
+  padding: 16px 16px 24px;
 `;
 
 const SkeletonList = styled.div`

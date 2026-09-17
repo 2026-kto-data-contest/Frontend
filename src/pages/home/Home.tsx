@@ -317,22 +317,25 @@ export default function Home() {
       {loadState === "success" && home && (
         <>
           <Greeting>
-            <GreetingTitle>{greetingTitle}</GreetingTitle>
-            {!auth.isLoggedIn ? (
-              <GreetingTitle>{GUEST_GREETING_SUBTITLE}</GreetingTitle>
-            ) : !auth.hasOnboarded ? (
-              <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
-                <Underline>{ONBOARDING_PROMPT_LABEL}</Underline>
-                {ONBOARDING_PROMPT_SUFFIX}
-              </GreetingActionLine>
-            ) : (
-              preferenceLine && (
+            <GreetingTitle>
+              {greetingTitle}
+              <br />
+              {!auth.isLoggedIn ? (
+                GUEST_GREETING_SUBTITLE
+              ) : !auth.hasOnboarded ? (
                 <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
-                  <Underline>{preferenceLine.slice(0, -PREFERENCE_SUFFIX.length)}</Underline>
-                  {PREFERENCE_SUFFIX}
+                  <Underline>{ONBOARDING_PROMPT_LABEL}</Underline>
+                  {ONBOARDING_PROMPT_SUFFIX}
                 </GreetingActionLine>
-              )
-            )}
+              ) : (
+                preferenceLine && (
+                  <GreetingActionLine type="button" onClick={handleGreetingActionClick}>
+                    <Underline>{preferenceLine.slice(0, -PREFERENCE_SUFFIX.length)}</Underline>
+                    {PREFERENCE_SUFFIX}
+                  </GreetingActionLine>
+                )
+              )}
+            </GreetingTitle>
           </Greeting>
 
           {bannerItems.length > 0 && (
@@ -392,7 +395,7 @@ export default function Home() {
               </MoreLink>
             </SectionHeader>
             <FilterRow>
-              {ALL_TYPE_FILTERS.map((filter) => (
+              {ALL_TYPE_FILTERS.filter((filter) => filter !== "기타").map((filter) => (
                 <Chip
                   key={filter}
                   label={filter}
@@ -590,19 +593,17 @@ const PageContainer = styled.div`
 `;
 
 const Greeting = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   padding-bottom: 16px;
 `;
 
-const GreetingTitle = styled.p`
+const GreetingTitle = styled.b`
   margin: 0;
   font-family: "LINE Seed Sans KR";
   font-size: 1.125rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.36px;
   color: ${colors.gray[900]};
-  white-space: pre-line;
 `;
 
 const GreetingActionLine = styled.button`
@@ -610,12 +611,9 @@ const GreetingActionLine = styled.button`
   border: none;
   padding: 0;
   background: transparent;
-  font-family: "LINE Seed Sans KR";
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
-  text-align: left;
-  white-space: pre-line;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
   cursor: pointer;
 `;
 
