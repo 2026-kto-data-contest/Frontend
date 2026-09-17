@@ -1,6 +1,7 @@
 // 실제 백엔드 양조장 상세/제품 응답을 상세 화면이 이미 알고 있는 Winery 모양으로 변환합니다.
 // 상세 화면의 렌더링·요약문 생성 로직을 그대로 재사용하기 위한 어댑터입니다.
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS, ALL_STRENGTH_FILTERS } from "../lib/mockWineries";
+import { resolveImageUrl } from "./api";
 import type {
   Winery,
   DrinkProduct,
@@ -93,7 +94,7 @@ export function adaptBreweryToWinery(detail: BreweryDetail, products: ProductCar
     badges: detail.featureTags,
     strength: bucketizeStrength(detail.alcoholMin, detail.alcoholMax),
     visitCondition: detail.reservationVisitState === "Y" ? "예약 방문" : "상시 방문",
-    photoUrls: detail.mainImage ? [detail.mainImage.url] : undefined,
+    photoUrls: detail.mainImage ? [resolveImageUrl(detail.mainImage.url)!] : undefined,
     phone: detail.phone ?? undefined,
     homepageUrl: detail.homepageUrl ?? undefined,
     address: detail.address,

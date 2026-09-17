@@ -105,7 +105,7 @@ const Info = styled.div`
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  justify-content: center;
+  padding: 5px 0;
 `;
 
 const Region = styled.p`

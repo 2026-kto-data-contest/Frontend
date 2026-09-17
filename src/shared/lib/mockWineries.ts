@@ -375,18 +375,6 @@ export const WINERIES: Winery[] = [
   },
 ];
 
-export const SUGGESTED_KEYWORDS = [
-  "상큼함",
-  "복분자주",
-  "달콤함",
-  "전통주",
-  "막주",
-  "아주",
-  "막걸리와자반",
-  "청주",
-  "과일주",
-];
-
 const BADGE_SUMMARY_TEMPLATES: Record<string, string> = {
   수상이력: "다양한 수상 이력이 있는 양조장이에요",
   식품명인: "식품명인이 빚는 양조장이에요",

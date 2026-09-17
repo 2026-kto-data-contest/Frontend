@@ -50,6 +50,14 @@ export function fetchSearchSuggestions(
   return getJson<SearchSuggestion[]>("/api/v1/search/suggestions", qs, signal);
 }
 
+export interface RecommendedSearchKeyword {
+  keyword: string;
+}
+
+export function fetchRecommendedKeywords(signal?: AbortSignal): Promise<RecommendedSearchKeyword[]> {
+  return getJson<RecommendedSearchKeyword[]>("/api/v1/search/recommended-keywords", undefined, signal);
+}
+
 export interface RecentSearch {
   recentSearchId: number;
   type: SearchTargetType;
