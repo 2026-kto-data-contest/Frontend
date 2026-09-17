@@ -16,6 +16,7 @@ import mapIcon from "../../assets/icon/Map.svg";
 import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import { colors } from "../../shared/styles/colors";
+import { resolveImageUrl } from "../../shared/api/api";
 import { ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
 import {
   breweryToCardData,
@@ -390,25 +391,28 @@ export default function SearchPage() {
                   {visibleRecent.map((item) => (
                     <RecentItem key={item.key}>
                       <RecentLeft type="button" onClick={item.onSelect}>
-                        <img src={watchIcon} alt="" width={16} height={16} />
+                        <img src={watchIcon} alt="" width={22} height={22} />
                         {item.label}
                       </RecentLeft>
                       <RemoveButton type="button" aria-label="삭제" onClick={item.onRemove}>
-                        <img src={removeIcon} alt="" width={14} height={14} />
+                        <img src={removeIcon} alt="" width={18} height={18} />
                       </RemoveButton>
                     </RecentItem>
                   ))}
                 </RecentList>
                 {recentItems.length > RECENT_VISIBLE_COUNT && (
-                  <ExpandToggle type="button" onClick={() => setRecentExpanded((prev) => !prev)}>
-                    {recentExpanded ? "최근 검색어 접기" : "최근 검색어 더보기"}
-                    <img
-                      src={recentExpanded ? upArrowIcon : downArrowIcon}
-                      alt=""
-                      width={12}
-                      height={12}
-                    />
-                  </ExpandToggle>
+                  <>
+                    <RecentDivider />
+                    <ExpandToggle type="button" onClick={() => setRecentExpanded((prev) => !prev)}>
+                      {recentExpanded ? "최근 검색어 접기" : "최근 검색어 더보기"}
+                      <img
+                        src={recentExpanded ? upArrowIcon : downArrowIcon}
+                        alt=""
+                        width={12}
+                        height={12}
+                      />
+                    </ExpandToggle>
+                  </>
                 )}
               </>
             )}
@@ -524,7 +528,7 @@ export default function SearchPage() {
                       ? `${winery.sido ?? ""} ${winery.sigungu}`.trim()
                       : (winery.sido ?? winery.region ?? "")
                   }
-                  photoUrl={winery.mainImage?.url}
+                  photoUrl={resolveImageUrl(winery.mainImage?.url)}
                   onClick={() => navigate(`/winery/${winery.breweryId}`)}
                 />
               ))}
@@ -577,7 +581,7 @@ const SearchHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 20px 16px;
+  padding: 20px 16px 15px;
 `;
 
 const InputWrapper = styled.div`
@@ -589,7 +593,7 @@ const InputWrapper = styled.div`
 
 const SearchInput = styled.input`
   width: 100%;
-  padding: 9px 40px 9px 12px;
+  padding: 9px 40px 7px 12px;
   border: none;
   border-radius: 8px;
   background-color: ${colors.gray[50]};
@@ -646,10 +650,10 @@ const SectionHeader = styled.div`
 
 const SectionTitle = styled.h2<{ $large?: boolean }>`
   margin: 0;
-  font-size: ${(props) => (props.$large ? "1.125rem" : "0.9375rem")};
+  font-size: ${(props) => (props.$large ? "1.125rem" : "1rem")};
   font-weight: 700;
   line-height: 140%;
-  letter-spacing: ${(props) => (props.$large ? "-0.36px" : "normal")};
+  letter-spacing: ${(props) => (props.$large ? "-0.36px" : "-0.32px")};
   color: ${colors.gray[900]};
 `;
 
@@ -657,15 +661,16 @@ const TextButton = styled.button`
   border: none;
   background: transparent;
   font-size: 0.8125rem;
-  color: ${colors.gray[400]};
+  color: ${colors.gray[300]};
   cursor: pointer;
 `;
 
 const EmptyRecent = styled.p`
   margin: 8px 0;
-  font-size: 0.875rem;
-  color: ${colors.gray[400]};
-  text-align: center;
+  font-size: 1rem;
+  letter-spacing: -0.32px;
+  line-height: 140%;
+  color: ${colors.gray[900]};
 `;
 
 const RecentList = styled.div`
@@ -677,7 +682,7 @@ const RecentItem = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 13px 0;
+  padding: 10px 0;
 `;
 
 const RecentLeft = styled.button`
@@ -687,8 +692,10 @@ const RecentLeft = styled.button`
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 0.875rem;
-  color: ${colors.gray[800]};
+  font-size: 16px;
+  letter-spacing: -0.32px;
+  line-height: 140%;
+  color: ${colors.gray[900]};
   cursor: pointer;
 `;
 
@@ -702,16 +709,23 @@ const RemoveButton = styled.button`
   cursor: pointer;
 `;
 
+const RecentDivider = styled.div`
+  height: 1px;
+  background-color: rgba(0, 0, 0, 0.047);
+`;
+
 const ExpandToggle = styled.button`
   display: flex;
   align-items: center;
   gap: 4px;
   align-self: center;
-  margin-top: 8px;
+  margin-top: 5px;
   border: none;
   background: transparent;
-  font-size: 0.8125rem;
-  color: ${colors.gray[400]};
+  font-size: 1rem;
+  letter-spacing: -0.32px;
+  line-height: 140%;
+  color: ${colors.gray[500]};
   cursor: pointer;
 `;
 
@@ -719,7 +733,7 @@ const SuggestRow = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 2px;
 `;
 
 const SuggestTag = styled.button`

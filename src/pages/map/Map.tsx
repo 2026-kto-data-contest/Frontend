@@ -29,6 +29,7 @@ import type {
   MapMenu,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
+import { resolveImageUrl } from "../../shared/api/api";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
   KakaoMapsNamespace,
@@ -1123,7 +1124,7 @@ export default function Map() {
                                         ? `${formatLiquorTypes(item.liquorTypes)} · ${region}`
                                         : region
                                     }
-                                    photoUrl={item.mainImage?.url}
+                                    photoUrl={resolveImageUrl(item.mainImage?.url)}
                                     onClick={() => navigate(`/winery/${item.breweryId}`)}
                                   />
                                 );
@@ -1142,7 +1143,7 @@ export default function Map() {
                                     onClick={() => navigate(`/winery/${item.breweryId}`)}
                                   >
                                     <AwardThumb
-                                      src={item.image?.url ?? noneImage}
+                                      src={resolveImageUrl(item.image?.url) ?? noneImage}
                                       alt=""
                                     />
                                     <AwardBadgeLine>
@@ -1208,7 +1209,8 @@ export default function Map() {
                             : place.roadAddressName || undefined,
                         ].filter((part): part is string => Boolean(part));
                         const thumbSrc =
-                          place.imageUrl ?? (place.category === "BREWERY" ? noneImage : null);
+                          resolveImageUrl(place.imageUrl) ??
+                          (place.category === "BREWERY" ? noneImage : null);
                         const badges =
                           place.category === "BREWERY" ? breweryBadges[place.placeId] : undefined;
                         return (

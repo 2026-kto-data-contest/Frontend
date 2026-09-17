@@ -1,7 +1,7 @@
 // 실제 배포 백엔드의 양조장 목록/상세/제품 조회 API 클라이언트입니다.
 // 로그인 없이도 조회 가능한 공개 API지만, /api/v1/home처럼 로그인 상태에 따라 취향 반영
 // 추천이 달라지는 API도 있어서 세션 쿠키를 실어 보냅니다.
-import { API_BASE_URL, ApiError } from "./api";
+import { API_BASE_URL, ApiError, resolveImageUrl } from "./api";
 
 export type VisitState = "Y" | "N" | "UNKNOWN";
 
@@ -411,6 +411,6 @@ export function breweryToCardData(item: BreweryListItem): {
     description: item.introduction ?? undefined,
     tags: item.flavorTags,
     badges: item.featureTags,
-    photoUrls: item.mainImage ? [item.mainImage.url] : undefined,
+    photoUrls: item.mainImage ? [resolveImageUrl(item.mainImage.url)!] : undefined,
   };
 }

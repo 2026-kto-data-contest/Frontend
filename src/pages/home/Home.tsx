@@ -464,7 +464,7 @@ export default function Home() {
                     key={winery.breweryId}
                     name={winery.businessName}
                     region={breweryToCardData(winery).detailRegion}
-                    photoUrl={winery.mainImage?.url}
+                    photoUrl={resolveImageUrl(winery.mainImage?.url)}
                     onClick={() => navigate(`/winery/${winery.breweryId}`)}
                   />
                 ))}
@@ -487,7 +487,7 @@ export default function Home() {
                   name={winery.businessName}
                   region={breweryToCardData(winery).detailRegion}
                   description={winery.introduction ?? undefined}
-                  photoUrl={winery.mainImage?.url}
+                  photoUrl={resolveImageUrl(winery.mainImage?.url)}
                   onClick={() => navigate(`/winery/${winery.breweryId}`)}
                 />
               ))}
@@ -625,11 +625,13 @@ const Underline = styled.span`
 const BannerCard = styled.div`
   position: relative;
   height: 400px;
-  margin-bottom: 10px;
+  margin-bottom: 20px;
   /* 카드 위치·크기 애니메이션이 매 프레임 페이지 전체 레이아웃을 다시 계산하게 만들면
      아래 콘텐츠가 많을수록 버벅여서(어떤 카드는 괜찮고 어떤 카드는 덜커덩거림), 이 영역
-     안에서만 레이아웃이 다시 계산되도록 가둬둡니다. */
-  contain: layout paint;
+     안에서만 레이아웃이 다시 계산되도록 가둬둡니다. paint까지 가두면 카드 그림자가 이
+     영역 경계에서 그대로 잘려서(위/왼쪽은 카드가 경계에 바로 붙어있어 그림자가 아예 안 보임)
+     layout만 포함시킵니다. */
+  contain: layout;
 `;
 
 const BannerStack = styled.div`
@@ -644,11 +646,13 @@ const BannerStack = styled.div`
 
 // Figma "Card/Recommand Animation" 컴포넌트의 스택 카드 3장(맨 앞/중간/뒤) 실측 inset입니다.
 // 351x400 기준 카드 좌표(맨 앞 0,0~335,400 / 중간 43,20~343,380 / 뒤 83,40~351,360)를
-// top/right/bottom/left inset으로 그대로 옮긴 것입니다.
+// top/right/bottom/left inset으로 옮긴 것입니다. 실제 컨테이너 폭(343px)이 기준 폭(351px)보다
+// 8px 좁아서, 세 카드 모두 right를 8px씩 줄여 서로 겹치는 정도(카드 사이 8px 간격)와
+// 맨 앞 카드 폭(335px)을 그대로 유지합니다.
 const BANNER_STACK_INSETS = [
-  { top: 0, right: 16, bottom: 0, left: 0 },
-  { top: 20, right: 8, bottom: 20, left: 43 },
-  { top: 40, right: 0, bottom: 40, left: 83 },
+  { top: 0, right: 8, bottom: 0, left: 0 },
+  { top: 20, right: 0, bottom: 20, left: 43 },
+  { top: 40, right: -8, bottom: 40, left: 83 },
 ] as const;
 
 // Figma "Card/Recommand-1" 모션(맨 앞 카드가 넘어갈 때 빠져나가는 효과)입니다.
@@ -680,7 +684,7 @@ const BannerStackItem = styled.button<{ $offset: number; $exiting: boolean }>`
   overflow: hidden;
   z-index: ${(props) => (props.$exiting ? 4 : 3 - props.$offset)};
   pointer-events: ${(props) => (props.$exiting ? "none" : "auto")};
-  box-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 16px 4px rgba(0, 0, 0, 0.2);
   will-change: top, right, bottom, left, transform, opacity;
   transition:
     top ${BANNER_EXIT_DURATION_MS}ms ${BANNER_EASE},
@@ -730,7 +734,8 @@ const BannerTitle = styled.p`
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
-  line-height: 1.4;
+  line-height: 132%;
+  letter-spacing: -0.4px;
   /* 단어 중간(예: "화이트와인" → "화이"/"트와인")이 아니라 단어(공백) 단위로만 줄바꿈합니다. */
   word-break: keep-all;
   overflow-wrap: break-word;
@@ -740,16 +745,16 @@ const Dots = styled.div`
   display: flex;
   justify-content: center;
   gap: 6px;
-  margin-bottom: 24px;
+  margin-bottom: 48px;
 `;
 
 const Dot = styled.button<{ $active: boolean }>`
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border: none;
   border-radius: 9999px;
   padding: 0;
-  background-color: ${(props) => (props.$active ? colors.gray[900] : colors.gray[300])};
+  background-color: ${(props) => (props.$active ? colors.gray[700] : colors.gray[100])};
   transition: background-color 0.2s ease-in-out;
   cursor: pointer;
 `;
@@ -805,7 +810,7 @@ const EmptyNotice = styled.p`
 const WineryList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 `;
 
 const PromoBanner = styled.button<{ $prompt: boolean }>`
