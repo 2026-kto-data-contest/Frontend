@@ -12,7 +12,10 @@ import {
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { STRENGTH_OPTIONS, ALCOHOL_LEVEL_TO_ID } from "../signin/onboarding/OnboardingStrengthPage";
 import bannerBeforeIcon from "../../assets/icon/BannerBefore.svg";
-import rightArrowIcon from "../../assets/icon/RightArrow.svg";
+import kakaoLogoIcon from "../../assets/icon/KakaoLogo.svg";
+import outwardIcon from "../../assets/icon/Outward.svg";
+import chevronRightIcon from "../../assets/icon/ChevronRight.svg";
+import chevronRightMutedIcon from "../../assets/icon/ChevronRightMuted.svg";
 
 const FROM_MYPAGE = "%2Fmypage";
 const TOAST_DURATION_MS = 3000;
@@ -115,9 +118,7 @@ export default function MyPage() {
         <Nickname>{auth.nickname}님</Nickname>
         <ProfileRow>
           <KakaoBadge>
-            <KakaoIcon aria-hidden viewBox="0 0 24 24">
-              <path d="M12 3C6.48 3 2 6.58 2 11c0 2.79 1.86 5.24 4.66 6.65-.2.73-.73 2.67-.84 3.09-.13.51.19.5.4.37.16-.11 2.55-1.73 3.58-2.43.71.1 1.45.16 2.2.16 5.52 0 10-3.58 10-8s-4.48-8-10-8z" />
-            </KakaoIcon>
+            <img src={kakaoLogoIcon} alt="" width={12} height={11} />
             kakao
           </KakaoBadge>
           <Email>{auth.email}</Email>
@@ -126,30 +127,34 @@ export default function MyPage() {
         {auth.hasOnboarded ? (
           <PreferenceSection>
             <SectionTitle>내 취향</SectionTitle>
-            <PreferenceRow
-              type="button"
-              onClick={() => navigate(`/onboarding/taste?from=${FROM_MYPAGE}`)}
-            >
-              <PreferenceLabel>주종 취향</PreferenceLabel>
-              <PreferenceValue>{tasteLabel || "선택 안 함"}</PreferenceValue>
-              <img src={rightArrowIcon} alt="" width={20} height={20} />
-            </PreferenceRow>
-            <PreferenceRow
-              type="button"
-              onClick={() => navigate(`/onboarding/region?from=${FROM_MYPAGE}`)}
-            >
-              <PreferenceLabel>지역</PreferenceLabel>
-              <PreferenceValue>{regionLabel || "선택 안 함"}</PreferenceValue>
-              <img src={rightArrowIcon} alt="" width={20} height={20} />
-            </PreferenceRow>
-            <PreferenceRow
-              type="button"
-              onClick={() => navigate(`/onboarding/strength?from=${FROM_MYPAGE}`)}
-            >
-              <PreferenceLabel>선호 도수</PreferenceLabel>
-              <PreferenceValue>{strengthLabel || "선택 안 함"}</PreferenceValue>
-              <img src={rightArrowIcon} alt="" width={20} height={20} />
-            </PreferenceRow>
+            <RowGroup>
+              <PreferenceRow
+                type="button"
+                onClick={() => navigate(`/onboarding/taste?from=${FROM_MYPAGE}`)}
+              >
+                <PreferenceLabel>주종 취향</PreferenceLabel>
+                <PreferenceValue>{tasteLabel || "선택 안 함"}</PreferenceValue>
+                <img src={chevronRightIcon} alt="" width={20} height={20} />
+              </PreferenceRow>
+              <RowDivider />
+              <PreferenceRow
+                type="button"
+                onClick={() => navigate(`/onboarding/region?from=${FROM_MYPAGE}`)}
+              >
+                <PreferenceLabel>지역</PreferenceLabel>
+                <PreferenceValue>{regionLabel || "선택 안 함"}</PreferenceValue>
+                <img src={chevronRightIcon} alt="" width={20} height={20} />
+              </PreferenceRow>
+              <RowDivider />
+              <PreferenceRow
+                type="button"
+                onClick={() => navigate(`/onboarding/strength?from=${FROM_MYPAGE}`)}
+              >
+                <PreferenceLabel>선호 도수</PreferenceLabel>
+                <PreferenceValue>{strengthLabel || "선택 안 함"}</PreferenceValue>
+                <img src={chevronRightIcon} alt="" width={20} height={20} />
+              </PreferenceRow>
+            </RowGroup>
           </PreferenceSection>
         ) : (
           <PromoBanner
@@ -170,61 +175,71 @@ export default function MyPage() {
       <BodyBlock>
         <Section>
           <SectionTitle>설정</SectionTitle>
-          <SettingRow>
-            <SettingText>
-              <SettingLabel>위치 기반 추천 사용</SettingLabel>
-              <SettingDesc>현재 위치를 활용해 가까운 양조장을 찾아드려요</SettingDesc>
-            </SettingText>
-            <Switch
-              type="button"
-              role="switch"
-              aria-checked={locationRecommend}
-              $on={locationRecommend}
-              disabled={savingCode === "LOCATION"}
-              onClick={() => toggleAgreement("LOCATION", locationRecommend, setLocationRecommend)}
-            >
-              <SwitchThumb $on={locationRecommend} />
-            </Switch>
-          </SettingRow>
-          <SettingRow>
-            <SettingText>
-              <SettingLabel>혜택 및 이벤트 소식 받기</SettingLabel>
-              <SettingDesc>전통주로만의 새로운 소식을 받아보세요</SettingDesc>
-            </SettingText>
-            <Switch
-              type="button"
-              role="switch"
-              aria-checked={marketing}
-              $on={marketing}
-              disabled={savingCode === "MARKETING"}
-              onClick={() => toggleAgreement("MARKETING", marketing, setMarketing)}
-            >
-              <SwitchThumb $on={marketing} />
-            </Switch>
-          </SettingRow>
+          <RowGroup>
+            <SettingRow>
+              <SettingText>
+                <SettingLabel>위치 기반 추천 사용</SettingLabel>
+                <SettingDesc>현재 위치를 활용해 가까운 양조장을 찾아드려요</SettingDesc>
+              </SettingText>
+              <Switch
+                type="button"
+                role="switch"
+                aria-checked={locationRecommend}
+                $on={locationRecommend}
+                disabled={savingCode === "LOCATION"}
+                onClick={() => toggleAgreement("LOCATION", locationRecommend, setLocationRecommend)}
+              >
+                <SwitchThumb $on={locationRecommend} />
+              </Switch>
+            </SettingRow>
+            <RowDivider />
+            <SettingRow>
+              <SettingText>
+                <SettingLabel>혜택 및 이벤트 소식 받기</SettingLabel>
+                <SettingDesc>전통주로만의 새로운 소식을 받아보세요</SettingDesc>
+              </SettingText>
+              <Switch
+                type="button"
+                role="switch"
+                aria-checked={marketing}
+                $on={marketing}
+                disabled={savingCode === "MARKETING"}
+                onClick={() => toggleAgreement("MARKETING", marketing, setMarketing)}
+              >
+                <SwitchThumb $on={marketing} />
+              </Switch>
+            </SettingRow>
+          </RowGroup>
         </Section>
 
         <Section>
           <SectionTitle>이용 안내</SectionTitle>
-          <InfoLinkRow type="button">
-            서비스 이용약관 <span aria-hidden>↗</span>
-          </InfoLinkRow>
-          <InfoLinkRow type="button">
-            개인정보 수집·이용 <span aria-hidden>↗</span>
-          </InfoLinkRow>
-          <InfoLinkRow type="button">
-            위치기반 서비스 이용약관 <span aria-hidden>↗</span>
-          </InfoLinkRow>
+          <RowGroup>
+            <InfoLinkRow type="button">
+              서비스 이용약관 <img src={outwardIcon} alt="" width={18} height={18} />
+            </InfoLinkRow>
+            <RowDivider />
+            <InfoLinkRow type="button">
+              개인정보 수집·이용 <img src={outwardIcon} alt="" width={18} height={18} />
+            </InfoLinkRow>
+            <RowDivider />
+            <InfoLinkRow type="button">
+              위치기반 서비스 이용약관 <img src={outwardIcon} alt="" width={18} height={18} />
+            </InfoLinkRow>
+          </RowGroup>
         </Section>
 
         <Section>
           <SectionTitle>계정</SectionTitle>
-          <AccountRow type="button" onClick={() => setLogoutOpen(true)}>
-            로그아웃 <img src={rightArrowIcon} alt="" width={20} height={20} />
-          </AccountRow>
-          <AccountRow type="button" onClick={() => navigate("/mypage/withdraw")}>
-            회원탈퇴 <img src={rightArrowIcon} alt="" width={20} height={20} />
-          </AccountRow>
+          <RowGroup>
+            <AccountRow type="button" onClick={() => setLogoutOpen(true)}>
+              로그아웃 <img src={chevronRightIcon} alt="" width={18} height={18} />
+            </AccountRow>
+            <RowDivider />
+            <AccountRow type="button" $muted onClick={() => navigate("/mypage/withdraw")}>
+              회원탈퇴 <img src={chevronRightMutedIcon} alt="" width={18} height={18} />
+            </AccountRow>
+          </RowGroup>
         </Section>
       </BodyBlock>
 
@@ -259,21 +274,25 @@ const PageContainer = styled.div`
 `;
 
 const TopBlock = styled.div`
-  padding: 12px 16px 24px;
+  padding: 16px 16px 24px;
 `;
 
 const Header = styled.h1`
-  margin: 0 0 20px;
-  font-size: 1.0625rem;
-  font-weight: 700;
+  margin: 0 0 24px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 132%;
+  letter-spacing: -0.4px;
   color: ${colors.gray[900]};
 `;
 
 const Nickname = styled.p`
   margin: 0 0 8px;
-  font-size: 1.25rem;
+  font-size: 1.5rem;
   font-weight: 700;
-  color: ${colors.gray[900]};
+  line-height: 132%;
+  letter-spacing: -0.48px;
+  color: ${colors.black};
 `;
 
 const ProfileRow = styled.div`
@@ -286,33 +305,33 @@ const KakaoBadge = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 2px 8px;
   border-radius: 9999px;
   background-color: #fee500;
-  color: #191919;
-  font-size: 0.75rem;
+  color: ${colors.gray[900]};
+  font-size: 0.875rem;
   font-weight: 600;
-`;
-
-const KakaoIcon = styled.svg`
-  width: 12px;
-  height: 12px;
-  fill: #191919;
+  line-height: 140%;
+  letter-spacing: -0.28px;
 `;
 
 const Email = styled.span`
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[500]};
 `;
 
 const PromoBanner = styled.button`
   display: flex;
   align-items: center;
+  width: 100%;
   gap: 12px;
-  margin: 20px 0 0;
-  padding: 16px;
+  margin: 24px 0 0;
+  padding: 16px 20px;
   border: none;
-  border-radius: 16px;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   box-sizing: border-box;
@@ -321,37 +340,46 @@ const PromoBanner = styled.button`
 
 const PromoIcon = styled.img`
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
 `;
 
 const PromoTextArea = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 `;
 
 const PromoTitle = styled.span`
   font-size: 0.875rem;
-  font-weight: 700;
-  color: #7a4a1f;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[900]};
 `;
 
 const PromoSubtitle = styled.span`
-  font-size: 0.75rem;
-  color: #a06a3a;
+  font-size: 0.6875rem;
+  line-height: 100%;
+  color: ${colors.gray[300]};
 `;
 
 const PreferenceSection = styled.div`
-  margin-top: 24px;
+  margin-top: 32px;
+`;
+
+const RowGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 `;
 
 const PreferenceRow = styled.button`
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 12px 0;
+  padding: 10px 0;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -362,19 +390,24 @@ const PreferenceLabel = styled.span`
   flex-shrink: 0;
   width: 76px;
   font-size: 0.875rem;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[500]};
 `;
 
 const PreferenceValue = styled.span`
   flex: 1;
-  font-size: 0.9375rem;
-  font-weight: 700;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[900]};
 `;
 
 const Divider = styled.div`
-  height: 8px;
-  background-color: ${colors.gray[50]};
+  height: 12px;
+  background-color: ${colors.divider};
 `;
 
 const BodyBlock = styled.div`
@@ -383,17 +416,21 @@ const BodyBlock = styled.div`
 
 const Section = styled.section`
   padding: 24px 0;
-
-  & + & {
-    border-top: 1px solid ${colors.gray[100]};
-  }
 `;
 
 const SectionTitle = styled.h2`
-  margin: 0 0 8px;
-  font-size: 1rem;
+  margin: 0 0 12px;
+  font-size: 1.125rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.36px;
   color: ${colors.gray[900]};
+`;
+
+const RowDivider = styled.div`
+  width: 100%;
+  height: 1px;
+  background-color: ${colors.divider};
 `;
 
 const SettingRow = styled.div`
@@ -401,32 +438,35 @@ const SettingRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 0;
+  padding: 10px 0;
 `;
 
 const SettingText = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 `;
 
 const SettingLabel = styled.span`
-  font-size: 0.9375rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${colors.gray[900]};
 `;
 
 const SettingDesc = styled.span`
-  font-size: 0.75rem;
-  color: ${colors.gray[400]};
+  font-size: 0.8125rem;
+  line-height: 100%;
+  color: ${colors.gray[500]};
 `;
 
 const Switch = styled.button<{ $on: boolean }>`
   flex-shrink: 0;
   position: relative;
-  width: 44px;
-  height: 26px;
+  width: 34px;
+  height: 20px;
   padding: 0;
   border: none;
   border-radius: 9999px;
@@ -442,10 +482,10 @@ const Switch = styled.button<{ $on: boolean }>`
 
 const SwitchThumb = styled.span<{ $on: boolean }>`
   position: absolute;
-  top: 3px;
-  left: ${(props) => (props.$on ? "21px" : "3px")};
-  width: 20px;
-  height: 20px;
+  top: 2px;
+  left: ${(props) => (props.$on ? "16px" : "2px")};
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   background-color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -457,25 +497,31 @@ const InfoLinkRow = styled.button`
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 12px 0;
+  padding: 10px 0;
   border: none;
   background: transparent;
-  font-size: 0.9375rem;
-  color: ${colors.gray[700]};
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 140%;
+  letter-spacing: -0.32px;
+  color: ${colors.gray[900]};
   cursor: pointer;
   text-align: left;
 `;
 
-const AccountRow = styled.button`
+const AccountRow = styled.button<{ $muted?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 12px 0;
+  padding: 10px 0;
   border: none;
   background: transparent;
-  font-size: 0.9375rem;
-  color: ${colors.gray[700]};
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 140%;
+  letter-spacing: -0.32px;
+  color: ${(props) => (props.$muted ? colors.gray[400] : colors.gray[900])};
   cursor: pointer;
   text-align: left;
 `;
