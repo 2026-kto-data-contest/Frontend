@@ -16,7 +16,7 @@ import mapIcon from "../../assets/icon/Map.svg";
 import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import { colors } from "../../shared/styles/colors";
-import { SUGGESTED_KEYWORDS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
+import { ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
 import {
   breweryToCardData,
   fetchRecommendedBreweries,
@@ -30,6 +30,7 @@ import {
   saveRecentSearch,
   deleteRecentSearch,
   deleteAllRecentSearches,
+  fetchRecommendedKeywords,
 } from "../../shared/api/searchApi";
 import type { SearchSuggestion, RecentSearch, RecentSearchInput } from "../../shared/api/searchApi";
 import { useAuth } from "../../shared/lib/authContext";
@@ -72,6 +73,7 @@ export default function SearchPage() {
   const [results, setResults] = usePersistentState<BreweryListItem[]>("search:results", []);
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);
   const [recommended, setRecommended] = useState<BreweryListItem[]>([]);
+  const [recommendedKeywords, setRecommendedKeywords] = useState<string[]>([]);
   // 백엔드 연관검색어 API는 자음(초성)만 있는 검색어는 매칭을 못 해서(예: "ㄱ" → 빈 배열),
   // 초성만 입력했을 때는 양조장 목록을 미리 받아둔 걸로 프론트에서 직접 초성 매칭합니다.
   const breweryCorpusRef = useRef<BreweryListItem[] | null>(null);
@@ -83,6 +85,17 @@ export default function SearchPage() {
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         setRecommended([]);
+      });
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchRecommendedKeywords(controller.signal)
+      .then((list) => setRecommendedKeywords(list.map((item) => item.keyword)))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        setRecommendedKeywords([]);
       });
     return () => controller.abort();
   }, []);
@@ -382,20 +395,22 @@ export default function SearchPage() {
             )}
           </Section>
 
-          <Section>
-            <SectionTitle>추천 검색어</SectionTitle>
-            <SuggestRow>
-              {SUGGESTED_KEYWORDS.map((keyword, index) => (
-                <SuggestTag
-                  key={`${keyword}-${index}`}
-                  type="button"
-                  onClick={() => runSearch(keyword)}
-                >
-                  {keyword}
-                </SuggestTag>
-              ))}
-            </SuggestRow>
-          </Section>
+          {recommendedKeywords.length > 0 && (
+            <Section>
+              <SectionTitle>추천 검색어</SectionTitle>
+              <SuggestRow>
+                {recommendedKeywords.map((keyword, index) => (
+                  <SuggestTag
+                    key={`${keyword}-${index}`}
+                    type="button"
+                    onClick={() => runSearch(keyword)}
+                  >
+                    {keyword}
+                  </SuggestTag>
+                ))}
+              </SuggestRow>
+            </Section>
+          )}
         </Content>
       )}
 
@@ -809,7 +824,7 @@ const EmptyResultWrapper = styled.div`
 const SuggestGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px 8px;
+  gap: 4px 8px;
 `;
 
 const ModalOverlay = styled.div`
