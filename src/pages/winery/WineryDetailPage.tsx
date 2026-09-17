@@ -32,9 +32,10 @@ import infoIcon from "../../assets/icon/Info.svg";
 import downArrowIcon from "../../assets/icon/DownArrow.svg";
 import pinIcon from "../../assets/icon/Pin.svg";
 import priceIcon from "../../assets/icon/Price.svg";
+import uploadIcon from "../../assets/icon/Upload.svg";
 import noneImage from "../../assets/img/NoneImage.png";
 
-const HEADER_HEIGHT = 52;
+const HEADER_HEIGHT = 56;
 const INTRO_LINE_LIMIT_CHARS = 120;
 const DRINK_DESC_LIMIT_CHARS = 79;
 const LIST_COLLAPSE_COUNT = 3;
@@ -268,30 +269,32 @@ export default function WineryDetailPage() {
 
   return (
     <PageContainer ref={pageRef}>
-      <Header $solid={scrolled}>
-        <BackButton onClick={() => navigate(-1)} onDark={!scrolled} />
-        {scrolled && <HeaderTitle>{winery.name}</HeaderTitle>}
-        <ShareButton type="button" aria-label="공유하기" $onDark={!scrolled} onClick={handleShare}>
-          <ShareIcon viewBox="0 0 24 24" aria-hidden>
-            <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
-          </ShareIcon>
-        </ShareButton>
+      <Header>
+        <HeaderBackButton>
+          <BackButton onClick={() => navigate(-1)} />
+        </HeaderBackButton>
+        <HeaderTitle>{scrolled ? winery.name : ""}</HeaderTitle>
+        <HeaderShareButton type="button" aria-label="공유하기" onClick={handleShare}>
+          <img src={uploadIcon} alt="" width={24} height={24} />
+        </HeaderShareButton>
       </Header>
 
-      <ImageCarousel onPointerDown={handleBannerPointerDown} onPointerUp={handleBannerPointerUp}>
-        {hasPhotos ? (
-          <>
-            <ImageSlide src={photoUrls[imageIndex]} alt="" />
-            {slideCount > 1 && (
-              <ImageCounter>
-                {imageIndex + 1}/{slideCount}
-              </ImageCounter>
-            )}
-          </>
-        ) : (
-          <ImageSlide src={noneImage} alt="" />
-        )}
-      </ImageCarousel>
+      <ImageCarouselWrap>
+        <ImageCarousel onPointerDown={handleBannerPointerDown} onPointerUp={handleBannerPointerUp}>
+          {hasPhotos ? (
+            <>
+              <ImageSlide src={photoUrls[imageIndex]} alt="" />
+              {slideCount > 1 && (
+                <ImageCounter>
+                  {imageIndex + 1}/{slideCount}
+                </ImageCounter>
+              )}
+            </>
+          ) : (
+            <ImageSlide src={noneImage} alt="" />
+          )}
+        </ImageCarousel>
+      </ImageCarouselWrap>
 
       <Body>
         <RegionText>{winery.detailRegion}</RegionText>
@@ -300,23 +303,26 @@ export default function WineryDetailPage() {
         {winery.badges && winery.badges.length > 0 && (
           <BadgeRow>
             {winery.badges.map((badge) => (
-              <Badge key={badge} label={badge} tone="gray" />
+              <Badge key={badge} label={badge} tone="gray" shape="flat" size="md" />
             ))}
           </BadgeRow>
         )}
 
         <InfoCard>
           <InfoCell>
-            <img src={liquorIcon} alt="" width={20} height={20} />
+            <img src={liquorIcon} alt="" width={24} height={24} />
             <InfoLabel>대표주종</InfoLabel>
             <InfoValue>{representativeType}</InfoValue>
           </InfoCell>
           {visitLabel && (
-            <InfoCell>
-              <img src={eventIcon} alt="" width={20} height={20} />
-              <InfoLabel>방문방식</InfoLabel>
-              <InfoValue>{visitLabel}</InfoValue>
-            </InfoCell>
+            <>
+              <InfoDivider />
+              <InfoCell>
+                <img src={eventIcon} alt="" width={24} height={24} />
+                <InfoLabel>방문방식</InfoLabel>
+                <InfoValue>{visitLabel}</InfoValue>
+              </InfoCell>
+            </>
           )}
         </InfoCard>
 
@@ -324,9 +330,9 @@ export default function WineryDetailPage() {
           <SummaryCard>
             <SummaryTitle>이 양조장의 한 줄 요약</SummaryTitle>
             <SummaryList>
-              {summaryBullets.map((bullet) => (
-                <SummaryItem key={bullet}>
-                  <img src={checkIcon} alt="" width={14} height={14} /> {bullet}
+              {summaryBullets.map((bullet, index) => (
+                <SummaryItem key={bullet} $first={index === 0}>
+                  <img src={checkIcon} alt="" width={16} height={16} /> {bullet}
                 </SummaryItem>
               ))}
             </SummaryList>
@@ -372,6 +378,8 @@ export default function WineryDetailPage() {
         )}
       </Section>
 
+      <Divider />
+
       <Section>
         <SectionTitle>양조장의 술</SectionTitle>
         {drinks.length === 0 ? (
@@ -393,6 +401,8 @@ export default function WineryDetailPage() {
         )}
       </Section>
 
+      <Divider />
+
       <Section>
         <SectionTitleRow>
           <SectionTitle>체험 프로그램</SectionTitle>
@@ -402,7 +412,7 @@ export default function WineryDetailPage() {
               aria-label="체험 프로그램 안내"
               onClick={() => setTooltipOpen((prev) => !prev)}
             >
-              <img src={infoIcon} alt="" width={14} height={14} />
+              <img src={infoIcon} alt="" width={16} height={16} />
             </TooltipButton>
             {tooltipOpen && (
               <TooltipBubble>
@@ -434,6 +444,8 @@ export default function WineryDetailPage() {
         )}
       </Section>
 
+      <Divider />
+
       <Section>
         <SectionTitle>위치</SectionTitle>
         <AddressRow>
@@ -463,10 +475,11 @@ export default function WineryDetailPage() {
             </ExpandIcon>
           </MapExpandButton>
         </MapPreview>
+
         <LocationActionRow>
-          <ActionButton type="button" onClick={handleDirections}>
+          <DirectionsButton type="button" onClick={handleDirections}>
             <TopRightIcon $src={topRightIcon} /> 길찾기
-          </ActionButton>
+          </DirectionsButton>
           <ActionButtonPrimary
             type="button"
             onClick={() => navigate(`/course/${winery.id}`, { state: { winery } })}
@@ -544,7 +557,7 @@ export default function WineryDetailPage() {
           <DrinkName>{drink.name}</DrinkName>
           {awardLabel && (
             <AwardInline>
-              <img src={awardIcon} alt="" width={14} height={14} /> {awardLabel}
+              <img src={awardIcon} alt="" width={16} height={16} /> {awardLabel}
             </AwardInline>
           )}
         </DrinkCardHeader>
@@ -579,16 +592,14 @@ export default function WineryDetailPage() {
         <ExperienceName>{program.name}</ExperienceName>
         <ExperienceDescription>{program.description}</ExperienceDescription>
         <ExperienceMeta>
-          <MetaChip>
-            <MaskIcon $src={watchIcon} $size={14} />
-            {program.durationMinutes ? formatDuration(program.durationMinutes) : "문의 필요"}
-          </MetaChip>
-          {program.price !== undefined && (
-            <MetaChip>
-              <MaskIcon $src={priceIcon} $size={14} />
-              {program.price.toLocaleString()}원
-            </MetaChip>
-          )}
+          <TimeChip>
+            <MaskIcon $src={watchIcon} $size={16} $color={colors.gray[900]} />
+            {program.durationMinutes ? formatDuration(program.durationMinutes) : "-"}
+          </TimeChip>
+          <PriceChip>
+            <MaskIcon $src={priceIcon} $size={16} />
+            {program.price !== undefined ? `${program.price.toLocaleString()}원` : "문의 필요"}
+          </PriceChip>
         </ExperienceMeta>
       </ExperienceCardWrap>
     );
@@ -617,56 +628,58 @@ const PlainHeader = styled.div`
   padding: 12px 16px;
 `;
 
-const Header = styled.div<{ $solid: boolean }>`
+const Header = styled.div`
   position: sticky;
   top: 0;
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
   height: ${HEADER_HEIGHT}px;
-  padding: 0 16px;
+  padding: 8px 16px;
   box-sizing: border-box;
-  background-color: ${(props) => (props.$solid ? "#ffffff" : "transparent")};
-  border-bottom: ${(props) => (props.$solid ? `1px solid ${colors.gray[100]}` : "none")};
-  transition: background-color 0.15s ease-in-out;
+  background-color: #ffffff;
+`;
+
+const HeaderBackButton = styled.div`
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
 `;
 
 const HeaderTitle = styled.h1`
-  flex: 1;
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 18px;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.36px;
   color: ${colors.gray[900]};
 `;
 
-const ShareButton = styled.button<{ $onDark: boolean }>`
-  flex-shrink: 0;
+const HeaderShareButton = styled.button`
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  padding: 0;
   border: none;
-  border-radius: 50%;
-  background: ${(props) => (props.$onDark ? "rgba(0, 0, 0, 0.3)" : "transparent")};
-  color: ${(props) => (props.$onDark ? "#ffffff" : colors.gray[900])};
+  background: transparent;
   cursor: pointer;
 `;
 
-const ShareIcon = styled.svg`
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-`;
-
 // currentColor로 재염색이 필요한 아이콘(고정 색상 SVG를 마스크로 씌워 배경색을 그대로 입힙니다).
-const MaskIcon = styled.span<{ $src: string; $size?: number }>`
+const MaskIcon = styled.span<{ $src: string; $size?: number; $color?: string }>`
   display: inline-block;
   flex-shrink: 0;
   width: ${(props) => props.$size ?? 16}px;
   height: ${(props) => props.$size ?? 16}px;
+  color: ${(props) => props.$color ?? "inherit"};
   background-color: currentColor;
   -webkit-mask-image: url("${(props) => props.$src}");
   mask-image: url("${(props) => props.$src}");
@@ -678,7 +691,7 @@ const MaskIcon = styled.span<{ $src: string; $size?: number }>`
   mask-size: contain;
 `;
 
-const TopRightIcon = styled(MaskIcon).attrs({ $size: 14 })``;
+const TopRightIcon = styled(MaskIcon).attrs({ $size: 20 })``;
 
 const ChevronIcon = styled.img<{ $flip?: boolean }>`
   width: 12px;
@@ -687,11 +700,15 @@ const ChevronIcon = styled.img<{ $flip?: boolean }>`
   transition: transform 0.15s ease-in-out;
 `;
 
+const ImageCarouselWrap = styled.div`
+  padding: 0 16px;
+`;
+
 const ImageCarousel = styled.div`
   position: relative;
   width: 100%;
   height: 260px;
-  margin-top: -${HEADER_HEIGHT}px;
+  border-radius: 16px;
   touch-action: pan-y;
   overflow: hidden;
 `;
@@ -705,48 +722,52 @@ const ImageSlide = styled.img`
 
 const ImageCounter = styled.span`
   position: absolute;
-  right: 12px;
-  bottom: 12px;
-  padding: 3px 8px;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 8px;
   border-radius: 9999px;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0, 0, 0, 0.45);
   color: #ffffff;
   font-size: 0.6875rem;
-  font-weight: 600;
+  line-height: 1;
 `;
 
 const Body = styled.div`
   display: flex;
   flex-direction: column;
-  padding: 16px 16px 20px;
+  padding: 16px 16px 32px;
 `;
 
 const RegionText = styled.p`
   margin: 0;
-  font-size: 0.8125rem;
-  color: ${colors.gray[400]};
+  font-size: 12px;
+  line-height: 140%;
+  color: ${colors.info.text};
 `;
 
 const NameText = styled.h2`
   margin: 4px 0 0;
-  font-size: 1.375rem;
+  font-size: 24px;
   font-weight: 700;
-  color: ${colors.gray[900]};
+  line-height: 132%;
+  letter-spacing: -0.48px;
+  color: ${colors.black};
 `;
 
 const BadgeRow = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
+  gap: 5px;
+  margin-top: 8px;
 `;
 
 const InfoCard = styled.div`
   display: flex;
+  align-items: center;
   margin-top: 16px;
-  border: 1px solid ${colors.gray[100]};
-  border-radius: 12px;
-  overflow: hidden;
 `;
 
 const InfoCell = styled.div`
@@ -754,38 +775,45 @@ const InfoCell = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 14px 8px;
+  gap: 4px;
+  padding: 16px 8px;
   text-align: center;
+`;
 
-  & + & {
-    border-left: 1px solid ${colors.gray[100]};
-  }
+const InfoDivider = styled.div`
+  flex-shrink: 0;
+  width: 1px;
+  height: 64px;
+  background-color: ${colors.gray[100]};
 `;
 
 const InfoLabel = styled.span`
-  font-size: 0.6875rem;
-  color: ${colors.gray[400]};
+  font-size: 11px;
+  line-height: 1;
+  color: ${colors.gray[500]};
 `;
 
 const InfoValue = styled.span`
-  font-size: 0.875rem;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1;
   color: ${colors.gray[900]};
 `;
 
 const SummaryCard = styled.div`
   margin-top: 16px;
   padding: 16px;
-  border-radius: 12px;
+  border-radius: 8px;
   background-color: ${colors.gray[50]};
 `;
 
 const SummaryTitle = styled.p`
-  margin: 0 0 8px;
-  font-size: 0.875rem;
-  font-weight: 700;
-  color: ${colors.gray[900]};
+  margin: 0 0 16px;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.black};
 `;
 
 const SummaryList = styled.ul`
@@ -794,16 +822,16 @@ const SummaryList = styled.ul`
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 `;
 
-const SummaryItem = styled.li`
+const SummaryItem = styled.li<{ $first?: boolean }>`
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.8125rem;
-  color: ${colors.gray[600]};
-  line-height: 1.5;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1;
+  color: ${(props) => (props.$first ? colors.gray[500] : colors.gray[600])};
 `;
 
 const ActionRow = styled.div`
@@ -819,7 +847,7 @@ const ActionButton = styled.button`
   justify-content: center;
   gap: 4px;
   padding: 10px 16px;
-  border: 1px solid ${colors.gray[200]};
+  border: 1px solid ${colors.border};
   border-radius: 8px;
   background-color: #ffffff;
   font-size: 0.875rem;
@@ -847,24 +875,22 @@ const Divider = styled.div`
 `;
 
 const Section = styled.section`
-  padding: 24px 16px;
-
-  & + & {
-    border-top: 1px solid ${colors.gray[100]};
-  }
+  padding: 32px 16px;
 `;
 
 const SectionTitleRow = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 `;
 
 const SectionTitle = styled.h3`
-  margin: 0 0 12px;
-  font-size: 1rem;
+  margin: 0 0 16px;
+  font-size: 18px;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.36px;
   color: ${colors.gray[900]};
 
   ${SectionTitleRow} & {
@@ -874,9 +900,11 @@ const SectionTitle = styled.h3`
 
 const IntroText = styled.p<{ $expanded: boolean }>`
   margin: 0;
-  font-size: 0.875rem;
-  line-height: 1.6;
-  color: ${colors.gray[600]};
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 140%;
+  letter-spacing: -0.32px;
+  color: ${colors.gray[500]};
   white-space: pre-line;
   ${(props) =>
     !props.$expanded &&
@@ -891,14 +919,17 @@ const IntroText = styled.p<{ $expanded: boolean }>`
 const ToggleTextButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 2px;
-  margin: 12px auto 0;
-  padding: 6px 14px;
-  border: 1px solid ${colors.gray[200]};
-  border-radius: 9999px;
-  background: #ffffff;
-  font-size: 0.8125rem;
-  color: ${colors.gray[600]};
+  justify-content: center;
+  gap: 4px;
+  margin: 8px auto 0;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.black};
   cursor: pointer;
 `;
 
@@ -911,13 +942,13 @@ const EmptyNotice = styled.p`
 const DrinkList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
 `;
 
 const DrinkCardWrap = styled.div`
-  padding: 14px;
-  border: 1px solid ${colors.gray[100]};
-  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid ${colors.border};
+  border-radius: 8px;
 `;
 
 const DrinkCardHeader = styled.div`
@@ -929,22 +960,27 @@ const DrinkCardHeader = styled.div`
 
 const DrinkName = styled.p`
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${colors.gray[900]};
 `;
 
 const DrinkMeta = styled.p`
   margin: 4px 0 0;
-  font-size: 0.75rem;
-  color: ${colors.gray[400]};
+  font-size: 12px;
+  line-height: 140%;
+  color: ${colors.info.text};
 `;
 
 const DrinkDescription = styled.p<{ $expanded: boolean }>`
   margin: 8px 0 0;
-  font-size: 0.8125rem;
-  line-height: 1.5;
-  color: ${colors.gray[600]};
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[500]};
   ${(props) =>
     !props.$expanded &&
     `
@@ -974,16 +1010,17 @@ const DrinkTagRow = styled.div`
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 16px;
 `;
 
 const AwardInline = styled.span`
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  color: ${colors.primary[500]};
-  font-size: 0.8125rem;
+  gap: 2px;
+  color: ${colors.primary[700]};
+  font-size: 12px;
   font-weight: 700;
+  line-height: 140%;
   white-space: nowrap;
 `;
 
@@ -995,13 +1032,11 @@ const TooltipButton = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
   border: none;
-  border-radius: 50%;
-  background: ${colors.gray[100]};
-  color: ${colors.gray[500]};
-  font-size: 0.6875rem;
+  background: transparent;
   cursor: pointer;
 `;
 
@@ -1032,69 +1067,87 @@ const TooltipLine = styled.p`
 const ExperienceList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 15px;
 `;
 
 const ExperienceCardWrap = styled.div`
-  padding: 14px;
-  border: 1px solid ${colors.gray[100]};
-  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid ${colors.border};
+  border-radius: 8px;
 `;
 
 const ExperienceName = styled.p`
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: 16px;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${colors.gray[900]};
 `;
 
 const ExperienceDescription = styled.p`
-  margin: 4px 0 0;
-  font-size: 0.8125rem;
+  margin: 8px 0 0;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[500]};
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
 `;
 
 const ExperienceMeta = styled.div`
   display: flex;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 16px;
 `;
 
-const MetaChip = styled.span`
+const TimeChip = styled.span`
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.75rem;
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[500]};
+`;
+
+const PriceChip = styled.span`
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
   font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[900]};
 `;
 
 const AddressRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
 `;
 
 const AddressText = styled.p`
-  flex: 1;
   margin: 0;
-  font-size: 0.875rem;
-  color: ${colors.gray[700]};
+  font-size: 14px;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[900]};
 `;
 
 const CopyLinkButton = styled.button`
   flex-shrink: 0;
-  padding: 4px 10px;
-  border: 1px solid ${colors.gray[200]};
-  border-radius: 9999px;
-  background: #ffffff;
-  font-size: 0.75rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 14px;
   font-weight: 600;
-  color: ${colors.gray[600]};
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[500]};
+  text-decoration: underline;
   cursor: pointer;
 `;
 
@@ -1104,9 +1157,9 @@ const MapPreview = styled.div`
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 160px;
-  margin-top: 12px;
-  border-radius: 12px;
+  height: 300px;
+  margin-top: 16px;
+  border-radius: 8px;
   background-color: ${colors.gray[50]};
   overflow: hidden;
 `;
@@ -1144,7 +1197,13 @@ const ExpandIcon = styled.svg`
 const LocationActionRow = styled.div`
   display: flex;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 16px;
+  padding-bottom: 25px;
+`;
+
+const DirectionsButton = styled(ActionButton)`
+  flex: none;
+  width: 120px;
 `;
 
 const NotFoundWrap = styled.div`

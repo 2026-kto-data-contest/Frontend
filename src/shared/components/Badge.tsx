@@ -4,16 +4,26 @@ import { colors } from "../styles/colors";
 
 type BadgeTone = "primary" | "gray" | "danger" | "success" | "warning";
 type BadgeShape = "pill" | "flat";
+// flat 배지의 크기: sm은 WineryCard 등에서 쓰는 기본 크기, md는 양조장 상세 페이지 Figma 스펙(4px 8px, 12px)입니다.
+type BadgeSize = "sm" | "md";
 
 export interface BadgeProps {
   label: string | number;
   tone?: BadgeTone;
   shape?: BadgeShape;
+  size?: BadgeSize;
+  className?: string;
 }
 
-export const Badge: React.FC<BadgeProps> = ({ label, tone = "gray", shape = "pill" }) => {
+export const Badge: React.FC<BadgeProps> = ({
+  label,
+  tone = "gray",
+  shape = "pill",
+  size = "sm",
+  className,
+}) => {
   return (
-    <StyledBadge $tone={tone} $shape={shape}>
+    <StyledBadge $tone={tone} $shape={shape} $size={size} className={className}>
       {label}
     </StyledBadge>
   );
@@ -59,12 +69,21 @@ const shapeStyles: Record<BadgeShape, ReturnType<typeof css>> = {
   `,
 };
 
-const StyledBadge = styled.span<{ $tone: BadgeTone; $shape: BadgeShape }>`
+const flatSizeStyles: Record<BadgeSize, ReturnType<typeof css> | null> = {
+  sm: null,
+  md: css`
+    padding: 4px 8px;
+    font-size: 0.75rem;
+  `,
+};
+
+const StyledBadge = styled.span<{ $tone: BadgeTone; $shape: BadgeShape; $size: BadgeSize }>`
   display: inline-flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
   white-space: nowrap;
   ${(props) => shapeStyles[props.$shape]}
+  ${(props) => props.$shape === "flat" && flatSizeStyles[props.$size]}
   ${(props) => toneStyles[props.$tone]}
 `;
