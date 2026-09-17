@@ -31,7 +31,9 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
           {retryIcon ? (
             <span aria-hidden>{retryIcon}</span>
           ) : (
-            <img src={retryIconAsset} alt="" width={16} height={16} />
+            <RetryIconBox>
+              <img src={retryIconAsset} alt="" />
+            </RetryIconBox>
           )}
           {retryLabel}
         </RetryButton>
@@ -47,7 +49,7 @@ const Wrapper = styled.div`
   align-items: center;
   justify-content: center;
   gap: 16px;
-  padding: 80px 24px;
+  padding: 80px 24px 140px;
   text-align: center;
 `;
 
@@ -64,7 +66,7 @@ const TextGroup = styled.div`
 
 const Title = styled.p`
   margin: 0;
-  font-size: 1rem;
+  font-size: 16px;
   font-weight: 700;
   line-height: 140%;
   letter-spacing: -0.32px;
@@ -73,9 +75,9 @@ const Title = styled.p`
 
 const Description = styled.p`
   margin: 0;
-  font-size: 0.875rem;
+  font-size: 14px;
   font-weight: 300;
-  line-height: 140%;
+  line-height: 160%;
   letter-spacing: -0.28px;
   color: ${colors.gray[400]};
   white-space: pre-line;
@@ -83,10 +85,10 @@ const Description = styled.p`
 
 const RetryButton = styled.button`
   display: inline-flex;
+  justify-content: center;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 10px 20px;
+  gap: 4px;
+  padding: 9px 16px;
   border: none;
   border-radius: 8px;
   background-color: ${colors.gray[900]};
@@ -96,4 +98,21 @@ const RetryButton = styled.button`
   line-height: 140%;
   letter-spacing: -0.28px;
   cursor: pointer;
+`;
+
+const RetryIconBox = styled.span`
+  display: flex;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  justify-content: center;
+  align-items: center;
+  gap: 4px;
+  aspect-ratio: 1 / 1;
+  box-sizing: border-box;
+
+  img {
+    width: 100%;
+    height: 100%;
+  }
 `;

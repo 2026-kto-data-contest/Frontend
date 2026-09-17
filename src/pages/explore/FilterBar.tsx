@@ -35,10 +35,12 @@ export const FilterBar = ({
 
   return (
     <Row>
-      <FilterButton type="button" onClick={() => onOpenFilter()}>
+      <FilterButton type="button" onClick={() => onOpenFilter()} $active={activeCount > 0}>
         <img src={filterIcon} alt="" width={16} height={16} /> 필터
         {activeCount > 0 && <CountBadge>{activeCount}</CountBadge>}
       </FilterButton>
+
+      {activeCount > 0 && <Divider />}
 
       {orderedKeys.map((key) => {
         const count = filters[key].length;
@@ -59,7 +61,7 @@ export const FilterBar = ({
                 onClearCategory(key);
               }}
             >
-              <img src={removeIcon} alt="" width={14} height={14} />
+              <img src={removeIcon} alt="" width={16} height={16} />
             </ClearIcon>
           </ActiveChip>
         );
@@ -72,7 +74,7 @@ const Row = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 16px 12px;
+  padding: 6px 16px 8px;
   overflow-x: auto;
 
   &::-webkit-scrollbar {
@@ -80,7 +82,7 @@ const Row = styled.div`
   }
 `;
 
-const FilterButton = styled.button`
+const FilterButton = styled.button<{ $active?: boolean }>`
   position: relative;
   flex-shrink: 0;
   display: flex;
@@ -88,10 +90,11 @@ const FilterButton = styled.button`
   gap: 4px;
   padding: 8px 12px;
   border-radius: 9999px;
-  border: 1px solid ${colors.gray[900]};
+  border: 1px solid ${(props) => (props.$active ? colors.gray[900] : colors.gray[200])};
   background: #ffffff;
-  font-size: 0.8125rem;
+  font-size: 13px;
   font-weight: 700;
+  line-height: 100%;
   color: ${colors.gray[900]};
   cursor: pointer;
 `;
@@ -103,16 +106,21 @@ const CountBadge = styled.span`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
+  width: 18px;
   height: 18px;
-  padding: 0 4px;
   border-radius: 9999px;
-  border: 2px solid #ffffff;
   background-color: ${colors.gray[900]};
   color: #ffffff;
   font-size: 0.6875rem;
-  font-weight: 700;
+  font-weight: 400;
   box-sizing: border-box;
+`;
+
+const Divider = styled.div`
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  background-color: ${colors.gray[200]};
 `;
 
 const DropdownButton = styled.button`
@@ -124,8 +132,10 @@ const DropdownButton = styled.button`
   border-radius: 9999px;
   border: 1px solid ${colors.gray[200]};
   background: #ffffff;
-  font-size: 0.8125rem;
-  color: ${colors.gray[600]};
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 100%;
+  color: ${colors.gray[500]};
   cursor: pointer;
   white-space: nowrap;
 `;
@@ -134,13 +144,14 @@ const ActiveChip = styled.button`
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 8px 8px 8px 12px;
+  gap: 2px;
+  padding: 7px 11px;
   border-radius: 9999px;
   border: 1px solid transparent;
   background-color: ${colors.primary[500]};
-  font-size: 0.8125rem;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 100%;
   color: #ffffff;
   cursor: pointer;
   white-space: nowrap;

@@ -4,7 +4,6 @@ import { useNavigate, useNavigationType, useSearchParams } from "react-router-do
 import { Skeleton } from "../../shared/components/Skeleton";
 import { ErrorState } from "../../shared/components/ErrorState";
 import { WineryCard } from "../../shared/components/WineryCard";
-import { BackButton } from "../../shared/components/BackButton";
 import searchIcon from "../../assets/icon/Search.svg";
 import { colors } from "../../shared/styles/colors";
 import { usePersistentState } from "../../shared/lib/pageState";
@@ -180,10 +179,9 @@ export default function WineryListPage() {
   return (
     <PageContainer>
       <Header>
-        <BackButton onClick={() => navigate(-1)} />
         <HeaderTitle>양조장</HeaderTitle>
         <SearchButton type="button" aria-label="검색" onClick={() => navigate("/search")}>
-          <img src={searchIcon} alt="" width={18} height={18} />
+          <img src={searchIcon} alt="" width={20} height={20} />
         </SearchButton>
       </Header>
 
@@ -199,7 +197,7 @@ export default function WineryListPage() {
         // Figma "Card/Brewery Type=List, State=Loading" 실측값(썸네일 115x115, 제목/위치/설명
         // 2줄/배지 2개)을 그대로 옮긴 것이며, 아래 WineryCard(thumbSize=115) 실제 모양과 같습니다.
         <SkeletonList>
-          {Array.from({ length: 4 }).map((_, index) => (
+          {Array.from({ length: 8 }).map((_, index) => (
             <SkeletonRow key={index}>
               <Skeleton $width="115px" $height="115px" $radius="8px" />
               <SkeletonCol>
@@ -299,15 +297,16 @@ const PageContainer = styled.div`
 const Header = styled.div`
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  justify-content: space-between;
+  padding: 16px;
 `;
 
 const HeaderTitle = styled.h1`
-  flex: 1;
   margin: 0;
-  font-size: 1.0625rem;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 132%;
+  letter-spacing: -0.4px;
   color: ${colors.gray[900]};
 `;
 

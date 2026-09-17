@@ -3,6 +3,7 @@ import styled from "styled-components";
 import { Chip } from "../../shared/components/Chip";
 import { colors } from "../../shared/styles/colors";
 import retryIcon from "../../assets/icon/Retry.svg";
+import removeIcon from "../../assets/icon/Remove.svg";
 import {
   ALL_TYPE_FILTERS,
   ALL_REGION_FILTERS,
@@ -71,13 +72,24 @@ export const FilterSheet = ({
   });
   const contentRef = useRef<HTMLDivElement>(null);
 
+  const scrollToSection = (key: SectionKey) => {
+    // 첫 섹션(주종)은 위쪽에 구분선이 없으므로, 섹션으로 scrollIntoView하면 Content의
+    // 상단 패딩까지 접혀버려 진짜 맨 위(scrollTop 0)까지 올라가지 않습니다. 이 경우엔
+    // Content 자체를 맨 위로 스크롤합니다.
+    if (key === SECTIONS[0].key) {
+      contentRef.current?.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+    sectionRefs.current[key]?.scrollIntoView({ behavior: "auto", block: "start" });
+  };
+
   useEffect(() => {
     if (open) {
       setDraft(initialFilters);
       setActiveTab(initialSection);
       // 시트가 열릴 때 선택된 섹션으로 바로 스크롤합니다. 내용 순서 자체는 항상 고정입니다.
       requestAnimationFrame(() => {
-        sectionRefs.current[initialSection]?.scrollIntoView({ block: "start" });
+        scrollToSection(initialSection);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,11 +106,9 @@ export const FilterSheet = ({
     }));
   };
 
-  // 마지막 섹션까지도 브라우저가 스크롤 가능한 만큼만 이동시키므로, 시트 길이가 모자라도
-  // 자연스럽게 마지막 필터가 하단에 맞춰지는 선에서 멈춥니다.
   const handleTabClick = (key: SectionKey) => {
     setActiveTab(key);
-    sectionRefs.current[key]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    scrollToSection(key);
   };
 
   const selectedEntries = SECTIONS.flatMap((section) =>
@@ -114,6 +124,9 @@ export const FilterSheet = ({
   return (
     <Overlay onClick={onClose}>
       <Sheet onClick={(e) => e.stopPropagation()}>
+        <HandleArea>
+          <HandleBar />
+        </HandleArea>
         <TabRow>
           {SECTIONS.map((section) => (
             <TabButton
@@ -131,12 +144,14 @@ export const FilterSheet = ({
         <Content ref={contentRef}>
           {SECTIONS.map((section, index) => (
             <Fragment key={section.key}>
-              {index > 0 && <SectionDivider />}
-              <Section
-                ref={(el) => {
-                  sectionRefs.current[section.key] = el;
-                }}
-              >
+              {index > 0 && (
+                <SectionDivider
+                  ref={(el) => {
+                    sectionRefs.current[section.key] = el;
+                  }}
+                />
+              )}
+              <Section>
                 <SectionTitle>{section.label}</SectionTitle>
                 <ChipGrid>
                   {section.options.map((option) => (
@@ -151,6 +166,7 @@ export const FilterSheet = ({
               </Section>
             </Fragment>
           ))}
+          <ScrollSpacer aria-hidden />
         </Content>
 
         {selectedEntries.length > 0 && (
@@ -162,7 +178,7 @@ export const FilterSheet = ({
                 onClick={() => removeSelected(section, value)}
               >
                 {value}
-                <span aria-hidden>×</span>
+                <img src={removeIcon} alt="" width={16} height={16} />
               </SelectedChip>
             ))}
           </SelectedRow>
@@ -203,15 +219,30 @@ const Sheet = styled.div`
   height: 620px;
   max-height: 92%;
   background-color: #ffffff;
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   overflow: hidden;
+`;
+
+const HandleArea = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+`;
+
+const HandleBar = styled.div`
+  width: 36px;
+  height: 4px;
+  border-radius: 9999px;
+  background-color: ${colors.gray[200]};
 `;
 
 const TabRow = styled.div`
   flex-shrink: 0;
   display: flex;
   overflow-x: auto;
-  border-bottom: 1px solid ${colors.gray[100]};
+  border-bottom: 1px solid ${colors.border};
   padding: 0 16px;
 
   &::-webkit-scrollbar {
@@ -224,12 +255,15 @@ const TabButton = styled.button<{ $active: boolean }>`
   position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 14px 10px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 10px;
   border: none;
   background: transparent;
   font-size: 1rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${(props) => (props.$active ? colors.gray[900] : colors.gray[500])};
   border-bottom: 2px solid ${(props) => (props.$active ? colors.gray[900] : "transparent")};
   white-space: nowrap;
@@ -237,8 +271,11 @@ const TabButton = styled.button<{ $active: boolean }>`
 `;
 
 const Dot = styled.span`
-  width: 5px;
-  height: 5px;
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background-color: ${colors.primary[500]};
 `;
@@ -259,16 +296,26 @@ const Section = styled.div`
   gap: 8px;
 `;
 
+// Content 높이가 필터 목록 전체보다 커서, 탭으로 뒤쪽 섹션(방문조건/이력)에 스크롤해도
+// 스크롤 여유가 부족해 해당 섹션이 상단까지 올라오지 못하는 문제를 막기 위한 여백입니다.
+const ScrollSpacer = styled.div`
+  flex-shrink: 0;
+  width: 1px;
+  height: 420px;
+`;
+
 const SectionDivider = styled.div`
   flex-shrink: 0;
   height: 1px;
-  background-color: ${colors.gray[100]};
+  background-color: ${colors.divider};
 `;
 
 const SectionTitle = styled.h3`
   margin: 0;
   font-size: 0.875rem;
   font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
   color: ${colors.gray[500]};
 `;
 
@@ -281,10 +328,11 @@ const ChipGrid = styled.div`
 const SelectedRow = styled.div`
   flex-shrink: 0;
   display: flex;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 4px;
+  padding: 10px 16px;
   overflow-x: auto;
-  border-top: 1px solid ${colors.gray[100]};
+  background-color: ${colors.gray[50]};
+  border-bottom: 1px solid ${colors.divider};
 
   &::-webkit-scrollbar {
     display: none;
@@ -295,13 +343,14 @@ const SelectedChip = styled.button`
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 6px 10px;
+  gap: 2px;
+  padding: 8px 12px;
   border-radius: 9999px;
   border: 1px solid ${colors.gray[200]};
-  background: ${colors.gray[50]};
+  background: #ffffff;
   font-size: 0.8125rem;
-  color: ${colors.gray[700]};
+  line-height: 100%;
+  color: ${colors.gray[500]};
   white-space: nowrap;
   cursor: pointer;
 `;
@@ -315,18 +364,21 @@ const Footer = styled.div`
 
 const ResetButton = styled.button`
   flex-shrink: 0;
-  width: 103px;
+  height: 48px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 12px 16px;
-  border: 1px solid ${colors.gray[200]};
+  border: 1px solid ${colors.border};
   border-radius: 8px;
-  background-color: #ffffff;
+  background-color: transparent;
   color: ${colors.gray[900]};
   font-size: 1rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   white-space: nowrap;
   cursor: pointer;
 `;
@@ -349,6 +401,11 @@ const ResetIcon = styled.span`
 
 const ApplyButton = styled.button`
   flex: 1;
+  height: 48px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 12px 16px;
   border: none;
   border-radius: 8px;
@@ -356,6 +413,8 @@ const ApplyButton = styled.button`
   color: #ffffff;
   font-size: 1rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   cursor: pointer;
 
   &:hover {
