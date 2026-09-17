@@ -377,14 +377,21 @@ export default function SearchPage() {
         ))}
 
       {phase === "loading" && (
+        // Figma "Card/Brewery Type=List, State=Loading" 실측값을 그대로 옮긴 것이며,
+        // 아래 검색 결과 WineryCard(thumbSize=115) 실제 모양과 같습니다.
         <ResultSkeletonList>
           {Array.from({ length: 5 }).map((_, index) => (
             <ResultSkeletonRow key={index}>
-              <Skeleton $width="80px" $height="80px" $radius="12px" />
+              <Skeleton $width="115px" $height="115px" $radius="8px" />
               <SkeletonCol>
-                <Skeleton $height="12px" $width="60%" />
-                <Skeleton $height="12px" $width="90%" />
-                <Skeleton $height="12px" $width="40%" />
+                <Skeleton $height="18px" $width="120px" />
+                <Skeleton $height="12px" $width="45px" />
+                <Skeleton $height="14px" $width="90%" />
+                <Skeleton $height="14px" $width="65%" />
+                <SkeletonBadgeRow>
+                  <Skeleton $height="19px" $width="51px" $radius="4px" />
+                  <Skeleton $height="19px" $width="70px" $radius="4px" />
+                </SkeletonBadgeRow>
               </SkeletonCol>
             </ResultSkeletonRow>
           ))}
@@ -684,6 +691,12 @@ const SkeletonCol = styled.div`
   flex-direction: column;
   gap: 8px;
   justify-content: center;
+`;
+
+const SkeletonBadgeRow = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
 `;
 
 const ResultWrapper = styled.div`

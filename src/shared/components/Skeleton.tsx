@@ -10,7 +10,7 @@ export interface SkeletonProps {
 export const Skeleton = styled.div<SkeletonProps>`
   width: ${(props) => props.$width ?? "100%"};
   height: ${(props) => props.$height ?? "16px"};
-  border-radius: ${(props) => props.$radius ?? "6px"};
+  border-radius: ${(props) => props.$radius ?? "4px"};
   flex-shrink: 0;
   background: linear-gradient(
     90deg,

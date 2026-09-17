@@ -30,7 +30,7 @@ export default function MyPage() {
 
   useEffect(() => {
     if (auth.isLoading || auth.isLoggedIn) return;
-    navigate("/login?from=%2Fmypage", { replace: true });
+    navigate("/login?from=%2F", { replace: true });
   }, [auth.isLoading, auth.isLoggedIn, navigate]);
 
   useEffect(() => {
@@ -87,11 +87,7 @@ export default function MyPage() {
   };
 
   if (auth.isLoading || !auth.isLoggedIn) {
-    return (
-      <PageContainer>
-        <Header>마이</Header>
-      </PageContainer>
-    );
+    return null;
   }
 
   const tasteLabel = preferences?.liquorTypes.join("·") ?? "";
