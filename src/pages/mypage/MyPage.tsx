@@ -118,7 +118,7 @@ export default function MyPage() {
         <Nickname>{auth.nickname}님</Nickname>
         <ProfileRow>
           <KakaoBadge>
-            <img src={kakaoLogoIcon} alt="" width={12} height={11} />
+            <img src={kakaoLogoIcon} alt="" width={13} height={12} />
             kakao
           </KakaoBadge>
           <Email>{auth.email}</Email>

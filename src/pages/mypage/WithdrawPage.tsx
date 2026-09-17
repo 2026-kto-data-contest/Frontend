@@ -5,6 +5,7 @@ import { AppBar } from "../../shared/components/AppBar";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
 import checkCircleIcon from "../../assets/icon/CheckCircle.svg";
+import circleIcon from "../../assets/icon/Circle.svg";
 
 const NOTICE_ITEMS = [
   "회원 탈퇴 시 계정 정보(이메일, 닉네임), 온보딩에서 설정한 취향 정보, 서비스 이용 기록 등 회원과 관련된 개인정보가 삭제됩니다.",
@@ -118,7 +119,7 @@ const Footer = styled.div`
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px;
+  padding: 16px 16px 32px;
 `;
 
 const AgreeRow = styled.button`
@@ -140,9 +141,9 @@ const CheckCircle = styled.span<{ $active: boolean }>`
   display: inline-block;
   width: 20px;
   height: 20px;
-  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[600])};
-  -webkit-mask-image: url("${checkCircleIcon}");
-  mask-image: url("${checkCircleIcon}");
+  background-color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[300])};
+  -webkit-mask-image: url("${(props) => (props.$active ? checkCircleIcon : circleIcon)}");
+  mask-image: url("${(props) => (props.$active ? checkCircleIcon : circleIcon)}");
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center;
