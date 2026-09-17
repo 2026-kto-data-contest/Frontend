@@ -1,6 +1,7 @@
 import React from "react";
 import styled, { css } from "styled-components";
 import { colors } from "../styles/colors";
+import { resolveImageUrl } from "../api/api";
 import noneImage from "../../assets/img/NoneImage.png";
 
 export interface PhotoCardProps {
@@ -24,7 +25,7 @@ export const PhotoCard: React.FC<PhotoCardProps> = ({
 }) => {
   return (
     <Wrapper $large={large} $fluid={fluid} onClick={onClick} $clickable={!!onClick}>
-      <Thumb $large={large} src={photoUrl ?? noneImage} alt="" />
+      <Thumb $large={large} src={resolveImageUrl(photoUrl) ?? noneImage} alt="" />
       <Body $large={large}>
         <TitleRegionGroup $large={large}>
           <Name>{name}</Name>
