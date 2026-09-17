@@ -267,17 +267,23 @@ export default function SearchPage() {
     setPhase("idle");
   };
 
+  // 검색을 시작하는 순간(입력·결과 화면) 더미 히스토리를 하나 쌓아두고, 뒤로가기(물리
+  // 버튼/제스처)가 눌리면 검색 페이지를 완전히 벗어나기 전에 먼저 입력 화면으로 되돌립니다.
+  const historyGuardedRef = useRef(false);
+
   const handleBack = () => {
     if (phase !== "idle" || query) {
-      resetToIdle();
+      if (historyGuardedRef.current) {
+        // 쌓아둔 더미 히스토리를 실제로 소비해야, 다음 뒤로가기에서 상태와 브라우저
+        // 히스토리가 다시 어긋나지 않습니다.
+        window.history.back();
+      } else {
+        resetToIdle();
+      }
       return;
     }
     navigate(-1);
   };
-
-  // 검색을 시작하는 순간(입력·결과 화면) 더미 히스토리를 하나 쌓아두고, 뒤로가기(물리
-  // 버튼/제스처)가 눌리면 검색 페이지를 완전히 벗어나기 전에 먼저 입력 화면으로 되돌립니다.
-  const historyGuardedRef = useRef(false);
 
   useEffect(() => {
     const leavingIdle = phase !== "idle" || query.length > 0;
@@ -537,7 +543,7 @@ const SearchHeader = styled.div`
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 12px 16px;
+  padding: 20px 16px;
 `;
 
 const InputWrapper = styled.div`
@@ -796,14 +802,14 @@ const EmptyResultWrapper = styled.div`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 16px 24px;
+  padding: 0 16px 50px;
   gap: 50px;
 `;
 
 const SuggestGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 15px 8px;
+  gap: 10px 8px;
 `;
 
 const ModalOverlay = styled.div`
@@ -829,7 +835,7 @@ const ModalCard = styled.div`
 const ModalTitle = styled.p`
   margin: 0;
   font-size: 0.9375rem;
-  font-weight: 700;
+  font-weight: 7s00;
   color: ${colors.gray[900]};
   text-align: center;
 `;
