@@ -16,8 +16,12 @@ import mapIcon from "../../assets/icon/Map.svg";
 import rightArrowIcon from "../../assets/icon/RightArrow.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import { colors } from "../../shared/styles/colors";
-import { SUGGESTED_KEYWORDS } from "../../shared/lib/mockWineries";
-import { breweryToCardData, fetchRecommendedBreweries, fetchBreweries } from "../../shared/api/breweriesApi";
+import { SUGGESTED_KEYWORDS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
+import {
+  breweryToCardData,
+  fetchRecommendedBreweries,
+  fetchBreweries,
+} from "../../shared/api/breweriesApi";
 import type { BreweryListItem } from "../../shared/api/breweriesApi";
 import {
   searchBreweries,
@@ -186,37 +190,40 @@ export default function SearchPage() {
         setPhase("error");
       });
 
-    // 자동완성 항목이면 실제 대상(type·id)을 그대로 저장하고,
-    // 자유 입력 검색은 대상을 특정할 수 없어 REGION 버킷의 키워드로 저장합니다.
-    const entry: RecentSearchInput = suggestion
+    // 자동완성 항목이면 실제 대상(type·id)을 그대로 저장합니다. 자유 입력 검색은 대상을
+    // 특정할 수 없는데, 백엔드는 REGION 타입도 id·displayName이 지원하는 8개 지역명과
+    // 정확히 같아야만 받아줘서(그 외엔 400) 지역명이 아닌 자유 입력은 저장을 건너뜁니다.
+    const displayName = suggestion?.displayName ?? trimmed;
+    const remoteEntry: RecentSearchInput | null = suggestion
       ? {
           type: suggestion.type,
           id: suggestion.id,
           keyword: suggestion.keyword,
           displayName: suggestion.displayName,
         }
-      : { type: "REGION", id: trimmed, keyword: trimmed, displayName: trimmed };
+      : (ALL_REGION_FILTERS as readonly string[]).includes(trimmed)
+        ? { type: "REGION", id: trimmed, keyword: trimmed, displayName: trimmed }
+        : null;
 
     if (isLoggedIn) {
-      saveRecentSearch(entry)
-        .then((saved) => {
-          setRemoteRecent((prev) =>
-            [
-              saved,
-              ...prev.filter((item) => !(item.type === saved.type && item.id === saved.id)),
-            ].slice(0, RECENT_MAX_COUNT)
-          );
-        })
-        .catch((error) => {
-          // 검색 결과 화면에는 영향 없이 넘어가지만, 원인 파악을 위해 콘솔에는 남깁니다.
-          console.error("최근 검색어 저장 실패", error);
-        });
+      if (remoteEntry) {
+        saveRecentSearch(remoteEntry)
+          .then((saved) => {
+            setRemoteRecent((prev) =>
+              [
+                saved,
+                ...prev.filter((item) => !(item.type === saved.type && item.id === saved.id)),
+              ].slice(0, RECENT_MAX_COUNT)
+            );
+          })
+          .catch((error) => {
+            // 검색 결과 화면에는 영향 없이 넘어가지만, 원인 파악을 위해 콘솔에는 남깁니다.
+            console.error("최근 검색어 저장 실패", error);
+          });
+      }
     } else {
       setLocalRecent((prev) =>
-        [entry.displayName, ...prev.filter((item) => item !== entry.displayName)].slice(
-          0,
-          RECENT_MAX_COUNT
-        )
+        [displayName, ...prev.filter((item) => item !== displayName)].slice(0, RECENT_MAX_COUNT)
       );
     }
   };
@@ -315,11 +322,11 @@ export default function SearchPage() {
               aria-label="입력 지우기"
               onClick={() => handleInputChange("")}
             >
-              <img src={cancelIcon} alt="" width={18} height={18} />
+              <img src={cancelIcon} alt="" width={24} height={24} />
             </ClearButton>
           ) : (
             <ClearButton type="button" aria-label="검색" onClick={() => runSearch(query)}>
-              <img src={searchIcon} alt="" width={18} height={18} />
+              <img src={searchIcon} alt="" width={14} height={14} />
             </ClearButton>
           )}
         </InputWrapper>
@@ -461,7 +468,7 @@ export default function SearchPage() {
           />
           <Section>
             <SectionHeader>
-              <SectionTitle>이런 양조장은 어때요?</SectionTitle>
+              <SectionTitle $large>이런 양조장은 어때요?</SectionTitle>
               <TextButton type="button" onClick={() => navigate("/explore")}>
                 더보기
               </TextButton>
@@ -546,7 +553,14 @@ const SearchInput = styled.input`
   border: none;
   border-radius: 8px;
   background-color: ${colors.gray[50]};
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-family: Pretendard;
   font-size: 1rem;
+  font-weight: 400;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${colors.gray[900]};
   outline: none;
   box-sizing: border-box;
@@ -559,12 +573,12 @@ const SearchInput = styled.input`
 
 const ClearButton = styled.button`
   position: absolute;
-  right: 8px;
+  right: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border: none;
   padding: 0;
   background: transparent;
@@ -590,10 +604,12 @@ const SectionHeader = styled.div`
   justify-content: space-between;
 `;
 
-const SectionTitle = styled.h2`
+const SectionTitle = styled.h2<{ $large?: boolean }>`
   margin: 0;
-  font-size: 0.9375rem;
+  font-size: ${(props) => (props.$large ? "1.125rem" : "0.9375rem")};
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: ${(props) => (props.$large ? "-0.36px" : "normal")};
   color: ${colors.gray[900]};
 `;
 
@@ -776,6 +792,8 @@ const MapButton = styled.button`
 `;
 
 const EmptyResultWrapper = styled.div`
+  flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0 16px 24px;
@@ -785,7 +803,7 @@ const EmptyResultWrapper = styled.div`
 const SuggestGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  gap: 15px 8px;
 `;
 
 const ModalOverlay = styled.div`

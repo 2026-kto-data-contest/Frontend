@@ -599,7 +599,8 @@ const Greeting = styled.div`
 const GreetingTitle = styled.b`
   margin: 0;
   font-family: "LINE Seed Sans KR";
-  font-size: 1.125rem;
+  font-size: 18px;
+  font-style: normal;
   font-weight: 700;
   line-height: 140%;
   letter-spacing: -0.36px;
@@ -768,6 +769,8 @@ const SectionTitle = styled.h2`
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.36px;
   color: ${colors.gray[900]};
 `;
 
