@@ -676,6 +676,7 @@ const EmptyRecent = styled.p`
   letter-spacing: -0.32px;
   line-height: 140%;
   color: ${colors.gray[900]};
+  text-align: center;
 `;
 
 const RecentList = styled.div`
