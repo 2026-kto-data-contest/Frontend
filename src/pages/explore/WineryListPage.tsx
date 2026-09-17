@@ -189,14 +189,21 @@ export default function WineryListPage() {
       />
 
       {loadState === "loading" && (
+        // Figma "Card/Brewery Type=List, State=Loading" 실측값(썸네일 115x115, 제목/위치/설명
+        // 2줄/배지 2개)을 그대로 옮긴 것이며, 아래 WineryCard(thumbSize=115) 실제 모양과 같습니다.
         <SkeletonList>
           {Array.from({ length: 4 }).map((_, index) => (
             <SkeletonRow key={index}>
-              <Skeleton $width="90px" $height="90px" $radius="12px" />
+              <Skeleton $width="115px" $height="115px" $radius="8px" />
               <SkeletonCol>
-                <Skeleton $height="12px" $width="60%" />
-                <Skeleton $height="12px" $width="90%" />
-                <Skeleton $height="12px" $width="40%" />
+                <Skeleton $height="18px" $width="120px" />
+                <Skeleton $height="12px" $width="45px" />
+                <Skeleton $height="14px" $width="90%" />
+                <Skeleton $height="14px" $width="65%" />
+                <SkeletonBadgeRow>
+                  <Skeleton $height="19px" $width="51px" $radius="4px" />
+                  <Skeleton $height="19px" $width="70px" $radius="4px" />
+                </SkeletonBadgeRow>
               </SkeletonCol>
             </SkeletonRow>
           ))}
@@ -240,7 +247,7 @@ export default function WineryListPage() {
                   } else if (auth.isLoggedIn) {
                     navigate("/terms?from=%2Fexplore");
                   } else {
-                    navigate("/login?from=%2Fexplore");
+                    navigate("/login?from=%2F");
                   }
                 }}
               />
@@ -342,4 +349,10 @@ const SkeletonCol = styled.div`
   flex-direction: column;
   gap: 8px;
   justify-content: center;
+`;
+
+const SkeletonBadgeRow = styled.div`
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
 `;

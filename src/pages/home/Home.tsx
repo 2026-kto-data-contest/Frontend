@@ -70,9 +70,7 @@ function BannerCardVisual({ item }: { item: RecommendedCourseCard }) {
       />
       <BannerText>
         {item.regionLabel && <BannerRegion>{item.regionLabel}</BannerRegion>}
-        <BannerTitle>
-          {item.title} <NoWrap>- 코스 이동</NoWrap>
-        </BannerTitle>
+        <BannerTitle>{item.title}</BannerTitle>
       </BannerText>
     </>
   );
@@ -278,10 +276,11 @@ export default function Home() {
   const greetingTitle = auth.isLoggedIn ? `${auth.nickname}님` : GUEST_GREETING_TITLE;
   const preferenceLine = preferences ? buildPreferenceLine(preferences) : null;
   // Figma상 "로그인 전"과 "로그인 후·온보딩 전" 배너는 같은 스타일(주황 배경+서브타이틀+사진)이고,
-  // 온보딩을 마친 뒤(DEFAULT/PERSONALIZED)에만 다른(초록빛 배경, 서브타이틀 없음) 배너를 씁니다.
+  // 온보딩을 마친 뒤에만 다른(초록빛 배경, 서브타이틀 없음) 배너를 씁니다.
+  // 백엔드 banner.type은 온보딩을 마친 뒤에도 계속 ONBOARDING으로 내려오는 경우가 있어서
+  // (실기기로 확인됨) 믿지 않고, 인사말 로직처럼 로그인 상태 auth.hasOnboarded로 직접 판단합니다.
   // 문구도 백엔드 banner.message가 아니라 Figma에 있는 문구를 그대로 씁니다.
-  const isPromptBanner =
-    home?.banner.type === "ONBOARDING" || home?.banner.type === "LOGIN";
+  const isPromptBanner = !auth.hasOnboarded;
   const promoTitle = isPromptBanner
     ? "내 취향에 딱 맞는\n양조장 체험이 궁금하다면?"
     : "전국의 체험 가능한 양조장을 \n한곳에서 만나보세요";
@@ -499,6 +498,10 @@ export default function Home() {
   );
 }
 
+// Figma 컴포넌트 라이브러리의 Card/Brewery Loading variant(Compact 120x174, Featured 220x298,
+// List 375 wide) 실측값을 그대로 옮긴 것이며, 실제 홈 화면에 있는 섹션을 전부 반영합니다
+// (미니배너·지역별/추천 양조장 가로 스크롤이 스켈레톤에 없어서 로딩이 끝나면 화면이 갑자기
+// 길어지던 것도 같이 고쳤습니다).
 const HomeSkeleton = () => (
   <SkeletonWrapper>
     <SkeletonGreeting>
@@ -506,6 +509,11 @@ const HomeSkeleton = () => (
       <Skeleton $height="20px" $width="50%" />
     </SkeletonGreeting>
     <Skeleton $height="400px" $radius="24px" />
+    <SkeletonDots>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Skeleton key={i} $height="6px" $width="6px" $radius="9999px" />
+      ))}
+    </SkeletonDots>
     <SkeletonSectionHeader>
       <Skeleton $height="20px" $width="110px" />
       <Skeleton $height="16px" $width="36px" />
@@ -528,6 +536,46 @@ const HomeSkeleton = () => (
         </SkeletonCol>
       </SkeletonRow>
     ))}
+
+    <Skeleton $height="100px" />
+
+    <SkeletonSectionHeader>
+      <Skeleton $height="20px" $width="90px" />
+      <Skeleton $height="16px" $width="36px" />
+    </SkeletonSectionHeader>
+    <SkeletonChipRow>
+      <Skeleton $height="29px" $width="52px" $radius="9999px" />
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+      <Skeleton $height="29px" $width="46px" $radius="9999px" />
+    </SkeletonChipRow>
+    <SkeletonScrollRow>
+      {[0, 1, 2].map((i) => (
+        <SkeletonCompactCard key={i}>
+          <Skeleton $height="120px" $width="120px" $radius="8px" />
+          <Skeleton $height="20px" $width="90%" />
+          <Skeleton $height="14px" $width="45px" />
+        </SkeletonCompactCard>
+      ))}
+    </SkeletonScrollRow>
+
+    <SkeletonSectionHeader>
+      <Skeleton $height="20px" $width="90px" />
+      <Skeleton $height="16px" $width="36px" />
+    </SkeletonSectionHeader>
+    <SkeletonScrollRow>
+      {[0, 1].map((i) => (
+        <SkeletonFeaturedCard key={i}>
+          <Skeleton $height="180px" $radius="0" />
+          <SkeletonFeaturedBody>
+            <Skeleton $height="18px" $width="70%" />
+            <Skeleton $height="12px" $width="40%" />
+            <Skeleton $height="16px" $width="100%" />
+            <Skeleton $height="16px" $width="55%" />
+          </SkeletonFeaturedBody>
+        </SkeletonFeaturedCard>
+      ))}
+    </SkeletonScrollRow>
   </SkeletonWrapper>
 );
 
@@ -687,11 +735,6 @@ const BannerTitle = styled.p`
   /* 단어 중간(예: "화이트와인" → "화이"/"트와인")이 아니라 단어(공백) 단위로만 줄바꿈합니다. */
   word-break: keep-all;
   overflow-wrap: break-word;
-`;
-
-// "코스 이동"은 띄어쓰기가 있어도 줄바꿈되면 안 되는 한 단어 취급입니다.
-const NoWrap = styled.span`
-  white-space: nowrap;
 `;
 
 const Dots = styled.div`
@@ -862,4 +905,40 @@ const SkeletonCol = styled.div`
   flex-direction: column;
   gap: 8px;
   justify-content: center;
+`;
+
+const SkeletonDots = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+`;
+
+const SkeletonScrollRow = styled.div`
+  display: flex;
+  gap: 10px;
+  overflow: hidden;
+`;
+
+const SkeletonCompactCard = styled.div`
+  flex-shrink: 0;
+  width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const SkeletonFeaturedCard = styled.div`
+  flex-shrink: 0;
+  width: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #ffffff;
+  border: 1px solid ${colors.gray[100]};
+`;
+
+const SkeletonFeaturedBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
 `;
