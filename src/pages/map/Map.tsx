@@ -234,9 +234,11 @@ export default function Map() {
   const navState = location.state as {
     winery?: Winery;
     courseStops?: RecommendedCourseStop[];
+    searchBreweryIds?: string[];
   } | null;
   const navStateWinery =
     navState?.winery && navState.winery.id === focusId ? navState.winery : undefined;
+  const searchBreweryIds = navState?.searchBreweryIds;
 
   const areaRef = useRef<HTMLDivElement>(null);
   const mapElRef = useRef<HTMLDivElement>(null);
@@ -253,6 +255,7 @@ export default function Map() {
   const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const refetchPlacesRef = useRef<(category: CategoryKey) => void>(() => {});
   const placesAbortRef = useRef<AbortController | null>(null);
+  const isSearchResultModeRef = useRef(Boolean(searchBreweryIds?.length));
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -281,6 +284,9 @@ export default function Map() {
 
   const [places, setPlaces] = useState<MapPlace[]>([]);
   const [placesLoadState, setPlacesLoadState] = useState<PlacesLoadState>("idle");
+  // 검색 결과에서 "지도에서 보기"로 넘어온 경우, 지도가 뜨자마자 뷰포트 기준 조회가
+  // 그 결과를 덮어쓰지 않도록 이 플래그가 true인 동안만 자동 조회를 막습니다.
+  const [isSearchResultMode, setIsSearchResultMode] = useState(Boolean(searchBreweryIds?.length));
   const [courseStops, setCourseStops] = useState<RecommendedCourseStop[]>([]);
   const [recommendedBreweries, setRecommendedBreweries] = useState<MapRecommendedBrewery[]>([]);
   const [awardedLiquors, setAwardedLiquors] = useState<MapAwardedLiquor[]>([]);
@@ -354,6 +360,10 @@ export default function Map() {
   useEffect(() => {
     userPositionRef.current = userPosition;
   }, [userPosition]);
+
+  useEffect(() => {
+    isSearchResultModeRef.current = isSearchResultMode;
+  }, [isSearchResultMode]);
 
   // 지도에 양조장이 하나도 안 보일 때 목록 대신 보여줄 기본 콘텐츠(추천 양조장·수상 전통주·추천 메뉴)입니다.
   useEffect(() => {
@@ -472,7 +482,9 @@ export default function Map() {
         });
         mapInstanceRef.current = map;
         kakao.event.addListener(map, "idle", () => {
-          if (!isCourseMode) refetchPlacesRef.current(activeCategoryRef.current);
+          if (!isCourseMode && !isSearchResultModeRef.current) {
+            refetchPlacesRef.current(activeCategoryRef.current);
+          }
         });
         setLoadState("ready");
         requestAnimationFrame(() => map.relayout());
@@ -614,10 +626,65 @@ export default function Map() {
 
   // 카테고리를 바꾸면 그 카테고리의 실제 장소를(양조장 포함) 새로 조회합니다.
   useEffect(() => {
-    if (loadState !== "ready" || isCourseMode) return;
+    if (loadState !== "ready" || isCourseMode || isSearchResultMode) return;
     refetchPlaces(activeCategory);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCategory, loadState, isCourseMode]);
+  }, [activeCategory, loadState, isCourseMode, isSearchResultMode]);
+
+  // 검색 결과에서 "지도에서 보기"로 넘어온 경우, 뷰포트 조회 대신 그 검색 결과
+  // 양조장들만 조회해 핀으로 띄우고 지도 범위를 그 핀들에 맞춥니다.
+  useEffect(() => {
+    if (!isSearchResultMode || loadState !== "ready" || !searchBreweryIds?.length) return;
+    const kakao = kakaoRef.current;
+    const map = mapInstanceRef.current;
+    if (!kakao || !map) return;
+
+    let cancelled = false;
+    setPlacesLoadState("loading");
+    Promise.all(searchBreweryIds.map((id) => fetchBreweryDetail(id).catch(() => null)))
+      .then((details) => {
+        if (cancelled) return;
+        const validPlaces: MapPlace[] = details
+          .filter((detail): detail is NonNullable<typeof detail> => detail != null)
+          .filter((detail) => detail.latitude != null && detail.longitude != null)
+          .map((detail) => ({
+            placeId: detail.breweryId,
+            placeName: detail.businessName,
+            category: "BREWERY",
+            categoryName: "양조장",
+            distance: null,
+            roadAddressName: detail.address ?? null,
+            phone: detail.phone,
+            latitude: detail.latitude as number,
+            longitude: detail.longitude as number,
+            imageUrl: resolveImageUrl(detail.mainImage?.url) ?? null,
+          }));
+        setPlaces(validPlaces);
+        setPlacesLoadState("ready");
+
+        if (validPlaces.length > 0) {
+          const bounds = new kakao.LatLngBounds();
+          validPlaces.forEach((place) => bounds.extend(new kakao.LatLng(place.latitude, place.longitude)));
+          if (validPlaces.length === 1) {
+            map.setCenter(new kakao.LatLng(validPlaces[0].latitude, validPlaces[0].longitude));
+            map.setLevel(FOCUS_LEVEL);
+          } else {
+            map.setBounds(bounds, 80, 40, 40, 40);
+          }
+        }
+        setIsSearchResultMode(false);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("검색 결과 양조장 조회 실패", error);
+        setPlacesLoadState("error");
+        setIsSearchResultMode(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSearchResultMode, loadState]);
 
   // 코스 모드에서 중심 양조장 마커만 그립니다(일반 모드의 양조장 핀은 아래 장소 마커 효과가 담당합니다).
   useEffect(() => {
@@ -986,7 +1053,7 @@ export default function Map() {
           </SearchBarButton>
         )}
 
-        {loadState === "loading" && (
+        {(loadState === "loading" || (loadState === "ready" && isSearchResultMode)) && (
           <StatusOverlay style={{ bottom: activeSheetHeight }}>
             <DotsLoader />
           </StatusOverlay>

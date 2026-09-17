@@ -29,10 +29,10 @@ const Banner = styled.button<{ $onboarded: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  margin: 12px 16px 0;
+  padding: 16px 20px;
+  margin: 10px 16px 5px;
   border: none;
-  border-radius: 16px;
+  border-radius: 8px;
   cursor: pointer;
   text-align: left;
   box-sizing: border-box;
@@ -41,24 +41,27 @@ const Banner = styled.button<{ $onboarded: boolean }>`
 
 const Icon = styled.img`
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 48px;
+  height: 48px;
 `;
 
 const TextArea = styled.span`
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 `;
 
 const Title = styled.span<{ $onboarded: boolean }>`
   font-size: 0.875rem;
-  font-weight: 700;
-  color: ${(props) => (props.$onboarded ? "#374151" : "#7a4a1f")};
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${(props) => (props.$onboarded ? "#374151" : "#171716")};
 `;
 
 const Subtitle = styled.span<{ $onboarded: boolean }>`
-  font-size: 0.75rem;
-  color: ${(props) => (props.$onboarded ? "#6b7280" : "#a06a3a")};
+  font-size: 0.6875rem;
+  line-height: 100%;
+  color: ${(props) => (props.$onboarded ? "#6b7280" : "#b0b0ae")};
 `;
