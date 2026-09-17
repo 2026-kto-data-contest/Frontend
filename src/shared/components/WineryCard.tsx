@@ -75,7 +75,7 @@ export const WineryCard: React.FC<WineryCardProps> = ({
         {showBadges && winery.badges && winery.badges.length > 0 && (
           <BadgeRow>
             {winery.badges.map((badge) => (
-              <Badge key={badge} label={badge} tone="gray" />
+              <Badge key={badge} label={badge} tone="gray" shape="flat" />
             ))}
           </BadgeRow>
         )}
@@ -140,6 +140,6 @@ const TagRow = styled.div`
 
 const BadgeRow = styled.div`
   display: flex;
-  gap: 6px;
+  gap: 4px;
   margin-top: 4px;
 `;

@@ -462,7 +462,7 @@ export default function SearchPage() {
         // Figma "Card/Brewery Type=List, State=Loading" 실측값을 그대로 옮긴 것이며,
         // 아래 검색 결과 WineryCard(thumbSize=115) 실제 모양과 같습니다.
         <ResultSkeletonList>
-          {Array.from({ length: 5 }).map((_, index) => (
+          {Array.from({ length: 8 }).map((_, index) => (
             <ResultSkeletonRow key={index}>
               <Skeleton $width="115px" $height="115px" $radius="8px" />
               <SkeletonCol>
@@ -497,7 +497,12 @@ export default function SearchPage() {
               />
             ))}
           </ResultList>
-          <MapButton type="button" onClick={() => navigate("/map")}>
+          <MapButton
+            type="button"
+            onClick={() =>
+              navigate("/map", { state: { searchBreweryIds: results.map((r) => r.breweryId) } })
+            }
+          >
             <img src={mapIcon} alt="" width={20} height={20} />
             지도에서 {results.length}곳 보기
           </MapButton>
@@ -809,7 +814,7 @@ const ResultWrapper = styled.div`
 `;
 
 const ResultCount = styled.p`
-  margin: 4px 0 12px;
+  margin: -8px 0 12px;
   font-size: 0.875rem;
   font-weight: 400;
   color: ${colors.gray[900]};
@@ -827,21 +832,23 @@ const ResultList = styled.div`
 `;
 
 const MapButton = styled.button`
-  position: absolute;
+  position: fixed;
   left: 50%;
   bottom: 20px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   border: none;
-  border-radius: 9999px;
-  padding: 10px 20px;
+  border-radius: 999px;
+  padding: 10px 16px;
   background-color: ${colors.primary[500]};
   color: ${colors.white};
-  font-size: 0.8125rem;
-  font-weight: 700;
-  box-shadow: 0 8px 16px rgba(255, 122, 0, 0.35);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.25);
   cursor: pointer;
 `;
 
