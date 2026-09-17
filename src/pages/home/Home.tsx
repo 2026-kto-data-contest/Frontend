@@ -647,12 +647,13 @@ const BannerStack = styled.div`
 // Figma "Card/Recommand Animation" 컴포넌트의 스택 카드 3장(맨 앞/중간/뒤) 실측 inset입니다.
 // 351x400 기준 카드 좌표(맨 앞 0,0~335,400 / 중간 43,20~343,380 / 뒤 83,40~351,360)를
 // top/right/bottom/left inset으로 옮긴 것입니다. 실제 컨테이너 폭(343px)이 기준 폭(351px)보다
-// 8px 좁아서, 세 카드 모두 right를 8px씩 줄여 서로 겹치는 정도(카드 사이 8px 간격)와
-// 맨 앞 카드 폭(335px)을 그대로 유지합니다.
+// 8px 좁아서, 세 카드 모두 좌우 4px씩(합 8px) 줄여 서로 겹치는 정도와 각 카드 폭(335/300/268px)은
+// 그대로 유지하면서, 좁아진 폭 안에서 가운데 정렬되게 합니다(왼쪽에만 다 몰아주면 페이지
+// 좌우 여백이 16px/24px로 어긋납니다).
 const BANNER_STACK_INSETS = [
-  { top: 0, right: 8, bottom: 0, left: 0 },
-  { top: 20, right: 0, bottom: 20, left: 43 },
-  { top: 40, right: -8, bottom: 40, left: 83 },
+  { top: 0, right: 16, bottom: 0, left: 0 },
+  { top: 20, right: 8, bottom: 20, left: 47 },
+  { top: 40, right: 0, bottom: 40, left: 87 },
 ] as const;
 
 // Figma "Card/Recommand-1" 모션(맨 앞 카드가 넘어갈 때 빠져나가는 효과)입니다.

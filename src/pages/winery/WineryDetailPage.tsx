@@ -19,7 +19,7 @@ import type { Winery } from "../../shared/lib/mockWineries";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import { fetchBreweryDetail, fetchBreweryProducts } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
-import watchIcon from "../../assets/icon/Watch.svg";
+import timeIcon from "../../assets/icon/Time.svg";
 import cancelIcon from "../../assets/icon/Cancel.svg";
 import liquorIcon from "../../assets/icon/Liquor.svg";
 import eventIcon from "../../assets/icon/Event.svg";
@@ -593,7 +593,7 @@ export default function WineryDetailPage() {
         <ExperienceDescription>{program.description}</ExperienceDescription>
         <ExperienceMeta>
           <TimeChip>
-            <MaskIcon $src={watchIcon} $size={16} $color={colors.gray[900]} />
+            <img src={timeIcon} alt="" width={16} height={16} />
             {program.durationMinutes ? formatDuration(program.durationMinutes) : "-"}
           </TimeChip>
           <PriceChip>
