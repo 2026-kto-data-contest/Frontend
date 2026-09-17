@@ -1,6 +1,7 @@
 import React from "react";
 import styled from "styled-components";
 import { colors } from "../styles/colors";
+import { resolveImageUrl } from "../api/api";
 import { Tag } from "./Tag";
 import { Badge } from "./Badge";
 import noneImage from "../../assets/img/NoneImage.png";
@@ -50,7 +51,7 @@ export const WineryCard: React.FC<WineryCardProps> = ({
 
   return (
     <Row onClick={onClick} $clickable={!!onClick}>
-      <Thumb $size={thumbSize} src={winery.photoUrls?.[0] ?? noneImage} alt="" />
+      <Thumb $size={thumbSize} src={resolveImageUrl(winery.photoUrls?.[0]) ?? noneImage} alt="" />
       <Info>
         {nameFirst ? (
           <>
