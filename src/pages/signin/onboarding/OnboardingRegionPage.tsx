@@ -59,12 +59,13 @@ export default function OnboardingRegionPage() {
       onBack={() => navigate(`/onboarding/taste?from=${encodeURIComponent(from)}`)}
       onSkip={handleSkip}
       error={skipError}
+      contentGap={24}
       footer={
         <Button
           variant="primary"
           size="lg"
           disabled={selected.length === 0}
-          style={{ width: "100%" }}
+          style={{ width: "100%", height: 48, borderRadius: 8 }}
           onClick={() => navigate(`/onboarding/strength?from=${encodeURIComponent(from)}`)}
         >
           다음

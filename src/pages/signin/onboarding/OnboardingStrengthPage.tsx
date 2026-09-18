@@ -28,9 +28,9 @@ export const ALCOHOL_LEVEL_TO_ID: Record<AlcoholLevel, string> = {
 };
 
 export const STRENGTH_OPTIONS = [
-  { id: "light", label: "가볍게", sub: "7도 미만" },
-  { id: "medium", label: "적당히", sub: "7도 이상 20도 미만" },
-  { id: "strong", label: "독하게", sub: "20도 이상" },
+  { id: "light", label: "가볍게", sub: "14도 이하" },
+  { id: "medium", label: "적당히", sub: "15도 이상 29도 미만" },
+  { id: "strong", label: "독하게", sub: "30도 이상" },
 ];
 
 const ICONS: Record<string, string> = {
@@ -111,7 +111,7 @@ export default function OnboardingStrengthPage() {
           variant="primary"
           size="lg"
           disabled={!selectedStrength || isSubmitting}
-          style={{ width: "100%" }}
+          style={{ width: "100%", height: 48, borderRadius: 8 }}
           onClick={handleFinish}
         >
           {isSubmitting ? "저장 중..." : "완료"}
