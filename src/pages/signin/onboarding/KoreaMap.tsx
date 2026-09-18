@@ -52,7 +52,7 @@ export const KoreaMap = ({ selectedRegions, onToggleRegion }: KoreaMapProps) => 
                 <path
                   key={i}
                   d={d}
-                  fill={active ? colors.primary[500] : colors.gray[200]}
+                  fill={active ? colors.primary[500] : colors.gray[300]}
                   stroke="#ffffff"
                   strokeWidth={1.2}
                   strokeLinejoin="round"

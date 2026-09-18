@@ -1,5 +1,7 @@
-import styled, { css } from "styled-components";
+import styled from "styled-components";
 import { colors } from "../../../shared/styles/colors";
+import optionCheckedIcon from "../../../assets/icon/OptionCheckedIcon.svg";
+import optionRadioIcon from "../../../assets/icon/OptionRadioIcon.svg";
 
 export interface OptionRowProps {
   icon: string;
@@ -18,9 +20,16 @@ export const OptionRow = ({ icon, label, sub, active, indicator, onClick }: Opti
       </IconWrap>
       <TextWrap>
         <Label $active={active}>{label}</Label>
-        <Sub>{sub}</Sub>
+        <Sub $active={active}>{sub}</Sub>
       </TextWrap>
-      <Indicator $active={active} $shape={indicator} />
+      {active && (
+        <img
+          src={indicator === "check" ? optionCheckedIcon : optionRadioIcon}
+          alt=""
+          width={24}
+          height={24}
+        />
+      )}
     </Row>
   );
 };
@@ -28,11 +37,11 @@ export const OptionRow = ({ icon, label, sub, active, indicator, onClick }: Opti
 const Row = styled.button<{ $active: boolean }>`
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   width: 100%;
   padding: 16px;
-  border-radius: 12px;
-  border: 1.5px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
+  border-radius: 16px;
+  border: 1px solid ${(props) => (props.$active ? colors.primary[700] : colors.divider)};
   background: #ffffff;
   cursor: pointer;
   text-align: left;
@@ -46,7 +55,7 @@ const IconWrap = styled.span<{ $active: boolean }>`
   flex-shrink: 0;
   width: 24px;
   height: 24px;
-  color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[700])};
+  color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[900])};
 `;
 
 const IconMask = styled.span<{ $src: string }>`
@@ -73,58 +82,14 @@ const TextWrap = styled.span`
 `;
 
 const Label = styled.span<{ $active: boolean }>`
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 700;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[900])};
 `;
 
-const Sub = styled.span`
+const Sub = styled.span<{ $active: boolean }>`
   font-size: 0.75rem;
-  color: ${colors.gray[400]};
-`;
-
-const Indicator = styled.span<{ $active: boolean; $shape: "check" | "radio" }>`
-  flex-shrink: 0;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  box-sizing: border-box;
-  position: relative;
-  border: 1.5px solid ${(props) => (props.$active ? colors.primary[500] : colors.gray[200])};
-  background-color: ${(props) =>
-    props.$active && props.$shape === "check" ? colors.primary[500] : "#ffffff"};
-
-  ${(props) =>
-    props.$active &&
-    props.$shape === "check" &&
-    css`
-      &::after {
-        content: "";
-        position: absolute;
-        left: 7px;
-        top: 4px;
-        width: 5px;
-        height: 9px;
-        border: solid #ffffff;
-        border-width: 0 2px 2px 0;
-        transform: rotate(45deg);
-      }
-    `}
-
-  ${(props) =>
-    props.$active &&
-    props.$shape === "radio" &&
-    css`
-      &::after {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        background-color: ${colors.primary[500]};
-        transform: translate(-50%, -50%);
-      }
-    `}
+  color: ${(props) => (props.$active ? colors.primary[500] : colors.gray[400])};
 `;

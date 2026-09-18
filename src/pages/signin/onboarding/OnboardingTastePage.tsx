@@ -80,7 +80,7 @@ export default function OnboardingTastePage() {
           variant="primary"
           size="lg"
           disabled={selected.length === 0}
-          style={{ width: "100%" }}
+          style={{ width: "100%", height: 48, borderRadius: 8 }}
           onClick={() => navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)}
         >
           다음
@@ -107,5 +107,5 @@ export default function OnboardingTastePage() {
 const RowList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 `;
