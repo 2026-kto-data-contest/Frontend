@@ -1,21 +1,26 @@
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import bannerBeforeIcon from "../../assets/icon/BannerBefore.svg";
 import bannerAfterIcon from "../../assets/icon/BannerAfter.svg";
 
 export interface ExplorePromoBannerProps {
   hasOnboarded: boolean;
   onClick: () => void;
-  disabled?: boolean;
+  /** 취향 맞춤 양조장을 조회하는 동안 클릭을 막고, 아이콘 자리에 로딩 표시를 보여줍니다. */
+  loading?: boolean;
 }
 
 export const ExplorePromoBanner = ({
   hasOnboarded,
   onClick,
-  disabled,
+  loading,
 }: ExplorePromoBannerProps) => {
   return (
-    <Banner type="button" $onboarded={hasOnboarded} onClick={onClick} disabled={disabled}>
-      <Icon src={hasOnboarded ? bannerAfterIcon : bannerBeforeIcon} alt="" />
+    <Banner type="button" $onboarded={hasOnboarded} onClick={onClick} disabled={loading}>
+      {loading ? (
+        <Spinner aria-label="불러오는 중" role="status" />
+      ) : (
+        <Icon src={hasOnboarded ? bannerAfterIcon : bannerBeforeIcon} alt="" />
+      )}
       <TextArea>
         <Title $onboarded={hasOnboarded}>
           {hasOnboarded ? "취향에 맞춘 여행 코스를 준비했어요" : "취향에 맞는 양조장을 찾아보세요"}
@@ -44,7 +49,6 @@ const Banner = styled.button<{ $onboarded: boolean }>`
   background-color: ${(props) => (props.$onboarded ? "#eef1f2" : "#fff5e6")};
 
   &:disabled {
-    opacity: 0.6;
     cursor: not-allowed;
   }
 `;
@@ -53,6 +57,24 @@ const Icon = styled.img`
   flex-shrink: 0;
   width: 48px;
   height: 48px;
+`;
+
+const spin = keyframes`
+  to {
+    transform: rotate(360deg);
+  }
+`;
+
+const Spinner = styled.span`
+  flex-shrink: 0;
+  display: inline-block;
+  width: 48px;
+  height: 48px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.1);
+  border-top-color: #ff8a00;
+  animation: ${spin} 0.8s linear infinite;
 `;
 
 const TextArea = styled.span`
