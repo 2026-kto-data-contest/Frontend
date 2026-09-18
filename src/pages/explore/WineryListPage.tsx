@@ -9,7 +9,7 @@ import { colors } from "../../shared/styles/colors";
 import { usePersistentState } from "../../shared/lib/pageState";
 import { useAuth } from "../../shared/lib/authContext";
 import { ApiError } from "../../shared/api/api";
-import { fetchBreweries, breweryToCardData } from "../../shared/api/breweriesApi";
+import { fetchBreweries, fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
 import type { BreweryListItem, BreweryListParams } from "../../shared/api/breweriesApi";
 import { FilterBar } from "./FilterBar";
 import { FilterSheet, EMPTY_FILTERS } from "./FilterSheet";
@@ -94,6 +94,22 @@ export default function WineryListPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetSection, setSheetSection] = useState<SectionKey>("types");
   const navigationType = useNavigationType();
+  // 프로모션 배너(온보딩 완료 상태)를 누르면 이 중 무작위 1곳의 추천 코스로 이동시킵니다.
+  const [preferenceMatchedBreweries, setPreferenceMatchedBreweries] = useState<BreweryListItem[]>(
+    []
+  );
+
+  useEffect(() => {
+    if (!auth.hasOnboarded) return;
+    const controller = new AbortController();
+    fetchHome(undefined, undefined, controller.signal)
+      .then((home) => setPreferenceMatchedBreweries(home.recommendedBreweries))
+      .catch((error) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("취향 맞춤 양조장 조회 실패", error);
+      });
+    return () => controller.abort();
+  }, [auth.hasOnboarded]);
 
   useEffect(() => {
     const urlType = searchParams.get("type");
@@ -246,7 +262,16 @@ export default function WineryListPage() {
                 hasOnboarded={auth.hasOnboarded}
                 onClick={() => {
                   if (auth.hasOnboarded) {
-                    navigate("/");
+                    // 취향과 일치하는 양조장 중 1곳을 무작위로 골라 추천 코스로 이동합니다.
+                    if (preferenceMatchedBreweries.length > 0) {
+                      const picked =
+                        preferenceMatchedBreweries[
+                          Math.floor(Math.random() * preferenceMatchedBreweries.length)
+                        ];
+                      navigate(`/course/${picked.breweryId}`);
+                    } else {
+                      navigate("/");
+                    }
                   } else if (auth.isLoggedIn && auth.termsAgreed) {
                     navigate("/onboarding?from=%2Fexplore");
                   } else if (auth.isLoggedIn) {
