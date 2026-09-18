@@ -22,6 +22,15 @@ function asRegion(region: string | null): (typeof ALL_REGION_FILTERS)[number] {
     : "수도권";
 }
 
+// BreweryDetail에는 시/군/구 필드가 따로 없어서, 전체 주소의 두 번째 토큰(예: "경상북도
+// 문경시 ..." → "문경시", "경북 영천시 ..." → "영천시")에서 시/군/구 접미사를 뗀 값을 씁니다.
+function sigunguFromAddress(address: string): string | null {
+  const token = address.split(" ")[1];
+  if (!token) return null;
+  const trimmed = token.replace(/(시|군|구)$/, "");
+  return trimmed || null;
+}
+
 function asVisitAvailability(state: VisitState): VisitAvailability {
   if (state === "Y") return "가능";
   if (state === "N") return "불가";
@@ -81,12 +90,14 @@ function adaptExperience(
 
 export function adaptBreweryToWinery(detail: BreweryDetail, products: ProductCard[]): Winery {
   const intro = detail.overview ?? detail.designationNote ?? undefined;
+  const sigungu = sigunguFromAddress(detail.address);
+  const sido = detail.sido ?? detail.region ?? "";
 
   return {
     id: detail.breweryId,
     type: asType(detail.liquorTypes[0]),
     region: asRegion(detail.region),
-    detailRegion: detail.sido ?? detail.region ?? "",
+    detailRegion: sigungu ? `${sido} ${sigungu}`.trim() : sido,
     name: detail.businessName,
     productName: products[0]?.productName ?? "",
     description: intro ?? "",

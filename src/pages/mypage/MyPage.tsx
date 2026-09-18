@@ -32,9 +32,17 @@ export default function MyPage() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (auth.isLoading || auth.isLoggedIn) return;
-    navigate("/login?from=%2F", { replace: true });
-  }, [auth.isLoading, auth.isLoggedIn, navigate]);
+    if (auth.isLoading) return;
+    if (!auth.isLoggedIn) {
+      navigate("/login?from=%2F", { replace: true });
+      return;
+    }
+    // 카카오 로그인만 하고 약관 동의를 마치지 않은 상태(세션은 있지만 termsAgreed=false)로는
+    // 마이페이지에 들어올 수 없게, 약관 동의 화면으로 돌려보냅니다.
+    if (!auth.termsAgreed) {
+      navigate("/terms", { replace: true });
+    }
+  }, [auth.isLoading, auth.isLoggedIn, auth.termsAgreed, navigate]);
 
   useEffect(() => {
     if (!auth.isLoggedIn) return;
@@ -89,7 +97,7 @@ export default function MyPage() {
     }
   };
 
-  if (auth.isLoading || !auth.isLoggedIn) {
+  if (auth.isLoading || !auth.isLoggedIn || !auth.termsAgreed) {
     return null;
   }
 

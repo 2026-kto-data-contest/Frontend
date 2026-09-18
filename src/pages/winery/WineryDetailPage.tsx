@@ -36,7 +36,6 @@ import uploadIcon from "../../assets/icon/Upload.svg";
 import noneImage from "../../assets/img/NoneImage.png";
 
 const HEADER_HEIGHT = 56;
-const INTRO_LINE_LIMIT_CHARS = 120;
 const DRINK_DESC_LIMIT_CHARS = 79;
 const LIST_COLLAPSE_COUNT = 3;
 const TOAST_DURATION_MS = 3000;
@@ -87,7 +86,6 @@ export default function WineryDetailPage() {
   const [imageIndex, setImageIndex] = useState(0);
   const [shareSheetOpen, setShareSheetOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  const [introExpanded, setIntroExpanded] = useState(false);
   const [drinksExpanded, setDrinksExpanded] = useState(false);
   const [experiencesExpanded, setExperiencesExpanded] = useState(false);
   const [expandedDrinkIds, setExpandedDrinkIds] = useState<Set<string>>(new Set());
@@ -258,7 +256,6 @@ export default function WineryDetailPage() {
     : experiences.slice(0, LIST_COLLAPSE_COUNT);
 
   const introText = winery.intro ?? winery.description;
-  const introNeedsToggle = introText.length > INTRO_LINE_LIMIT_CHARS;
 
   const handleDirections = () => {
     const url =
@@ -271,13 +268,15 @@ export default function WineryDetailPage() {
   return (
     <PageContainer ref={pageRef}>
       <Header>
-        <HeaderBackButton>
+        <HeaderSide>
           <BackButton onClick={() => navigate(-1)} />
-        </HeaderBackButton>
+        </HeaderSide>
         <HeaderTitle>{scrolled ? winery.name : ""}</HeaderTitle>
-        <HeaderShareButton type="button" aria-label="공유하기" onClick={handleShare}>
-          <img src={uploadIcon} alt="" width={24} height={24} />
-        </HeaderShareButton>
+        <HeaderSide $end>
+          <HeaderShareButton type="button" aria-label="공유하기" onClick={handleShare}>
+            <img src={uploadIcon} alt="" width={24} height={24} />
+          </HeaderShareButton>
+        </HeaderSide>
       </Header>
 
       <ImageCarouselWrap>
@@ -341,22 +340,23 @@ export default function WineryDetailPage() {
         )}
 
         <ActionRow>
-          {winery.phone && (
-            <ActionButton
-              type="button"
-              onClick={() => copyToClipboard(winery.phone!, "전화번호를 복사했어요!")}
-            >
-              <img src={articleIcon} alt="" width={20} height={20} /> 연락처
-            </ActionButton>
-          )}
-          {winery.homepageUrl && (
-            <ActionButton
-              type="button"
-              onClick={() => window.open(winery.homepageUrl, "_blank", "noopener,noreferrer")}
-            >
-              <img src={webIcon} alt="" width={20} height={20} /> 홈페이지
-            </ActionButton>
-          )}
+          <ActionButton
+            type="button"
+            disabled={!winery.phone}
+            onClick={() => winery.phone && copyToClipboard(winery.phone, "전화번호를 복사했어요!")}
+          >
+            <img src={articleIcon} alt="" width={20} height={20} /> 연락처
+          </ActionButton>
+          <ActionButton
+            type="button"
+            disabled={!winery.homepageUrl}
+            onClick={() =>
+              winery.homepageUrl &&
+              window.open(winery.homepageUrl, "_blank", "noopener,noreferrer")
+            }
+          >
+            <img src={webIcon} alt="" width={20} height={20} /> 홈페이지
+          </ActionButton>
           <ActionButton
             type="button"
             onClick={() => navigate(`/course/${winery.id}`, { state: { winery } })}
@@ -366,20 +366,18 @@ export default function WineryDetailPage() {
         </ActionRow>
       </Body>
 
-      <Divider />
+      <Divider ref={introRef} />
 
-      <Section ref={introRef}>
-        <SectionTitle>양조장 소개</SectionTitle>
-        <IntroText $expanded={introExpanded}>{introText}</IntroText>
-        {introNeedsToggle && (
-          <ToggleTextButton type="button" onClick={() => setIntroExpanded((prev) => !prev)}>
-            {introExpanded ? "접기" : "더보기"}{" "}
-            <ChevronIcon src={downArrowIcon} alt="" $flip={introExpanded} />
-          </ToggleTextButton>
-        )}
-      </Section>
+      {introText && (
+        <>
+          <Section>
+            <SectionTitle>양조장 소개</SectionTitle>
+            <IntroText>{introText}</IntroText>
+          </Section>
 
-      <Divider />
+          <Divider />
+        </>
+      )}
 
       <Section>
         <SectionTitle>양조장의 술</SectionTitle>
@@ -402,31 +400,29 @@ export default function WineryDetailPage() {
         )}
       </Section>
 
-      <Divider />
+      {experiences.length > 0 && (
+        <>
+          <Divider />
 
-      <Section>
-        <SectionTitleRow>
-          <SectionTitle>체험 프로그램</SectionTitle>
-          <TooltipAnchor>
-            <TooltipButton
-              type="button"
-              aria-label="체험 프로그램 안내"
-              onClick={() => setTooltipOpen((prev) => !prev)}
-            >
-              <img src={infoIcon} alt="" width={16} height={16} />
-            </TooltipButton>
-            {tooltipOpen && (
-              <TooltipBubble>
-                <TooltipLine>프로그램 금액이 현장에서 변동될 수 있어요</TooltipLine>
-                <TooltipLine>소요시간은 상황에 따라 변동될 수 있어요</TooltipLine>
-              </TooltipBubble>
-            )}
-          </TooltipAnchor>
-        </SectionTitleRow>
-        {experiences.length === 0 ? (
-          <EmptyNotice>아직 운영 중인 체험 프로그램이 없어요.</EmptyNotice>
-        ) : (
-          <>
+          <Section>
+            <SectionTitleRow>
+              <SectionTitle>체험 프로그램</SectionTitle>
+              <TooltipAnchor>
+                <TooltipButton
+                  type="button"
+                  aria-label="체험 프로그램 안내"
+                  onClick={() => setTooltipOpen((prev) => !prev)}
+                >
+                  <img src={infoIcon} alt="" width={16} height={16} />
+                </TooltipButton>
+                {tooltipOpen && (
+                  <TooltipBubble>
+                    <TooltipLine>프로그램 금액이 현장에서 변동될 수 있어요</TooltipLine>
+                    <TooltipLine>소요시간은 상황에 따라 변동될 수 있어요</TooltipLine>
+                  </TooltipBubble>
+                )}
+              </TooltipAnchor>
+            </SectionTitleRow>
             <ExperienceList>
               {visibleExperiences.map((program) => (
                 <ExperienceCard key={program.id} program={program} />
@@ -441,9 +437,9 @@ export default function WineryDetailPage() {
                 <ChevronIcon src={downArrowIcon} alt="" $flip={experiencesExpanded} />
               </ToggleTextButton>
             )}
-          </>
-        )}
-      </Section>
+          </Section>
+        </>
+      )}
 
       <Divider />
 
@@ -635,34 +631,37 @@ const Header = styled.div`
   z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
   height: ${HEADER_HEIGHT}px;
   padding: 8px 16px;
   box-sizing: border-box;
   background-color: #ffffff;
 `;
 
-const HeaderBackButton = styled.div`
-  position: absolute;
-  left: 16px;
-  top: 50%;
-  transform: translateY(-50%);
+const HeaderSide = styled.div<{ $end?: boolean }>`
+  flex-shrink: 0;
+  min-width: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: ${(props) => (props.$end ? "flex-end" : "flex-start")};
 `;
 
 const HeaderTitle = styled.h1`
+  flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 18px;
   font-weight: 700;
   line-height: 140%;
   letter-spacing: -0.36px;
   color: ${colors.gray[900]};
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
 const HeaderShareButton = styled.button`
-  position: absolute;
-  right: 16px;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -856,6 +855,12 @@ const ActionButton = styled.button`
   color: ${colors.gray[900]};
   cursor: pointer;
   white-space: nowrap;
+
+  &:disabled {
+    color: ${colors.gray[300]};
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
 `;
 
 const ActionButtonPrimary = styled(ActionButton)`
@@ -899,7 +904,7 @@ const SectionTitle = styled.h3`
   }
 `;
 
-const IntroText = styled.p<{ $expanded: boolean }>`
+const IntroText = styled.p`
   margin: 0;
   font-size: 16px;
   font-weight: 400;
@@ -907,14 +912,6 @@ const IntroText = styled.p<{ $expanded: boolean }>`
   letter-spacing: -0.32px;
   color: ${colors.gray[500]};
   white-space: pre-line;
-  ${(props) =>
-    !props.$expanded &&
-    `
-    display: -webkit-box;
-    -webkit-line-clamp: 5;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  `}
 `;
 
 const ToggleTextButton = styled.button`

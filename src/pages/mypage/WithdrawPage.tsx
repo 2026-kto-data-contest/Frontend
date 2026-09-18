@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 import { AppBar } from "../../shared/components/AppBar";
-import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
+import { useAuth } from "../../shared/lib/authContext";
 import checkCircleIcon from "../../assets/icon/CheckCircle.svg";
 import circleIcon from "../../assets/icon/Circle.svg";
 
@@ -13,24 +13,17 @@ const NOTICE_ITEMS = [
   "회원 탈퇴 시 전통주로와 연결된 카카오 계정의 연결도 함께 해제됩니다.",
 ];
 
-const TOAST_DURATION_MS = 3000;
-
 export default function WithdrawPage() {
   const navigate = useNavigate();
+  const auth = useAuth();
   const [checked, setChecked] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = (message: string) => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast(message);
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_DURATION_MS);
-  };
-
-  const handleWithdraw = () => {
-    // TODO: 회원 탈퇴 API가 아직 없어서, 준비 중임을 알리고 실제로는 탈퇴를 진행하지 않습니다.
-    // 백엔드에 DELETE /api/v1/members/me 같은 엔드포인트가 생기면 이 부분을 실제 호출로 교체해주세요.
-    showToast("회원 탈퇴 기능은 아직 준비 중이에요. 빠른 시일 내에 지원할게요.");
+  const handleWithdraw = async () => {
+    // TODO: 회원 탈퇴 API가 아직 없어서, 실제 계정·데이터 삭제는 이루어지지 않습니다.
+    // 백엔드에 DELETE /api/v1/members/me 같은 엔드포인트가 생기면 이 부분을 실제 호출로
+    // 교체해주세요. 그 전까지는 임시로 로그아웃만 처리하고 홈으로 이동시킵니다.
+    await auth.logout();
+    navigate("/", { replace: true });
   };
 
   return (
@@ -55,8 +48,6 @@ export default function WithdrawPage() {
           탈퇴하기
         </WithdrawButton>
       </Footer>
-
-      <Snackbar message={toast} />
     </PageContainer>
   );
 }

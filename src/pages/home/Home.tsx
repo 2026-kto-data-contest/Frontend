@@ -252,7 +252,15 @@ export default function Home() {
       return;
     }
     if (auth.hasOnboarded) {
-      navigate("/explore");
+      // 사용자 취향과 일치하는 양조장(추천 양조장 섹션과 같은 목록) 중 1곳을 무작위로 골라
+      // 그 양조장의 추천 코스 화면으로 보냅니다.
+      const matchedBreweries = home?.recommendedBreweries ?? [];
+      if (matchedBreweries.length > 0) {
+        const picked = matchedBreweries[Math.floor(Math.random() * matchedBreweries.length)];
+        navigate(`/course/${picked.breweryId}`);
+      } else {
+        navigate("/explore");
+      }
     } else if (auth.isLoggedIn && auth.termsAgreed) {
       navigate("/onboarding");
     } else if (auth.isLoggedIn) {
