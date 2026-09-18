@@ -5,11 +5,16 @@ import bannerAfterIcon from "../../assets/icon/BannerAfter.svg";
 export interface ExplorePromoBannerProps {
   hasOnboarded: boolean;
   onClick: () => void;
+  disabled?: boolean;
 }
 
-export const ExplorePromoBanner = ({ hasOnboarded, onClick }: ExplorePromoBannerProps) => {
+export const ExplorePromoBanner = ({
+  hasOnboarded,
+  onClick,
+  disabled,
+}: ExplorePromoBannerProps) => {
   return (
-    <Banner type="button" $onboarded={hasOnboarded} onClick={onClick}>
+    <Banner type="button" $onboarded={hasOnboarded} onClick={onClick} disabled={disabled}>
       <Icon src={hasOnboarded ? bannerAfterIcon : bannerBeforeIcon} alt="" />
       <TextArea>
         <Title $onboarded={hasOnboarded}>
@@ -37,6 +42,11 @@ const Banner = styled.button<{ $onboarded: boolean }>`
   text-align: left;
   box-sizing: border-box;
   background-color: ${(props) => (props.$onboarded ? "#eef1f2" : "#fff5e6")};
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
 `;
 
 const Icon = styled.img`
