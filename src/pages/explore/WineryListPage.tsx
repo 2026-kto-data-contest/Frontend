@@ -250,7 +250,7 @@ export default function WineryListPage() {
             <>
               <ExplorePromoBanner
                 hasOnboarded={auth.hasOnboarded}
-                disabled={bannerLoading}
+                loading={bannerLoading}
                 onClick={async () => {
                   if (auth.hasOnboarded) {
                     // 취향과 일치하는 양조장을 그 자리에서 새로 조회해 그중 1곳을 무작위로

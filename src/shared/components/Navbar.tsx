@@ -8,7 +8,7 @@ import mapIcon from "../../assets/icon/MapIcon.svg";
 import breweryIcon from "../../assets/icon/BreweryIcon.svg";
 import myIcon from "../../assets/icon/MyIcon.svg";
 
-export const NAVBAR_HEIGHT = 60;
+export const NAVBAR_HEIGHT = 64;
 
 interface NavItem {
   id: string;
@@ -85,44 +85,59 @@ const BottomNavbar = styled.nav`
   flex-shrink: 0;
   height: ${NAVBAR_HEIGHT}px;
   background-color: #ffffff;
-  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 0 1px rgba(0, 0, 0, 0.25);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 8px 40px;
+  box-sizing: border-box;
 `;
 
 const NavList = styled.ul`
   display: flex;
-  justify-content: space-around;
   align-items: center;
+  gap: 24px;
   width: 100%;
+  height: 100%;
   margin: 0;
   padding: 0;
   list-style: none;
+
+  li {
+    flex: 1;
+    height: 100%;
+  }
 `;
 
 const StyledNavLink = styled(Link)<NavLinkProps>`
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  font-size: 0.75rem;
-  font-weight: ${(props) => (props.$isActive ? "700" : "500")};
+  justify-content: center;
+  gap: 5px;
+  height: 100%;
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 1;
   color: ${(props) => (props.$isActive ? "#171716" : "#b0b0ae")};
+  opacity: ${(props) => (props.$isActive ? 1 : 0.5)};
   text-decoration: none;
-  padding: 8px 12px;
-  transition: color 0.2s ease-in-out;
+  transition:
+    color 0.2s ease-in-out,
+    opacity 0.2s ease-in-out;
 
   &:hover {
     color: #171716;
+    opacity: 1;
   }
 `;
 
 // 아이콘 파일 자체는 색이 고정돼 있어, 모양만 마스크로 떠서 currentColor(active/inactive 색)를 입힙니다.
 const NavIcon = styled.span<{ $src: string }>`
   display: inline-block;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   background-color: currentColor;
   -webkit-mask-image: url("${(props) => props.$src}");
   mask-image: url("${(props) => props.$src}");
