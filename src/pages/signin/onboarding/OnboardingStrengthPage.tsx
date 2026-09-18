@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/lib/authContext";
@@ -6,11 +6,16 @@ import { usePersistentState } from "../../../shared/lib/pageState";
 import { Button } from "../../../shared/components/Button";
 import { OnboardingLayout } from "./OnboardingLayout";
 import { OptionRow } from "./OptionRow";
-import { finishOnboarding, finishOnboardingWithPreferences } from "./finishOnboarding";
+import {
+  finishOnboarding,
+  finishOnboardingWithPreferences,
+  saveOnboardingPreferenceField,
+} from "./finishOnboarding";
 import { TASTE_OPTIONS } from "./OnboardingTastePage";
 import { REAL_REGIONS } from "./OnboardingRegionPage";
 import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
-import type { AlcoholLevel } from "../../../shared/api/api";
+import { fetchOnboardingPreferences } from "../../../shared/api/api";
+import type { AlcoholLevel, OnboardingPreferencesData } from "../../../shared/api/api";
 import lightIcon from "../../../assets/icon/Light.svg";
 import halfIcon from "../../../assets/icon/Half.svg";
 import hardIcon from "../../../assets/icon/Hard.svg";
@@ -44,6 +49,7 @@ export default function OnboardingStrengthPage() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
+  const isEditMode = from === "/mypage";
   const [selectedTaste] = usePersistentState<string[]>("onboarding:taste", []);
   const [selectedRegion] = usePersistentState<string[]>("onboarding:region", []);
   const [selectedStrength, setSelectedStrength] = usePersistentState<string>(
@@ -52,6 +58,25 @@ export default function OnboardingStrengthPage() {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [otherPreferences, setOtherPreferences] = useState<OnboardingPreferencesData | null>(
+    null
+  );
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    fetchOnboardingPreferences()
+      .then((preferences) => {
+        if (cancelled) return;
+        setOtherPreferences(preferences);
+        setSelectedStrength(ALCOHOL_LEVEL_TO_ID[preferences.alcoholLevel] ?? "");
+      })
+      .catch((error) => console.error("취향 정보 조회 실패", error));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode]);
 
   const handleFinish = async () => {
     if (isSubmitting) return;
@@ -92,6 +117,21 @@ export default function OnboardingStrengthPage() {
     setIsSubmitting(false);
   };
 
+  const handleSave = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    const result = await saveOnboardingPreferenceField(navigate, from, {
+      liquorTypes: otherPreferences?.liquorTypes ?? [...ALL_TYPE_FILTERS],
+      regions: otherPreferences?.regions ?? [],
+      alcoholLevel: ALCOHOL_LEVEL_MAP[selectedStrength] ?? "MEDIUM",
+    });
+    if (!result.success) {
+      setErrorMessage(result.message ?? null);
+    }
+    setIsSubmitting(false);
+  };
+
   return (
     <OnboardingLayout
       step={3}
@@ -103,8 +143,13 @@ export default function OnboardingStrengthPage() {
         </>
       }
       subtitle="가장 가까운 항목 하나를 골라 주세요."
-      onBack={() => navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)}
-      onSkip={handleSkip}
+      onBack={() =>
+        isEditMode
+          ? navigate(from)
+          : navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)
+      }
+      onSkip={isEditMode ? undefined : handleSkip}
+      showProgress={!isEditMode}
       error={errorMessage}
       footer={
         <Button
@@ -112,7 +157,7 @@ export default function OnboardingStrengthPage() {
           size="lg"
           disabled={!selectedStrength || isSubmitting}
           style={{ width: "100%", height: 48, borderRadius: 8 }}
-          onClick={handleFinish}
+          onClick={isEditMode ? handleSave : handleFinish}
         >
           {isSubmitting ? "저장 중..." : "완료"}
         </Button>

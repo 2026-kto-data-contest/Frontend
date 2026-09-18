@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/lib/authContext";
@@ -6,7 +6,10 @@ import { usePersistentState } from "../../../shared/lib/pageState";
 import { Button } from "../../../shared/components/Button";
 import { OnboardingLayout } from "./OnboardingLayout";
 import { OptionRow } from "./OptionRow";
-import { finishOnboarding } from "./finishOnboarding";
+import { finishOnboarding, saveOnboardingPreferenceField } from "./finishOnboarding";
+import { fetchOnboardingPreferences } from "../../../shared/api/api";
+import type { OnboardingPreferencesData } from "../../../shared/api/api";
+import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import sweetIcon from "../../../assets/icon/Sweet.svg";
 import nuttyIcon from "../../../assets/icon/Nutty.svg";
 import cleanIcon from "../../../assets/icon/Clean.svg";
@@ -42,9 +45,35 @@ export default function OnboardingTastePage() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
+  const isEditMode = from === "/mypage";
   const [selected, setSelected] = usePersistentState<string[]>("onboarding:taste", []);
   const [isSkipping, setIsSkipping] = useState(false);
   const [skipError, setSkipError] = useState<string | null>(null);
+  const [otherPreferences, setOtherPreferences] = useState<OnboardingPreferencesData | null>(
+    null
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    fetchOnboardingPreferences()
+      .then((preferences) => {
+        if (cancelled) return;
+        setOtherPreferences(preferences);
+        const concreteOptions = TASTE_OPTIONS.filter((option) => option.type);
+        const matchedIds = concreteOptions
+          .filter((option) => preferences.liquorTypes.includes(option.type))
+          .map((option) => option.id);
+        setSelected(matchedIds.length === concreteOptions.length ? ["any"] : matchedIds);
+      })
+      .catch((error) => console.error("취향 정보 조회 실패", error));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode]);
 
   const toggle = (id: string) => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
@@ -61,6 +90,28 @@ export default function OnboardingTastePage() {
     setIsSkipping(false);
   };
 
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    const liquorTypes = Array.from(
+      new Set(
+        TASTE_OPTIONS.filter((option) => selected.includes(option.id) && option.type).map(
+          (option) => option.type
+        )
+      )
+    );
+    const result = await saveOnboardingPreferenceField(navigate, from, {
+      liquorTypes: liquorTypes.length > 0 ? liquorTypes : [...ALL_TYPE_FILTERS],
+      regions: otherPreferences?.regions ?? [],
+      alcoholLevel: otherPreferences?.alcoholLevel ?? "MEDIUM",
+    });
+    if (!result.success) {
+      setSaveError(result.message ?? null);
+    }
+    setIsSaving(false);
+  };
+
   return (
     <OnboardingLayout
       step={1}
@@ -72,18 +123,23 @@ export default function OnboardingTastePage() {
         </>
       }
       subtitle="마음에 드는 맛을 모두 골라주세요."
-      onBack={() => navigate(-1)}
-      onSkip={handleSkip}
-      error={skipError}
+      onBack={() => (isEditMode ? navigate(from) : navigate(-1))}
+      onSkip={isEditMode ? undefined : handleSkip}
+      showProgress={!isEditMode}
+      error={isEditMode ? saveError : skipError}
       footer={
         <Button
           variant="primary"
           size="lg"
-          disabled={selected.length === 0}
+          disabled={selected.length === 0 || (isEditMode && isSaving)}
           style={{ width: "100%", height: 48, borderRadius: 8 }}
-          onClick={() => navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)}
+          onClick={
+            isEditMode
+              ? handleSave
+              : () => navigate(`/onboarding/region?from=${encodeURIComponent(from)}`)
+          }
         >
-          다음
+          {isEditMode ? (isSaving ? "저장 중..." : "완료") : "다음"}
         </Button>
       }
     >
