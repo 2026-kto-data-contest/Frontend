@@ -238,23 +238,24 @@ export default function SearchPage() {
         ? { type: "REGION", id: trimmed, keyword: trimmed, displayName: trimmed }
         : null;
 
-    if (isLoggedIn) {
-      if (remoteEntry) {
-        saveRecentSearch(remoteEntry)
-          .then((saved) => {
-            setRemoteRecent((prev) =>
-              [
-                saved,
-                ...prev.filter((item) => !(item.type === saved.type && item.id === saved.id)),
-              ].slice(0, RECENT_MAX_COUNT)
-            );
-          })
-          .catch((error) => {
-            // 검색 결과 화면에는 영향 없이 넘어가지만, 원인 파악을 위해 콘솔에는 남깁니다.
-            console.error("최근 검색어 저장 실패", error);
-          });
-      }
+    if (isLoggedIn && remoteEntry) {
+      saveRecentSearch(remoteEntry)
+        .then((saved) => {
+          setRemoteRecent((prev) =>
+            [
+              saved,
+              ...prev.filter((item) => !(item.type === saved.type && item.id === saved.id)),
+            ].slice(0, RECENT_MAX_COUNT)
+          );
+        })
+        .catch((error) => {
+          // 검색 결과 화면에는 영향 없이 넘어가지만, 원인 파악을 위해 콘솔에는 남깁니다.
+          console.error("최근 검색어 저장 실패", error);
+        });
     } else {
+      // 로그인 상태라도 백엔드가 대상(type·id)을 특정할 수 없는 자유 입력 검색은 서버에
+      // 저장할 수 없으니, 이 기기에서라도 기억하도록 로컬에 저장합니다(로그인 시 최근
+      // 검색어 목록에도 함께 표시됩니다).
       setLocalRecent((prev) =>
         [displayName, ...prev.filter((item) => item !== displayName)].slice(0, RECENT_MAX_COUNT)
       );
@@ -267,30 +268,38 @@ export default function SearchPage() {
     setPhase(next ? "typing" : "idle");
   };
 
+  const localRecentItems = localRecent.map((keyword, index) => ({
+    key: `local-${keyword}-${index}`,
+    label: keyword,
+    onSelect: () => runSearch(keyword),
+    onRemove: () => setLocalRecent((prev) => prev.filter((_, i) => i !== index)),
+  }));
+
   const recentItems = isLoggedIn
-    ? remoteRecent.map((item) => ({
-        key: String(item.recentSearchId),
-        label: item.displayName,
-        onSelect: () => runSearch(item.keyword),
-        onRemove: () => {
-          deleteRecentSearch(item.recentSearchId).catch(() => {});
-          setRemoteRecent((prev) => prev.filter((r) => r.recentSearchId !== item.recentSearchId));
-        },
-      }))
-    : localRecent.map((keyword, index) => ({
-        key: `${keyword}-${index}`,
-        label: keyword,
-        onSelect: () => runSearch(keyword),
-        onRemove: () => setLocalRecent((prev) => prev.filter((_, i) => i !== index)),
-      }));
+    ? [
+        ...remoteRecent.map((item) => ({
+          key: `remote-${item.recentSearchId}`,
+          label: item.displayName,
+          onSelect: () => runSearch(item.keyword),
+          onRemove: () => {
+            deleteRecentSearch(item.recentSearchId).catch(() => {});
+            setRemoteRecent((prev) => prev.filter((r) => r.recentSearchId !== item.recentSearchId));
+          },
+        })),
+        // 서버에 저장할 수 없었던 자유 입력 검색(로컬 폴백)도 로그인 상태의 최근 검색어에
+        // 함께 보여줍니다. 이미 서버에 같은 이름으로 저장된 항목은 중복 표시하지 않습니다.
+        ...localRecentItems.filter(
+          (local) => !remoteRecent.some((remote) => remote.displayName === local.label)
+        ),
+      ].slice(0, RECENT_MAX_COUNT)
+    : localRecentItems;
 
   const handleClearAllRecent = () => {
     if (isLoggedIn) {
       deleteAllRecentSearches().catch(() => {});
       setRemoteRecent([]);
-    } else {
-      setLocalRecent([]);
     }
+    setLocalRecent([]);
     setConfirmingClearAll(false);
   };
 

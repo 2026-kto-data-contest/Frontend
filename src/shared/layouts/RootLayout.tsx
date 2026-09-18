@@ -2,6 +2,7 @@ import styled from "styled-components";
 import { Outlet, useLocation } from "react-router-dom";
 import { Navbar } from "../components/Navbar";
 import { useScrollRestoration } from "../lib/pageState";
+import { NavbarVisibilityProvider, useNavbarVisibility } from "../lib/navbarVisibility";
 
 const PHONE_WIDTH = 390;
 const PHONE_HEIGHT = 844;
@@ -16,16 +17,23 @@ export const Layout = () => {
   return (
     <Backdrop>
       <PhoneFrame>
-        <ScrollArea ref={ref} onScroll={handleScroll}>
-          <MainContent>
-            <Outlet />
-          </MainContent>
-        </ScrollArea>
+        <NavbarVisibilityProvider>
+          <ScrollArea ref={ref} onScroll={handleScroll}>
+            <MainContent>
+              <Outlet />
+            </MainContent>
+          </ScrollArea>
 
-        <Navbar />
+          <NavbarGate />
+        </NavbarVisibilityProvider>
       </PhoneFrame>
     </Backdrop>
   );
+};
+
+const NavbarGate = () => {
+  const { hidden } = useNavbarVisibility();
+  return hidden ? null : <Navbar />;
 };
 
 export const AuthLayout = () => {
