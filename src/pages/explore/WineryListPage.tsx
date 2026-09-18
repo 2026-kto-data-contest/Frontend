@@ -9,7 +9,11 @@ import { colors } from "../../shared/styles/colors";
 import { usePersistentState } from "../../shared/lib/pageState";
 import { useAuth } from "../../shared/lib/authContext";
 import { ApiError } from "../../shared/api/api";
-import { fetchBreweries, fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
+import {
+  fetchBreweries,
+  fetchRecommendedBreweries,
+  breweryToCardData,
+} from "../../shared/api/breweriesApi";
 import type { BreweryListItem, BreweryListParams } from "../../shared/api/breweriesApi";
 import { FilterBar } from "./FilterBar";
 import { FilterSheet, EMPTY_FILTERS } from "./FilterSheet";
@@ -94,22 +98,8 @@ export default function WineryListPage() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetSection, setSheetSection] = useState<SectionKey>("types");
   const navigationType = useNavigationType();
-  // 프로모션 배너(온보딩 완료 상태)를 누르면 이 중 무작위 1곳의 추천 코스로 이동시킵니다.
-  const [preferenceMatchedBreweries, setPreferenceMatchedBreweries] = useState<BreweryListItem[]>(
-    []
-  );
-
-  useEffect(() => {
-    if (!auth.hasOnboarded) return;
-    const controller = new AbortController();
-    fetchHome(undefined, undefined, controller.signal)
-      .then((home) => setPreferenceMatchedBreweries(home.recommendedBreweries))
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("취향 맞춤 양조장 조회 실패", error);
-      });
-    return () => controller.abort();
-  }, [auth.hasOnboarded]);
+  // 프로모션 배너(온보딩 완료 상태) 클릭 시 취향 맞춤 양조장을 조회하는 동안 중복 클릭을 막습니다.
+  const [bannerLoading, setBannerLoading] = useState(false);
 
   useEffect(() => {
     const urlType = searchParams.get("type");
@@ -260,17 +250,26 @@ export default function WineryListPage() {
             <>
               <ExplorePromoBanner
                 hasOnboarded={auth.hasOnboarded}
-                onClick={() => {
+                disabled={bannerLoading}
+                onClick={async () => {
                   if (auth.hasOnboarded) {
-                    // 취향과 일치하는 양조장 중 1곳을 무작위로 골라 추천 코스로 이동합니다.
-                    if (preferenceMatchedBreweries.length > 0) {
-                      const picked =
-                        preferenceMatchedBreweries[
-                          Math.floor(Math.random() * preferenceMatchedBreweries.length)
-                        ];
-                      navigate(`/course/${picked.breweryId}`);
-                    } else {
+                    // 취향과 일치하는 양조장을 그 자리에서 새로 조회해 그중 1곳을 무작위로
+                    // 골라 추천 코스로 이동합니다(클릭 시점에 바로 조회해 타이밍 문제를 피함).
+                    setBannerLoading(true);
+                    try {
+                      const page = await fetchRecommendedBreweries(0, 6);
+                      if (page.content.length > 0) {
+                        const picked =
+                          page.content[Math.floor(Math.random() * page.content.length)];
+                        navigate(`/course/${picked.breweryId}`);
+                      } else {
+                        navigate("/");
+                      }
+                    } catch (error) {
+                      console.error("취향 맞춤 양조장 조회 실패", error);
                       navigate("/");
+                    } finally {
+                      setBannerLoading(false);
                     }
                   } else if (auth.isLoggedIn && auth.termsAgreed) {
                     navigate("/onboarding?from=%2Fexplore");
