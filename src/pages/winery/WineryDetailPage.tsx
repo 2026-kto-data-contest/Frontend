@@ -207,9 +207,10 @@ export default function WineryDetailPage() {
   const slideCount = hasPhotos ? photoUrls.length : 1;
 
   const handleShare = async () => {
+    // text에 소개글을 넣으면 일부 공유 대상(문자 메시지 등)이 제목·본문·링크를 구분 없이
+    // 한 줄로 이어붙여 보내버려서, 링크만 깔끔하게 전달되도록 제목과 URL만 넘깁니다.
     const shareData = {
       title: winery.name,
-      text: winery.intro ?? winery.description,
       url: shareUrl,
     };
     if (navigator.share) {
