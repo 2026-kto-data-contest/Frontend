@@ -55,7 +55,11 @@ export const Navbar = () => {
     {
       id: "mypage",
       label: "마이",
-      path: auth.isLoggedIn ? "/mypage" : "/login?from=%2F",
+      path: !auth.isLoggedIn
+        ? "/login?from=%2F"
+        : !auth.termsAgreed
+          ? "/terms"
+          : "/mypage",
       isActive: pathname === "/mypage",
       icon: <NavIcon $src={myIcon} />,
     },
