@@ -6,6 +6,15 @@ import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
 import { fetchTerms, saveTermsAgreements, continueAuth, ApiError } from "../../shared/api/api";
 import type { TermItem } from "../../shared/api/api";
+import closeXIcon from "../../assets/icon/CloseX.svg";
+import checkMarkIcon from "../../assets/icon/CheckMark.svg";
+import checkMarkMutedIcon from "../../assets/icon/CheckMarkMuted.svg";
+import checkCircleOutlineIcon from "../../assets/icon/CheckCircleOutline.svg";
+import checkCircleOutlineMutedIcon from "../../assets/icon/CheckCircleOutlineMuted.svg";
+
+// "보기"를 눌렀을 때 상세 약관 페이지로 이동하는 항목들입니다(마케팅·연령확인 제외).
+// 아직 그 페이지가 없어서, 페이지가 생기면 여기서 실제 경로로 연결해주세요.
+const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "LOCATION"]);
 
 // 백엔드 조회가 실패했을 때(오프라인 등) 화면이 비지 않도록 쓰는 기본값입니다.
 const FALLBACK_TERMS: TermItem[] = [
@@ -50,6 +59,10 @@ export default function TermsPage() {
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // "만 19세 이상" 확인은 아직 백엔드 약관 목록에 없어서(추후 연동 예정), 화면만 먼저
+  // 만들어두고 이 항목만 로컬 상태로 관리합니다. 저장(saveTermsAgreements)에는 보내지
+  // 않고, 필수 항목이라 전체동의·계속하기 가능 여부 판단에는 함께 포함합니다.
+  const [ageVerified, setAgeVerified] = useState(false);
 
   useEffect(() => {
     fetchTerms()
@@ -62,11 +75,13 @@ export default function TermsPage() {
       });
   }, []);
 
-  const allChecked = terms.every((item) => checked[item.code]);
-  const canContinue = terms.filter((item) => item.required).every((item) => checked[item.code]);
+  const allChecked = ageVerified && terms.every((item) => checked[item.code]);
+  const canContinue =
+    ageVerified && terms.filter((item) => item.required).every((item) => checked[item.code]);
 
   const toggleAll = () => {
     const next = !allChecked;
+    setAgeVerified(next);
     setChecked(Object.fromEntries(terms.map((item) => [item.code, next])));
   };
 
@@ -101,7 +116,7 @@ export default function TermsPage() {
   return (
     <PageContainer>
       <CloseButton type="button" aria-label="닫기" onClick={() => navigate(-1)}>
-        ✕
+        <img src={closeXIcon} alt="" width={24} height={24} />
       </CloseButton>
 
       <Title>
@@ -111,30 +126,53 @@ export default function TermsPage() {
       </Title>
 
       <AllAgreeRow type="button" onClick={toggleAll}>
-        <CheckCircle $active={allChecked} $size={22}>
-          ✓
-        </CheckCircle>
+        <img
+          src={allChecked ? checkCircleOutlineIcon : checkCircleOutlineMutedIcon}
+          alt=""
+          width={24}
+          height={24}
+        />
         <AllAgreeLabel>모두 동의합니다.</AllAgreeLabel>
       </AllAgreeRow>
 
       <Divider />
 
       <ItemList>
+        <ItemRow>
+          <ItemLeft type="button" onClick={() => setAgeVerified((prev) => !prev)}>
+            <img
+              src={ageVerified ? checkMarkIcon : checkMarkMutedIcon}
+              alt=""
+              width={24}
+              height={24}
+            />
+            <ItemLabel>[필수] 만 19세 이상입니다</ItemLabel>
+          </ItemLeft>
+        </ItemRow>
         {terms.map((item) => (
           <ItemRow key={item.code}>
             <ItemLeft type="button" onClick={() => toggleItem(item.code)}>
-              <CheckCircle $active={!!checked[item.code]} $size={18}>
-                ✓
-              </CheckCircle>
+              <img
+                src={checked[item.code] ? checkMarkIcon : checkMarkMutedIcon}
+                alt=""
+                width={24}
+                height={24}
+              />
               <ItemLabel>
                 [{item.required ? "필수" : "선택"}] {item.title}
               </ItemLabel>
             </ItemLeft>
-            {item.contentUrl && (
-              <ViewLink as="a" href={item.contentUrl} target="_blank" rel="noopener noreferrer">
-                보기
-              </ViewLink>
-            )}
+            {VIEWABLE_TERM_CODES.has(item.code) &&
+              (item.contentUrl ? (
+                <ViewLink as="a" href={item.contentUrl} target="_blank" rel="noopener noreferrer">
+                  보기
+                </ViewLink>
+              ) : (
+                // TODO: 약관 상세 페이지가 생기면 그 경로로 navigate 하도록 바꿔주세요.
+                <ViewLink as="button" type="button">
+                  보기
+                </ViewLink>
+              ))}
           </ItemRow>
         ))}
       </ItemList>
@@ -145,7 +183,7 @@ export default function TermsPage() {
         variant="primary"
         size="lg"
         disabled={!canContinue || isSubmitting}
-        style={{ marginTop: 32, width: "100%" }}
+        style={{ marginTop: "auto", width: "100%", height: 52, borderRadius: 8 }}
         onClick={handleSubmit}
       >
         {isSubmitting ? "처리 중..." : "동의하고 계속하기"}
@@ -158,7 +196,7 @@ const PageContainer = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 24px;
+  padding: 24px 24px 48px;
   box-sizing: border-box;
   background-color: #ffffff;
 `;
@@ -172,8 +210,6 @@ const CloseButton = styled.button`
   justify-content: center;
   border: none;
   background: transparent;
-  color: #111827;
-  font-size: 1rem;
   cursor: pointer;
   padding: 0;
   margin-bottom: 24px;
@@ -182,38 +218,40 @@ const CloseButton = styled.button`
 const Title = styled.h1`
   margin: 0 0 24px;
   font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1.4;
-  color: #111827;
+  font-weight: 600;
+  line-height: 132%;
+  letter-spacing: -0.4px;
+  color: ${colors.gray[900]};
 `;
 
 const AllAgreeRow = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border: none;
   background: transparent;
-  padding: 0;
+  padding: 8px 0;
   cursor: pointer;
 `;
 
 const AllAgreeLabel = styled.span`
   font-size: 1rem;
   font-weight: 700;
-  color: #111827;
+  line-height: 140%;
+  letter-spacing: -0.32px;
+  color: ${colors.gray[900]};
 `;
 
-const Divider = styled.hr`
+const Divider = styled.div`
   width: 100%;
-  margin: 16px 0;
-  border: none;
-  border-top: 1px solid #e5e7eb;
+  height: 1px;
+  margin: 4px 0;
+  background-color: ${colors.divider};
 `;
 
 const ItemList = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 16px;
 `;
 
 const ItemRow = styled.div`
@@ -221,12 +259,13 @@ const ItemRow = styled.div`
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  padding: 4px 0;
 `;
 
 const ItemLeft = styled.button`
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   border: none;
   background: transparent;
   padding: 0;
@@ -235,30 +274,24 @@ const ItemLeft = styled.button`
 
 const ItemLabel = styled.span`
   font-size: 0.875rem;
-  color: #374151;
+  font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[600]};
   text-align: left;
 `;
 
 const ViewLink = styled.span`
   flex-shrink: 0;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font: inherit;
   font-size: 0.8125rem;
-  color: #9ca3af;
+  line-height: 100%;
+  color: ${colors.gray[300]};
   text-decoration: underline;
-`;
-
-const CheckCircle = styled.span<{ $active: boolean; $size: number }>`
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: ${(props) => props.$size}px;
-  height: ${(props) => props.$size}px;
-  border-radius: 50%;
-  font-size: ${(props) => props.$size * 0.6}px;
-  font-weight: 700;
-  color: ${(props) => (props.$active ? "#ffffff" : "#9ca3af")};
-  background-color: ${(props) => (props.$active ? colors.primary[500] : "#f3f4f6")};
-  border: 1px solid ${(props) => (props.$active ? "transparent" : "#e5e7eb")};
+  cursor: pointer;
 `;
 
 const ErrorText = styled.p`
