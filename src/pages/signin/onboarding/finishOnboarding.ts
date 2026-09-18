@@ -72,3 +72,25 @@ export async function finishOnboardingWithPreferences(
     };
   }
 }
+
+/**
+ * 마이페이지에서 취향(주종/지역/도수) 중 한 항목만 개별적으로 수정할 때 씁니다.
+ * 이미 온보딩을 마친 회원이므로 완료 처리는 다시 하지 않고, 저장 후 바로 돌아갈 경로로 이동합니다.
+ */
+export async function saveOnboardingPreferenceField(
+  navigate: (path: string) => void,
+  fallbackPath: string,
+  preferences: OnboardingPreferencesData
+): Promise<FinishOnboardingResult> {
+  try {
+    await saveOnboardingPreferences(preferences);
+    navigate(fallbackPath);
+    return { success: true };
+  } catch (error) {
+    console.error("취향 저장 실패", error);
+    return {
+      success: false,
+      message: toErrorMessage(error, "저장에 실패했어요. 다시 시도해주세요."),
+    };
+  }
+}

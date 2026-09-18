@@ -47,7 +47,7 @@ export const SECTION_SHORT_LABELS: Record<SectionKey, string> = {
 };
 
 const SECTIONS: { key: SectionKey; label: string; options: readonly string[] }[] = [
-  { key: "types", label: "주종", options: ALL_TYPE_FILTERS },
+  { key: "types", label: "주종", options: ALL_TYPE_FILTERS.filter((type) => type !== "기타") },
   { key: "regions", label: "방문지역", options: ALL_REGION_FILTERS },
   { key: "strengths", label: "선호도수", options: ALL_STRENGTH_FILTERS },
   { key: "visitConditions", label: "방문조건", options: ALL_VISIT_CONDITION_FILTERS },

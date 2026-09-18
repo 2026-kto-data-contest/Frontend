@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../../shared/lib/authContext";
@@ -7,7 +7,9 @@ import { Button } from "../../../shared/components/Button";
 import { Chip } from "../../../shared/components/Chip";
 import { OnboardingLayout } from "./OnboardingLayout";
 import { KoreaMap } from "./KoreaMap";
-import { finishOnboarding } from "./finishOnboarding";
+import { finishOnboarding, saveOnboardingPreferenceField } from "./finishOnboarding";
+import { fetchOnboardingPreferences } from "../../../shared/api/api";
+import type { OnboardingPreferencesData } from "../../../shared/api/api";
 
 export const REAL_REGIONS = ["수도권", "충청", "강원", "경상", "전라", "제주"];
 const REGION_OPTIONS = [...REAL_REGIONS, "전국"];
@@ -17,9 +19,31 @@ export default function OnboardingRegionPage() {
   const auth = useAuth();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
+  const isEditMode = from === "/mypage";
   const [selected, setSelected] = usePersistentState<string[]>("onboarding:region", []);
   const [isSkipping, setIsSkipping] = useState(false);
   const [skipError, setSkipError] = useState<string | null>(null);
+  const [otherPreferences, setOtherPreferences] = useState<OnboardingPreferencesData | null>(
+    null
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    let cancelled = false;
+    fetchOnboardingPreferences()
+      .then((preferences) => {
+        if (cancelled) return;
+        setOtherPreferences(preferences);
+        setSelected(preferences.regions.length === 0 ? [...REAL_REGIONS] : preferences.regions);
+      })
+      .catch((error) => console.error("취향 정보 조회 실패", error));
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode]);
 
   const isNationwide = REAL_REGIONS.every((region) => selected.includes(region));
 
@@ -45,6 +69,22 @@ export default function OnboardingRegionPage() {
     setIsSkipping(false);
   };
 
+  const handleSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    setSaveError(null);
+    const regions = isNationwide ? [] : selected;
+    const result = await saveOnboardingPreferenceField(navigate, from, {
+      liquorTypes: otherPreferences?.liquorTypes ?? [],
+      alcoholLevel: otherPreferences?.alcoholLevel ?? "MEDIUM",
+      regions,
+    });
+    if (!result.success) {
+      setSaveError(result.message ?? null);
+    }
+    setIsSaving(false);
+  };
+
   return (
     <OnboardingLayout
       step={2}
@@ -56,19 +96,28 @@ export default function OnboardingRegionPage() {
         </>
       }
       subtitle="궁금한 지역을 모두 골라 주세요."
-      onBack={() => navigate(`/onboarding/taste?from=${encodeURIComponent(from)}`)}
-      onSkip={handleSkip}
-      error={skipError}
+      onBack={() =>
+        isEditMode
+          ? navigate(from)
+          : navigate(`/onboarding/taste?from=${encodeURIComponent(from)}`)
+      }
+      onSkip={isEditMode ? undefined : handleSkip}
+      showProgress={!isEditMode}
+      error={isEditMode ? saveError : skipError}
       contentGap={24}
       footer={
         <Button
           variant="primary"
           size="lg"
-          disabled={selected.length === 0}
+          disabled={selected.length === 0 || (isEditMode && isSaving)}
           style={{ width: "100%", height: 48, borderRadius: 8 }}
-          onClick={() => navigate(`/onboarding/strength?from=${encodeURIComponent(from)}`)}
+          onClick={
+            isEditMode
+              ? handleSave
+              : () => navigate(`/onboarding/strength?from=${encodeURIComponent(from)}`)
+          }
         >
-          다음
+          {isEditMode ? (isSaving ? "저장 중..." : "완료") : "다음"}
         </Button>
       }
     >

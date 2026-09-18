@@ -8,13 +8,16 @@ export interface OnboardingLayoutProps {
   title: ReactNode;
   subtitle: string;
   onBack: () => void;
-  onSkip: () => void;
+  /** 없으면 건너뛰기 버튼을 표시하지 않습니다. (예: 마이페이지에서 개별 수정할 때) */
+  onSkip?: () => void;
   children: ReactNode;
   footer: ReactNode;
   /** 저장 실패 등으로 다음 화면 이동을 막았을 때 보여줄 안내 문구입니다. */
   error?: string | null;
   /** 타이틀 블록과 본문 사이 간격. Figma 기준 취향·도수는 32px, 지역은 24px입니다. */
   contentGap?: number;
+  /** 3단계 진행 표시줄. 마이페이지에서 개별 항목만 수정할 때는 숨깁니다. */
+  showProgress?: boolean;
 }
 
 const TOTAL_STEPS = 3;
@@ -29,21 +32,26 @@ export const OnboardingLayout = ({
   footer,
   error,
   contentGap = 32,
+  showProgress = true,
 }: OnboardingLayoutProps) => {
   return (
     <PageContainer>
       <Header>
         <BackButton onClick={onBack} />
-        <SkipButton type="button" onClick={onSkip}>
-          건너뛰기
-        </SkipButton>
+        {onSkip && (
+          <SkipButton type="button" onClick={onSkip}>
+            건너뛰기
+          </SkipButton>
+        )}
       </Header>
 
-      <ProgressRow>
-        {Array.from({ length: TOTAL_STEPS }, (_, i) => (
-          <ProgressSegment key={i} $active={i < step} />
-        ))}
-      </ProgressRow>
+      {showProgress && (
+        <ProgressRow>
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => (
+            <ProgressSegment key={i} $active={i < step} />
+          ))}
+        </ProgressRow>
+      )}
 
       <Title>{title}</Title>
       <Subtitle>{subtitle}</Subtitle>
