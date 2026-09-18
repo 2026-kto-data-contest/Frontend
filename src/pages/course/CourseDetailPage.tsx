@@ -519,6 +519,8 @@ const StopPinLabel = styled.span`
   line-height: 1;
   color: ${colors.gray[900]};
   white-space: nowrap;
+  -webkit-text-stroke: 3px #ffffff;
+  paint-order: stroke fill;
 `;
 
 const MapExpandButton = styled.button`
