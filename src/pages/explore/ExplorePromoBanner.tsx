@@ -17,7 +17,11 @@ export const ExplorePromoBanner = ({
   return (
     <Banner type="button" $onboarded={hasOnboarded} onClick={onClick} disabled={loading}>
       {loading ? (
-        <Spinner aria-label="불러오는 중" role="status" />
+        <DotsWrap role="status" aria-label="불러오는 중">
+          <Dot $delay={0} />
+          <Dot $delay={0.15} />
+          <Dot $delay={0.3} />
+        </DotsWrap>
       ) : (
         <Icon src={hasOnboarded ? bannerAfterIcon : bannerBeforeIcon} alt="" />
       )}
@@ -47,10 +51,6 @@ const Banner = styled.button<{ $onboarded: boolean }>`
   text-align: left;
   box-sizing: border-box;
   background-color: ${(props) => (props.$onboarded ? "#eef1f2" : "#fff5e6")};
-
-  &:disabled {
-    cursor: not-allowed;
-  }
 `;
 
 const Icon = styled.img`
@@ -59,22 +59,30 @@ const Icon = styled.img`
   height: 48px;
 `;
 
-const spin = keyframes`
-  to {
-    transform: rotate(360deg);
-  }
+// DotsLoader(src/shared/components/DotsLoader.tsx)와 같은 모션을 배너 아이콘(48x48) 자리에
+// 맞춰 작게 씁니다.
+const dotPulse = keyframes`
+  0%, 80%, 100% { opacity: 0.1; }
+  40% { opacity: 1; }
 `;
 
-const Spinner = styled.span`
+const DotsWrap = styled.span`
   flex-shrink: 0;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 48px;
   height: 48px;
-  box-sizing: border-box;
+`;
+
+const Dot = styled.span<{ $delay: number }>`
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  border: 3px solid rgba(0, 0, 0, 0.1);
-  border-top-color: #ff8a00;
-  animation: ${spin} 0.8s linear infinite;
+  background-color: #ff8a00;
+  animation: ${dotPulse} 1.1s ease-in-out infinite;
+  animation-delay: ${(props) => props.$delay}s;
 `;
 
 const TextArea = styled.span`
