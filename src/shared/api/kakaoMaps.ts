@@ -22,6 +22,7 @@ export interface KakaoLatLngBounds {
 
 export interface KakaoMapInstance {
   setCenter(latlng: KakaoLatLng): void;
+  getCenter(): KakaoLatLng;
   setLevel(level: number): void;
   getLevel(): number;
   getBounds(): KakaoLatLngBounds;
@@ -35,6 +36,12 @@ export interface KakaoMapInstance {
   relayout(): void;
   /** 지도를 픽셀 단위로 이동합니다(마우스 드래그와 동일한 효과). */
   panBy(dx: number, dy: number): void;
+  getProjection(): KakaoProjection;
+}
+
+export interface KakaoProjection {
+  /** 위경도를 지도 컨테이너 기준 화면 픽셀 좌표로 변환합니다(핀 겹침 판정에 사용). */
+  pointFromCoords(latlng: KakaoLatLng): KakaoPoint;
 }
 
 export interface KakaoMarkerInstance {
@@ -79,7 +86,7 @@ interface KakaoSize {
   height: number;
 }
 
-interface KakaoPoint {
+export interface KakaoPoint {
   x: number;
   y: number;
 }

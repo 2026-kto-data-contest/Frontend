@@ -2,7 +2,7 @@ import React from "react";
 import styled, { css } from "styled-components";
 import { colors } from "../styles/colors";
 
-type BadgeTone = "primary" | "gray" | "danger" | "success" | "warning";
+type BadgeTone = "primary" | "gray" | "neutral" | "danger" | "success" | "warning";
 type BadgeShape = "pill" | "flat";
 // flat 배지의 크기: sm은 WineryCard 등에서 쓰는 기본 크기, md는 양조장 상세 페이지 Figma 스펙(4px 8px, 12px)입니다.
 type BadgeSize = "sm" | "md";
@@ -37,6 +37,10 @@ const toneStyles: Record<BadgeTone, ReturnType<typeof css>> = {
   gray: css`
     background-color: ${colors.info.bg};
     color: ${colors.info.text};
+  `,
+  neutral: css`
+    background-color: ${colors.gray[50]};
+    color: ${colors.gray[600]};
   `,
   danger: css`
     background-color: #fee2e2;

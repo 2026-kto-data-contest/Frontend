@@ -30,28 +30,40 @@ import type {
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
 import { resolveImageUrl } from "../../shared/api/api";
+import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
   KakaoMapsNamespace,
   KakaoMapInstance,
   KakaoCustomOverlayInstance,
+  KakaoProjection,
 } from "../../shared/api/kakaoMaps";
-import callIcon from "../../assets/icon/Call.svg";
+import callIcon from "../../assets/icon/MapArticle.svg";
+import outwardIcon from "../../assets/icon/MapArrowOutward.svg";
+import shareIcon from "../../assets/icon/Upload.svg";
 import webIcon from "../../assets/icon/Web.svg";
 import topRightIcon from "../../assets/icon/TopRight.svg";
-import liquorIcon from "../../assets/icon/Liquor.svg";
+import liquorIcon from "../../assets/icon/MapCategoryBrewery.svg";
 import bedIcon from "../../assets/icon/Bed.svg";
 import cafeIcon from "../../assets/icon/Cafe.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
-import restaurantIcon from "../../assets/icon/Restaurant.svg";
+import restaurantIcon from "../../assets/icon/MapCategoryRestaurant.svg";
 import awardIcon from "../../assets/icon/Award.svg";
+import searchIcon from "../../assets/icon/MapSearch.svg";
+import targetIcon from "../../assets/icon/MapTarget.svg";
+import placeCardFallbackBrewery from "../../assets/icon/MapPlaceCardFallback.svg";
+import placeCardFallbackRestaurant from "../../assets/icon/CourseFallbackRestaurant.svg";
+import placeCardFallbackAttraction from "../../assets/icon/CourseFallbackAttraction.svg";
+import placeCardFallbackCafe from "../../assets/icon/CourseFallbackCafe.svg";
+import placeCardFallbackLodging from "../../assets/icon/CourseFallbackLodging.svg";
+import closeIcon from "../../assets/icon/CloseX.svg";
 import noneImage from "../../assets/img/NoneImage.png";
 
 type CategoryKey = "brewery" | "restaurants" | "attractions" | "cafes" | "lodging";
 type LoadState = "loading" | "ready" | "error";
 type SheetMode = "list" | "detail";
 type DetailKind = "winery" | "place" | "stop";
-type PlacesLoadState = "idle" | "loading" | "ready" | "error" | "zoomed_out";
+type PlacesLoadState = "idle" | "loading" | "ready" | "error";
 
 const CATEGORY_ORDER: CategoryKey[] = ["brewery", "restaurants", "attractions", "cafes", "lodging"];
 
@@ -70,6 +82,15 @@ const CATEGORY_PIN_ICON: Partial<Record<CategoryKey, string>> = {
   attractions: flagIcon,
   cafes: cafeIcon,
   lodging: bedIcon,
+};
+
+// 장소 목록 카드에 사진이 없을 때 보여줄 카테고리별 일러스트 썸네일입니다.
+const CATEGORY_PLACE_FALLBACK: Record<CategoryKey, string> = {
+  brewery: placeCardFallbackBrewery,
+  restaurants: placeCardFallbackRestaurant,
+  attractions: placeCardFallbackAttraction,
+  cafes: placeCardFallbackCafe,
+  lodging: placeCardFallbackLodging,
 };
 
 const MAP_PLACE_CATEGORY: Record<CategoryKey, MapPlaceCategory> = {
@@ -97,12 +118,11 @@ const DEFAULT_LEVEL = 7;
 const FOCUS_LEVEL = 5;
 const USER_LOCATION_LEVEL = 6;
 const TOAST_DURATION_MS = 3000;
-// 식당·카페·숙소·관광지는 전국에 워낙 많아서, 넓게 축소한 상태로 조회하면 특정 지역(수도권 등)
-// 결과가 한쪽에 몰려 찍히면서 마치 그 지역 것만 보여주는 것처럼 보입니다. 양조장은 수가 적어
-// 전국을 봐도 문제없어서 그대로 두고, 나머지 카테고리만 일정 축척 이상에서는 조회를 건너뜁니다.
-const PLACE_DENSITY_ZOOM_LIMIT = 12;
 // 양조장을 선택했을 때 바텀시트의 기본 높이입니다. 사용자가 핸들로 직접 늘리거나 줄일 수 있습니다.
 const DETAIL_SHEET_HEIGHT = 320;
+// 카테고리 Chip 선택 시 리스트 아이템이 이만큼 모일 때까지 지도 탐색 반경을 넓혀갑니다.
+const MIN_PLACE_RESULTS = 3;
+const SEARCH_RADII_KM = [3, 5, 7, 10, 15, 20, 30];
 
 interface SimplePlaceInfo {
   name: string;
@@ -119,6 +139,23 @@ function formatLiquorTypes(types: string[]): string {
   const shown = types.slice(0, 2).join("/");
   const rest = types.length - 2;
   return rest > 0 ? `${shown} 외 ${rest}` : shown;
+}
+
+// 반경 안에 실제 조회된 양조장이 없어 목록이 "전통주로 추천 양조장"으로 대체될 때도,
+// 그 추천 양조장들의 핀은 지도에 떠 있어야 합니다. MapPlace 모양으로 맞춰 재사용합니다.
+function recommendedBreweryToPlace(item: MapRecommendedBrewery): MapPlace {
+  return {
+    placeId: item.breweryId,
+    placeName: item.businessName,
+    category: "BREWERY",
+    categoryName: formatLiquorTypes(item.liquorTypes.length > 0 ? item.liquorTypes : ["양조장"]),
+    distance: null,
+    roadAddressName: item.address,
+    phone: null,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    imageUrl: resolveImageUrl(item.mainImage?.url) ?? null,
+  };
 }
 
 function placeToInfo(place: MapPlace): SimplePlaceInfo {
@@ -166,8 +203,10 @@ function createPinElement(options: {
   label: string;
   selected: boolean;
   dimmed: boolean;
+  /** 핀이 겹쳐 있을 때, 겹친 묶음 안에서 맨 위가 아닌 핀은 이름표를 숨깁니다. 기본은 표시합니다. */
+  showLabel?: boolean;
 }): HTMLDivElement {
-  const { emoji, iconSrc, color, label, selected, dimmed } = options;
+  const { emoji, iconSrc, color, label, selected, dimmed, showLabel = true } = options;
   const wrap = document.createElement("div");
   wrap.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;opacity:${
     dimmed ? 0.45 : 1
@@ -199,17 +238,20 @@ function createPinElement(options: {
     circle.textContent = emoji;
   }
 
-  const text = document.createElement("span");
-  text.textContent = label;
-  text.style.cssText = `
-    font-size:${selected ? 12 : 11}px;font-weight:${selected ? "700" : "400"};color:#171716;
-    white-space:nowrap;
-    -webkit-text-stroke:3px #ffffff;
-    paint-order:stroke fill;
-  `;
-
   wrap.appendChild(circle);
-  wrap.appendChild(text);
+
+  if (showLabel) {
+    const text = document.createElement("span");
+    text.textContent = label;
+    text.style.cssText = `
+      font-size:${selected ? 12 : 11}px;font-weight:${selected ? "700" : "400"};color:#171716;
+      white-space:nowrap;
+      -webkit-text-stroke:3px #ffffff;
+      paint-order:stroke fill;
+    `;
+    wrap.appendChild(text);
+  }
+
   return wrap;
 }
 
@@ -220,6 +262,60 @@ function createUserDotElement(): HTMLDivElement {
     border:3px solid #ffffff;box-shadow:0 0 0 4px rgba(59,130,246,0.25);
   `;
   return dot;
+}
+
+const PIN_OVERLAP_THRESHOLD_PX = 32;
+
+// 화면 픽셀 기준으로 겹치는 핀들을 한 묶음으로 모은 뒤, 묶음마다 기준점(유저 현재 위치,
+// 없으면 양조장)과 가장 가까운 핀 하나만 이름표를 보이도록 나머지 핀들의 key를 돌려줍니다.
+function resolveHiddenPinLabels(
+  pins: { key: string; lat: number; lng: number }[],
+  kakao: KakaoMapsNamespace,
+  projection: KakaoProjection,
+  reference: { lat: number; lng: number } | null
+): Set<string> {
+  const points = pins.map((pin) => ({
+    ...pin,
+    screen: projection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng)),
+  }));
+
+  const assigned = new Set<string>();
+  const clusters: (typeof points)[] = [];
+  points.forEach((pin) => {
+    if (assigned.has(pin.key)) return;
+    const cluster = [pin];
+    assigned.add(pin.key);
+    points.forEach((other) => {
+      if (assigned.has(other.key)) return;
+      const distancePx = Math.hypot(pin.screen.x - other.screen.x, pin.screen.y - other.screen.y);
+      if (distancePx <= PIN_OVERLAP_THRESHOLD_PX) {
+        cluster.push(other);
+        assigned.add(other.key);
+      }
+    });
+    clusters.push(cluster);
+  });
+
+  const hidden = new Set<string>();
+  clusters.forEach((cluster) => {
+    if (cluster.length <= 1) return;
+    let winner = cluster[0];
+    if (reference) {
+      let bestDistance = Infinity;
+      cluster.forEach((pin) => {
+        const distance = (pin.lat - reference.lat) ** 2 + (pin.lng - reference.lng) ** 2;
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          winner = pin;
+        }
+      });
+    }
+    cluster.forEach((pin) => {
+      if (pin.key !== winner.key) hidden.add(pin.key);
+    });
+  });
+
+  return hidden;
 }
 
 export default function Map() {
@@ -256,6 +352,9 @@ export default function Map() {
   const refetchPlacesRef = useRef<(category: CategoryKey) => void>(() => {});
   const placesAbortRef = useRef<AbortController | null>(null);
   const isSearchResultModeRef = useRef(Boolean(searchBreweryIds?.length));
+  // 목록에서 핀/카드를 눌러 양조장 상세로 들어가기 직전의 시트 높이를 기억해뒀다가,
+  // 상세를 닫으면(X) 접힌 상태로 되돌리지 않고 원래 보던 목록 높이로 복원합니다.
+  const previousSheetHeightRef = useRef<number | null>(null);
 
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -365,10 +464,12 @@ export default function Map() {
     isSearchResultModeRef.current = isSearchResultMode;
   }, [isSearchResultMode]);
 
-  // 지도에 양조장이 하나도 안 보일 때 목록 대신 보여줄 기본 콘텐츠(추천 양조장·수상 전통주·추천 메뉴)입니다.
+  // 지도에 양조장이 하나도 안 보일 때(혹은 아직 조회 전인 진입 초기) 목록 대신 보여줄 기본
+  // 콘텐츠입니다. Figma의 "Default BottomSheet"처럼 추천 양조장 그리드 3묶음(12개) 사이사이에
+  // 수상 전통주·추천 메뉴 섹션을 끼워 넣으므로 12개를 한 번에 받아둡니다.
   useEffect(() => {
     const controller = new AbortController();
-    fetchMapRecommendedBreweries(0, 4, controller.signal)
+    fetchMapRecommendedBreweries(0, 12, controller.signal)
       .then((page) => setRecommendedBreweries(page.content))
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -393,7 +494,7 @@ export default function Map() {
   function handleSelectMenu(menu: string) {
     if (selectedMenu === menu) {
       setSelectedMenu(null);
-      refetchPlaces(activeCategory);
+      refetchPlacesByRadius(activeCategory);
       return;
     }
     setSelectedMenu(menu);
@@ -420,49 +521,66 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [places, activeCategory, placesLoadState]);
 
-  function refetchPlaces(category: CategoryKey) {
+  // 카테고리 Chip을 선택하면, 리스트 아이템이 최소 3개 모일 때까지 지도 중심 기준
+  // 탐색 반경을 3km → 5km → 7km → 10km → 15km → 20km → 30km 순으로 넓혀가며 조회합니다.
+  function refetchPlacesByRadius(category: CategoryKey) {
     const mapCategory = MAP_PLACE_CATEGORY[category];
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
     if (!mapCategory || !kakao || !map) return;
 
-    // 지도를 계속 움직이면 'idle'마다 새 요청이 쌓일 수 있어, 이전 요청은 항상 끊고 최신 것만 남깁니다.
     placesAbortRef.current?.abort();
-
-    if (category !== "brewery" && map.getLevel() >= PLACE_DENSITY_ZOOM_LIMIT) {
-      setPlaces([]);
-      setPlacesLoadState("zoomed_out");
-      return;
-    }
-
     const controller = new AbortController();
     placesAbortRef.current = controller;
 
-    const bounds = map.getBounds();
-    const sw = bounds.getSouthWest();
-    const ne = bounds.getNorthEast();
+    const center = map.getCenter();
+    const centerLat = center.getLat();
+    const centerLng = center.getLng();
     const position = userPositionRef.current;
 
     setPlacesLoadState("loading");
-    fetchMapPlaces(
-      { south: sw.getLat(), west: sw.getLng(), north: ne.getLat(), east: ne.getLng() },
-      mapCategory,
-      position ?? undefined,
-      0,
-      100,
-      controller.signal
-    )
-      .then((page) => {
-        setPlaces(page.content);
-        setPlacesLoadState("ready");
-      })
-      .catch((error) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("장소 조회 실패", error);
-        setPlacesLoadState("error");
-      });
+
+    async function run() {
+      for (let i = 0; i < SEARCH_RADII_KM.length; i++) {
+        const radiusKm = SEARCH_RADII_KM[i];
+        const isLastRadius = i === SEARCH_RADII_KM.length - 1;
+        const latDelta = radiusKm / 111;
+        const lngDelta = radiusKm / (111 * Math.cos((centerLat * Math.PI) / 180));
+        try {
+          const page = await fetchMapPlaces(
+            {
+              south: centerLat - latDelta,
+              north: centerLat + latDelta,
+              west: centerLng - lngDelta,
+              east: centerLng + lngDelta,
+            },
+            mapCategory,
+            position ?? undefined,
+            0,
+            100,
+            controller.signal
+          );
+          if (controller.signal.aborted) return;
+          if (page.content.length >= MIN_PLACE_RESULTS || isLastRadius) {
+            setPlaces(page.content);
+            setPlacesLoadState("ready");
+            return;
+          }
+        } catch (error) {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          console.error("장소 조회 실패", error);
+          setPlacesLoadState("error");
+          return;
+        }
+      }
+    }
+
+    run();
   }
-  refetchPlacesRef.current = refetchPlaces;
+
+  // 지도를 움직여 'idle'이 발생했을 때도 같은 반경 확장 조회를 써서, 사용자가 어디로 이동하든
+  // (내 위치 포함) 식당·숙소처럼 드문 카테고리가 "결과 없음"으로 비어 보이지 않게 합니다.
+  refetchPlacesRef.current = refetchPlacesByRadius;
 
   // 지도 인스턴스는 최초 1회만 생성합니다.
   useEffect(() => {
@@ -624,10 +742,10 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 카테고리를 바꾸면 그 카테고리의 실제 장소를(양조장 포함) 새로 조회합니다.
+  // 카테고리를 바꾸면 그 카테고리의 실제 장소를(양조장 포함) 반경을 넓혀가며 새로 조회합니다.
   useEffect(() => {
     if (loadState !== "ready" || isCourseMode || isSearchResultMode) return;
-    refetchPlaces(activeCategory);
+    refetchPlacesByRadius(activeCategory);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory, loadState, isCourseMode, isSearchResultMode]);
 
@@ -729,7 +847,28 @@ export default function Map() {
 
     if (isCourseMode) return;
 
-    places.forEach((place) => {
+    // 반경 안에 실제 양조장이 하나도 없어 목록이 "전통주로 추천 양조장"으로 대체된 상태라면,
+    // 핀도 그 추천 양조장 기준으로 그립니다(그렇지 않으면 지도에 핀이 하나도 안 보이게 됩니다).
+    const pinSource =
+      activeCategory === "brewery" && places.length === 0 && recommendedBreweries.length > 0
+        ? recommendedBreweries.map(recommendedBreweryToPlace)
+        : places;
+
+    // 핀이 화면상 겹쳐 있으면, 유저 현재 위치(없으면 지도 중심)와 가장 가까운 핀만 이름표를
+    // 보여주고 나머지는 숨깁니다. 이름표가 남는 핀이 겹친 핀들 위로 그려지도록 뒤에 그립니다.
+    const projection = map.getProjection();
+    const reference = userPosition ?? { lat: map.getCenter().getLat(), lng: map.getCenter().getLng() };
+    const hiddenLabels = resolveHiddenPinLabels(
+      pinSource.map((place) => ({ key: place.placeId, lat: place.latitude, lng: place.longitude })),
+      kakao,
+      projection,
+      reference
+    );
+    const orderedPlaces = [...pinSource].sort(
+      (a, b) => Number(hiddenLabels.has(b.placeId)) - Number(hiddenLabels.has(a.placeId))
+    );
+
+    orderedPlaces.forEach((place) => {
       const isSelected =
         place.category === "BREWERY"
           ? detailKind === "winery" && selectedId === place.placeId
@@ -741,6 +880,7 @@ export default function Map() {
         label: place.placeName,
         selected: isSelected,
         dimmed: false,
+        showLabel: isSelected || !hiddenLabels.has(place.placeId),
       });
       el.addEventListener("click", () => handleSelectPlace(place));
       const overlay = new kakao.CustomOverlay({
@@ -753,7 +893,17 @@ export default function Map() {
       placeOverlaysRef.current.push(overlay);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState, places, activeCategory, isCourseMode, detailKind, selectedPlace, selectedId]);
+  }, [
+    loadState,
+    places,
+    activeCategory,
+    isCourseMode,
+    detailKind,
+    selectedPlace,
+    selectedId,
+    userPosition,
+    recommendedBreweries,
+  ]);
 
   // 코스 모드에서 실제 추천 코스 정거장(식당·관광지·카페·숙소) 마커를 그립니다.
   useEffect(() => {
@@ -764,9 +914,25 @@ export default function Map() {
     stopOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     stopOverlaysRef.current = [];
 
-    courseStops.forEach((stop) => {
+    const validStops = courseStops.filter((stop) => STOP_TYPE_TO_CATEGORY[stop.type]);
+    // 핀이 겹쳐 있으면 유저 현재 위치(없으면 양조장)와 가장 가까운 핀만 이름표를 보여줍니다.
+    const projection = map.getProjection();
+    const reference =
+      userPosition ?? (focusWinery?.lat && focusWinery?.lng
+        ? { lat: focusWinery.lat, lng: focusWinery.lng }
+        : null);
+    const hiddenLabels = resolveHiddenPinLabels(
+      validStops.map((stop) => ({ key: stop.contentId, lat: stop.latitude, lng: stop.longitude })),
+      kakao,
+      projection,
+      reference
+    );
+    const orderedStops = [...validStops].sort(
+      (a, b) => Number(hiddenLabels.has(b.contentId)) - Number(hiddenLabels.has(a.contentId))
+    );
+
+    orderedStops.forEach((stop) => {
       const category = STOP_TYPE_TO_CATEGORY[stop.type];
-      if (!category) return;
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
       const el = createPinElement({
         emoji: CATEGORY_META[category].icon,
@@ -775,6 +941,7 @@ export default function Map() {
         label: stop.name,
         selected: isSelected,
         dimmed: false,
+        showLabel: isSelected || !hiddenLabels.has(stop.contentId),
       });
       el.addEventListener("click", () => handleSelectStop(stop));
       const overlay = new kakao.CustomOverlay({
@@ -787,7 +954,7 @@ export default function Map() {
       stopOverlaysRef.current.push(overlay);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop]);
+  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, userPosition, focusWinery]);
 
   // 내 위치 표시(파란 점)를 그립니다.
   useEffect(() => {
@@ -899,6 +1066,7 @@ export default function Map() {
   }
 
   function handleSelectWinery(id: string) {
+    if (sheetMode === "list") previousSheetHeightRef.current = sheetHeight;
     setSelectedId(id);
     setDetailKind("winery");
     setSheetMode("detail");
@@ -907,10 +1075,11 @@ export default function Map() {
     if (winery?.lat && winery?.lng) focusMapOn(winery.lat, winery.lng, DETAIL_SHEET_HEIGHT);
   }
 
-  // 양조장 핀·목록만 지도 포커스를 옮깁니다. 그 외 장소(식당·카페 등)는 이미 화면에 보이는
-  // 상태에서 누른 것이므로 별도 카드(FloatingCard)만 띄우고 지도는 그대로 둡니다.
+  // 목록·핀에서 장소를 선택하면 카테고리 상관없이 해당 핀으로 지도를 이동시키고(반경 3km 수준)
+  // 그 장소의 바텀시트(양조장이면 상세 시트, 그 외는 FloatingCard)를 엽니다.
   function handleSelectPlace(place: MapPlace) {
     if (place.category === "BREWERY") {
+      if (sheetMode === "list") previousSheetHeightRef.current = sheetHeight;
       setSelectedId(place.placeId);
       setDetailKind("winery");
       ensureWineryLoaded(place.placeId);
@@ -921,6 +1090,7 @@ export default function Map() {
     }
     setSelectedPlace(place);
     setDetailKind("place");
+    focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
   }
 
   function handleSelectStop(stop: RecommendedCourseStop) {
@@ -932,7 +1102,8 @@ export default function Map() {
     setSelectedId(null);
     setDetailKind("winery");
     setSheetMode("list");
-    setSheetHeight(getSnapPoints(areaHeight).collapsed);
+    setSheetHeight(previousSheetHeightRef.current ?? getSnapPoints(areaHeight).collapsed);
+    previousSheetHeightRef.current = null;
   };
 
   // 장소(식당·카페 등)·코스 정거장 카드를 닫습니다. 바텀시트 자체는 건드리지 않습니다.
@@ -965,9 +1136,16 @@ export default function Map() {
     setIsDragging(false);
     const points = getSnapPoints(areaHeight);
     const candidates = [points.collapsed, points.mid, points.full];
-    setSheetHeight((current) =>
-      candidates.reduce((a, b) => (Math.abs(b - current) < Math.abs(a - current) ? b : a))
+    const snapped = candidates.reduce((a, b) =>
+      Math.abs(b - sheetHeight) < Math.abs(a - sheetHeight) ? b : a
     );
+    // 양조장 상세를 맨 위까지 끌어올리면, Figma의 "Brewery Card Expanded" 미니 상세 페이지 대신
+    // 이미 동일한 내용(대표주종·방문방식·한 줄 요약 등)을 갖춘 양조장 상세 페이지로 이동합니다.
+    if (snapped >= points.full && sheetMode === "detail" && detailKind === "winery" && selectedWinery) {
+      navigate(`/winery/${selectedWinery.id}`);
+      return;
+    }
+    setSheetHeight(snapped);
   };
 
   const handleShareWinery = async (winery: Winery) => {
@@ -991,9 +1169,19 @@ export default function Map() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  const consentActive = !isCourseMode && showLocationConsent;
+  const floatingInfo =
+    detailKind === "place" && selectedPlace
+      ? placeToInfo(selectedPlace)
+      : detailKind === "stop" && selectedStop
+        ? stopToInfo(selectedStop)
+        : null;
+  // 위치 동의 시트·양조장 상세 시트·장소 상세 카드가 화면을 덮는 동안은 하단 네비게이션 바를 숨깁니다.
+  useHideNavbar(consentActive || sheetMode === "detail" || Boolean(floatingInfo));
+
   // 양조장 정보를 아직 못 찾은 게 "로딩 중"이 아니라 "완전히 실패"했을 때만 지도를 아예 안 그립니다.
   // 로딩 중에는 아래 메인 렌더가 그대로 진행되어야 <MapEl>이 마운트되고 카카오맵이 초기화됩니다
-  // (여기서 일찍 return하면 <MapEl>이 없는 채로 지도 초기화 effect가 한 번만 실행되고 끝나버려,
+  // (여기서 일찍 return하면 <MapEl>이 없는 채로 지도 초기화 효과가 한 번만 실행되고 끝나버려,
   // 나중에 양조장 정보가 도착해도 지도가 영영 뜨지 않습니다).
   if (isCourseMode && !focusWinery && !focusWineryLoading) {
     return (
@@ -1006,17 +1194,13 @@ export default function Map() {
     );
   }
 
-  const consentActive = !isCourseMode && showLocationConsent;
-  const floatingInfo =
-    detailKind === "place" && selectedPlace
-      ? placeToInfo(selectedPlace)
-      : detailKind === "stop" && selectedStop
-        ? stopToInfo(selectedStop)
-        : null;
   // 장소 카드(FloatingCard)가 떠 있을 때는 바텀시트 자체가 사라지므로 피해야 할 높이가 없습니다.
   const activeSheetHeight = consentActive ? 190 : floatingInfo ? 0 : sheetHeight;
   const isSheetFullyExpanded =
     !consentActive && !floatingInfo && sheetHeight >= getSnapPoints(areaHeight).full - 2;
+  // 바텀시트를 접힌 스냅 지점까지 끌어내리면, Figma의 "Brewery Card Collapsed" 상태처럼
+  // 이름·버튼만 남기고 종류/주소/사진 등 부가 정보는 숨깁니다.
+  const isDetailCollapsed = sheetHeight <= getSnapPoints(areaHeight).collapsed + 20;
 
   return (
     <PageContainer>
@@ -1031,9 +1215,7 @@ export default function Map() {
                 aria-label="공유하기"
                 onClick={() => handleShareWinery(focusWinery)}
               >
-                <ShareIcon viewBox="0 0 24 24" aria-hidden>
-                  <path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.04 9.81A2.99 2.99 0 0 0 3 12a3 3 0 0 0 5.04 2.19l7.12 4.15c-.05.21-.08.43-.08.66a2.92 2.92 0 1 0 2.92-2.92z" />
-                </ShareIcon>
+                <img src={shareIcon} alt="" width={24} height={24} />
               </ShareButton>
             )
           }
@@ -1045,10 +1227,7 @@ export default function Map() {
 
         {!isCourseMode && !isSheetFullyExpanded && (
           <SearchBarButton type="button" onClick={() => navigate("/search")}>
-            <SearchGlyph viewBox="0 0 24 24" aria-hidden>
-              <circle cx="11" cy="11" r="6" />
-              <line x1="20" y1="20" x2="15.5" y2="15.5" />
-            </SearchGlyph>
+            <img src={searchIcon} alt="" width={24} height={24} />
             <SearchPlaceholder>양조장·전통주 검색</SearchPlaceholder>
           </SearchBarButton>
         )}
@@ -1065,7 +1244,7 @@ export default function Map() {
           </StatusOverlay>
         )}
 
-        {loadState === "ready" && (
+        {loadState === "ready" && !consentActive && (
           <MapControls style={{ bottom: activeSheetHeight + 12 }}>
             <ZoomControl>
               <ZoomButton type="button" aria-label="확대" onClick={handleZoomIn}>
@@ -1082,10 +1261,7 @@ export default function Map() {
               $active={locationState === "granted"}
               onClick={handleLocationButtonClick}
             >
-              <LocationGlyph viewBox="0 0 24 24" aria-hidden>
-                <circle cx="12" cy="12" r="3" />
-                <path d="M12 2v3M12 19v3M2 12h3M19 12h3" />
-              </LocationGlyph>
+              <LocationGlyph $src={targetIcon} aria-hidden />
             </LocationButton>
           </MapControls>
         )}
@@ -1142,7 +1318,7 @@ export default function Map() {
                             const wasMenuMode = selectedMenu != null;
                             setSelectedMenu(null);
                             setActiveCategory(key);
-                            if (wasMenuMode) refetchPlaces(key);
+                            if (wasMenuMode) refetchPlacesByRadius(key);
                           }}
                         >
                           {pinIcon ? (
@@ -1160,144 +1336,173 @@ export default function Map() {
                     })}
                   </ChipRow>
 
-                  {placesLoadState === "loading" && <DotsLoader />}
-                  {placesLoadState === "zoomed_out" && (
-                    <EmptyCategoryNotice>
-                      지도를 조금 더 확대하면 {CATEGORY_META[activeCategory].label} 정보가 보여요.
-                    </EmptyCategoryNotice>
-                  )}
-                  {placesLoadState === "error" && (
-                    <EmptyCategoryNotice>
-                      목록을 불러오지 못했어요. 지도를 조금 움직여보세요.
-                    </EmptyCategoryNotice>
-                  )}
-                  {placesLoadState === "ready" &&
-                    places.length === 0 &&
-                    (activeCategory === "brewery" ? (
-                      recommendedBreweries.length > 0 ? (
-                        <>
-                          <RecommendedSection>
-                            <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
-                            <RecommendedGrid>
-                              {recommendedBreweries.map((item) => {
-                                const region = item.address.split(" ").slice(0, 2).join(" ");
-                                return (
-                                  <PhotoCard
-                                    key={item.breweryId}
-                                    fluid
-                                    name={item.businessName}
-                                    region={
-                                      item.liquorTypes.length > 0
-                                        ? `${formatLiquorTypes(item.liquorTypes)} · ${region}`
-                                        : region
-                                    }
-                                    photoUrl={resolveImageUrl(item.mainImage?.url)}
-                                    onClick={() => navigate(`/winery/${item.breweryId}`)}
-                                  />
-                                );
-                              })}
-                            </RecommendedGrid>
-                          </RecommendedSection>
+                  {activeCategory === "brewery" &&
+                  places.length === 0 &&
+                  recommendedBreweries.length > 0 ? (
+                    // Figma의 "Default BottomSheet"처럼, 추천 양조장 그리드 사이사이에 수상
+                    // 전통주·추천 메뉴 섹션을 끼워 보여줍니다. 실제 조회 결과가 아직 없어도
+                    // (진입 초기 포함) 이 추천 콘텐츠는 로딩 여부와 상관없이 바로 보여줍니다.
+                    <>
+                      <RecommendedSection>
+                        <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
+                        <RecommendedGrid>
+                          {recommendedBreweries.slice(0, 4).map((item) => (
+                            <RecommendedBreweryCard key={item.breweryId} item={item} onNavigate={navigate} />
+                          ))}
+                        </RecommendedGrid>
+                      </RecommendedSection>
 
-                          {awardedLiquors.length > 0 && (
-                            <AwardSection>
-                              <RecommendedTitle>수상받은 전통주</RecommendedTitle>
-                              <AwardRow>
-                                {awardedLiquors.map((item) => (
-                                  <AwardCard
-                                    key={item.productId}
-                                    type="button"
-                                    onClick={() => navigate(`/winery/${item.breweryId}`)}
-                                  >
-                                    <AwardThumb
-                                      src={resolveImageUrl(item.image?.url) ?? noneImage}
-                                      alt=""
-                                    />
-                                    <AwardBadgeLine>
-                                      <img src={awardIcon} alt="" width={14} height={14} />
-                                      {item.awardBadge}
-                                    </AwardBadgeLine>
-                                    <AwardName>{item.productName}</AwardName>
-                                    <AwardMetaPrimary>
-                                      {item.breweryName}
-                                      {item.address
-                                        ? ` · ${item.address.split(" ").slice(0, 2).join(" ")}`
-                                        : ""}
-                                    </AwardMetaPrimary>
-                                    <AwardMetaSecondary>
-                                      {[
-                                        item.alcoholMin != null ? `${item.alcoholMin}도` : null,
-                                        item.volume,
-                                        item.liquorTypes[0],
-                                      ]
-                                        .filter(Boolean)
-                                        .join(" · ")}
-                                    </AwardMetaSecondary>
-                                  </AwardCard>
-                                ))}
-                              </AwardRow>
-                            </AwardSection>
-                          )}
+                      {awardedLiquors.length > 0 && (
+                        <AwardSection>
+                          <RecommendedTitle>수상받은 전통주</RecommendedTitle>
+                          <AwardRow>
+                            {awardedLiquors.map((item) => (
+                              <AwardCard
+                                key={item.productId}
+                                type="button"
+                                onClick={() => navigate(`/winery/${item.breweryId}`)}
+                              >
+                                <AwardThumb
+                                  src={resolveImageUrl(item.image?.url) ?? noneImage}
+                                  alt=""
+                                />
+                                <AwardBadgeLine>
+                                  <img src={awardIcon} alt="" width={14} height={14} />
+                                  {item.awardBadge}
+                                </AwardBadgeLine>
+                                <AwardName>{item.productName}</AwardName>
+                                <AwardMetaPrimary>
+                                  {item.breweryName}
+                                  {item.address
+                                    ? ` · ${item.address.split(" ").slice(0, 2).join(" ")}`
+                                    : ""}
+                                </AwardMetaPrimary>
+                                <AwardMetaSecondary>
+                                  {[
+                                    item.alcoholMin != null ? `${item.alcoholMin}도` : null,
+                                    item.volume,
+                                    item.liquorTypes[0],
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </AwardMetaSecondary>
+                              </AwardCard>
+                            ))}
+                          </AwardRow>
+                        </AwardSection>
+                      )}
 
-                          {mapMenus.length > 0 && (
-                            <RecommendedSection>
-                              <RecommendedTitle>지금 찾아보면 좋은 메뉴</RecommendedTitle>
-                              <MenuChipRow>
-                                {mapMenus.map((item) => (
-                                  <MenuChip
-                                    key={item.menu}
-                                    type="button"
-                                    $active={selectedMenu === item.menu}
-                                    onClick={() => handleSelectMenu(item.menu)}
-                                  >
-                                    {item.displayName}
-                                  </MenuChip>
-                                ))}
-                              </MenuChipRow>
-                            </RecommendedSection>
-                          )}
-                        </>
-                      ) : (
-                        // 양조장은 "정보가 없어요" 문구 대신, 추천 콘텐츠가 도착할 때까지 로딩 표시로 대신합니다.
-                        <DotsLoader />
-                      )
-                    ) : (
-                      <EmptyCategoryNotice>
-                        이 지역에는 {CATEGORY_META[activeCategory].label} 정보가 없어요.
-                      </EmptyCategoryNotice>
-                    ))}
+                      {recommendedBreweries.slice(4, 8).length > 0 && (
+                        <RecommendedSection>
+                          <RecommendedGrid>
+                            {recommendedBreweries.slice(4, 8).map((item) => (
+                              <RecommendedBreweryCard
+                                key={item.breweryId}
+                                item={item}
+                                onNavigate={navigate}
+                              />
+                            ))}
+                          </RecommendedGrid>
+                        </RecommendedSection>
+                      )}
+
+                      {mapMenus.length > 0 && (
+                        <RecommendedSection>
+                          <RecommendedTitle>지금 찾아보면 좋은 메뉴</RecommendedTitle>
+                          <MenuChipRow>
+                            {mapMenus.map((item) => (
+                              <MenuChip
+                                key={item.menu}
+                                type="button"
+                                $active={selectedMenu === item.menu}
+                                onClick={() => handleSelectMenu(item.menu)}
+                              >
+                                {item.displayName}
+                              </MenuChip>
+                            ))}
+                          </MenuChipRow>
+                        </RecommendedSection>
+                      )}
+
+                      {recommendedBreweries.slice(8, 12).length > 0 && (
+                        <RecommendedSection>
+                          <RecommendedGrid>
+                            {recommendedBreweries.slice(8, 12).map((item) => (
+                              <RecommendedBreweryCard
+                                key={item.breweryId}
+                                item={item}
+                                onNavigate={navigate}
+                              />
+                            ))}
+                          </RecommendedGrid>
+                        </RecommendedSection>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {placesLoadState === "loading" && (
+                        <LoaderCenter $height={Math.max(160, sheetHeight - 90)}>
+                          <DotsLoader />
+                        </LoaderCenter>
+                      )}
+                      {placesLoadState === "error" && (
+                        <EmptyCategoryNotice>
+                          목록을 불러오지 못했어요. 지도를 조금 움직여보세요.
+                        </EmptyCategoryNotice>
+                      )}
+                      {placesLoadState === "ready" &&
+                        places.length === 0 &&
+                        (activeCategory === "brewery" ? (
+                          // 양조장은 "정보가 없어요" 문구 대신, 추천 콘텐츠가 도착할 때까지 로딩 표시로 대신합니다.
+                          <LoaderCenter $height={Math.max(160, sheetHeight - 90)}>
+                            <DotsLoader />
+                          </LoaderCenter>
+                        ) : (
+                          <EmptyCategoryNotice>
+                            이 지역에는 {CATEGORY_META[activeCategory].label} 정보가 없어요.
+                          </EmptyCategoryNotice>
+                        ))}
+                    </>
+                  )}
                   {placesLoadState === "ready" && places.length > 0 && (
                     <PlaceList>
                       {places.map((place) => {
-                        const subtitleParts = [
-                          place.categoryName || undefined,
+                        const isBrewery = place.category === "BREWERY";
+                        const distanceOrAddress =
                           place.distance != null
                             ? `${place.distance.toFixed(1)}km`
-                            : place.roadAddressName || undefined,
-                        ].filter((part): part is string => Boolean(part));
-                        const thumbSrc =
-                          resolveImageUrl(place.imageUrl) ??
-                          (place.category === "BREWERY" ? noneImage : null);
-                        const badges =
-                          place.category === "BREWERY" ? breweryBadges[place.placeId] : undefined;
+                            : place.roadAddressName || undefined;
+                        const subtitleParts = (
+                          isBrewery
+                            ? [place.categoryName || undefined, distanceOrAddress]
+                            : [distanceOrAddress, place.categoryName || undefined]
+                        ).filter((part): part is string => Boolean(part));
+                        const thumbSrc = resolveImageUrl(place.imageUrl);
+                        const badges = isBrewery ? breweryBadges[place.placeId] : undefined;
                         return (
                           <PlaceRow
                             key={place.placeId}
                             type="button"
                             onClick={() => handleSelectPlace(place)}
                           >
-                            {thumbSrc ? (
-                              <PlaceThumb src={thumbSrc} alt="" />
-                            ) : (
-                              <PlaceThumbFallback aria-hidden>
-                                {CATEGORY_META[activeCategory].icon}
-                              </PlaceThumbFallback>
-                            )}
+                            <PlaceThumb
+                              src={thumbSrc ?? CATEGORY_PLACE_FALLBACK[activeCategory]}
+                              alt=""
+                            />
                             <PlaceBody>
                               <PlaceName>{place.placeName}</PlaceName>
                               <PlaceMeta>
                                 {subtitleParts.map((part, index) => (
-                                  <PlaceMetaPart key={part}>
+                                  <PlaceMetaPart
+                                    key={part}
+                                    $tone={
+                                      isBrewery
+                                        ? undefined
+                                        : index === 0
+                                          ? "primary"
+                                          : "secondary"
+                                    }
+                                  >
                                     {index > 0 && <PlaceMetaDot aria-hidden />}
                                     {part}
                                   </PlaceMetaPart>
@@ -1306,7 +1511,12 @@ export default function Map() {
                               {badges && badges.length > 0 && (
                                 <PlaceBadgeRow>
                                   {badges.map((badge) => (
-                                    <Badge key={badge} label={badge} tone="gray" />
+                                    <Badge
+                                      key={badge}
+                                      label={badge}
+                                      tone={badge === "예약필요" ? "neutral" : "gray"}
+                                      shape="flat"
+                                    />
                                   ))}
                                 </PlaceBadgeRow>
                               )}
@@ -1325,6 +1535,7 @@ export default function Map() {
                   <DetailContent
                     winery={selectedWinery}
                     showClose={!isCourseMode}
+                    compact={isDetailCollapsed}
                     onClose={handleCloseDetail}
                     onShare={handleShareWinery}
                     onDirections={handleDirections}
@@ -1334,7 +1545,9 @@ export default function Map() {
                 ) : wineryDetailLoading || (isCourseMode && focusWineryLoading) ? (
                   // 코스 모드에서는 focusWinery를 별도 effect로 불러오는 중이라 wineryDetailLoading이
                   // 아니라 focusWineryLoading이 참일 때도 "정보 없음"이 아니라 로딩으로 처리해야 합니다.
-                  <DotsLoader />
+                  <LoaderCenter $height={Math.max(160, sheetHeight - 40)}>
+                    <DotsLoader />
+                  </LoaderCenter>
                 ) : (
                   <DetailNotFound>양조장 정보를 찾을 수 없어요.</DetailNotFound>
                 ))}
@@ -1359,9 +1572,31 @@ export default function Map() {
   );
 }
 
+function RecommendedBreweryCard({
+  item,
+  onNavigate,
+}: {
+  item: MapRecommendedBrewery;
+  onNavigate: (path: string) => void;
+}) {
+  const region = item.address.split(" ").slice(0, 2).join(" ");
+  return (
+    <PhotoCard
+      fluid
+      name={item.businessName}
+      region={
+        item.liquorTypes.length > 0 ? `${formatLiquorTypes(item.liquorTypes)} · ${region}` : region
+      }
+      photoUrl={resolveImageUrl(item.mainImage?.url)}
+      onClick={() => onNavigate(`/winery/${item.breweryId}`)}
+    />
+  );
+}
+
 function DetailContent({
   winery,
   showClose,
+  compact,
   onClose,
   onShare,
   onDirections,
@@ -1370,6 +1605,7 @@ function DetailContent({
 }: {
   winery: Winery;
   showClose: boolean;
+  compact: boolean;
   onClose: () => void;
   onShare: (winery: Winery) => void;
   onDirections: (winery: Winery) => void;
@@ -1379,7 +1615,7 @@ function DetailContent({
   const representativeType = getRepresentativeTypeLabel(winery);
   const visitLabel = getWineryVisitLabel(winery);
   const experienceCount = winery.experiences?.length ?? 0;
-  const photoUrls = winery.photoUrls && winery.photoUrls.length > 0 ? winery.photoUrls : [noneImage];
+  const photoUrls = winery.photoUrls && winery.photoUrls.length > 0 ? winery.photoUrls : [];
 
   return (
     <DetailWrap>
@@ -1387,30 +1623,37 @@ function DetailContent({
         <DetailName>{winery.name}</DetailName>
         {showClose && (
           <DetailCloseButton type="button" aria-label="닫기" onClick={onClose}>
-            ×
+            <img src={closeIcon} alt="" width={24} height={24} />
           </DetailCloseButton>
         )}
       </DetailHeaderRow>
 
-      <DetailMetaLine>
-        {representativeType}
-        {experienceCount > 0 ? ` · 체험 프로그램 ${experienceCount}개` : ""}
-      </DetailMetaLine>
-      {visitLabel && <DetailVisitLine>{visitLabel}</DetailVisitLine>}
-      <DetailAddressText>{winery.address ?? winery.detailRegion}</DetailAddressText>
+      {!compact && (
+        <>
+          <DetailMetaLine>
+            {representativeType}
+            {experienceCount > 0 ? ` · 체험 프로그램 ${experienceCount}개` : ""}
+          </DetailMetaLine>
+          {visitLabel && <DetailVisitLine>{visitLabel}</DetailVisitLine>}
+          <DetailAddressText>{winery.address ?? winery.detailRegion}</DetailAddressText>
+        </>
+      )}
 
       <DetailActionRow>
         <DetailActionPrimary type="button" onClick={() => onNavigateCourse(winery.id)}>
           <MaskIcon $src={topRightIcon} /> 추천코스
         </DetailActionPrimary>
         <DetailAction type="button" onClick={() => onShare(winery)}>
-          공유
+          <MaskIcon $src={shareIcon} /> 공유
         </DetailAction>
         {winery.phone && (
           <DetailAction type="button" onClick={() => onCopyPhone(winery.phone!)}>
             <MaskIcon $src={callIcon} /> 연락처
           </DetailAction>
         )}
+        <DetailAction type="button" onClick={() => onDirections(winery)}>
+          <MaskIcon $src={outwardIcon} /> 길찾기
+        </DetailAction>
         {winery.homepageUrl && (
           <DetailAction
             type="button"
@@ -1419,21 +1662,20 @@ function DetailContent({
             <MaskIcon $src={webIcon} /> 홈페이지
           </DetailAction>
         )}
-        <DetailAction type="button" onClick={() => onDirections(winery)}>
-          <MaskIcon $src={topRightIcon} /> 길찾기
-        </DetailAction>
       </DetailActionRow>
 
-      <DetailPhotoRow>
-        {photoUrls.map((url, index) => (
-          <DetailPhoto
-            key={`${url}-${index}`}
-            src={url}
-            alt=""
-            $single={photoUrls.length === 1}
-          />
-        ))}
-      </DetailPhotoRow>
+      {!compact && photoUrls.length > 0 && (
+        <DetailPhotoRow>
+          {photoUrls.map((url, index) => (
+            <DetailPhoto
+              key={`${url}-${index}`}
+              src={url}
+              alt=""
+              $single={photoUrls.length === 1}
+            />
+          ))}
+        </DetailPhotoRow>
+      )}
     </DetailWrap>
   );
 }
@@ -1456,17 +1698,20 @@ function SimplePlaceDetail({
         <DetailName>{info.name}</DetailName>
         {showClose && (
           <DetailCloseButton type="button" aria-label="닫기" onClick={onClose}>
-            ×
+            <img src={closeIcon} alt="" width={24} height={24} />
           </DetailCloseButton>
         )}
       </DetailHeaderRow>
 
       {info.note && <PlaceNote>{info.note}</PlaceNote>}
 
-      <DetailMetaLine>
-        {info.categoryLabel}
-        {info.distanceLabel ? ` · ${info.distanceLabel}` : ""}
-      </DetailMetaLine>
+      {(info.distanceLabel || info.categoryLabel) && (
+        <DetailMetaRow>
+          {info.distanceLabel && <DetailMetaPrimary>{info.distanceLabel}</DetailMetaPrimary>}
+          {info.distanceLabel && info.categoryLabel && <DetailMetaDot aria-hidden />}
+          {info.categoryLabel && <DetailMetaSecondary>{info.categoryLabel}</DetailMetaSecondary>}
+        </DetailMetaRow>
+      )}
 
       {info.address && (
         <InlineCopyRow>
@@ -1526,11 +1771,6 @@ const ShareButton = styled.button`
   cursor: pointer;
 `;
 
-const ShareIcon = styled.svg`
-  width: 18px;
-  height: 18px;
-  fill: currentColor;
-`;
 
 const MapArea = styled.div`
   position: relative;
@@ -1547,34 +1787,26 @@ const MapEl = styled.div`
 
 const SearchBarButton = styled.button`
   position: absolute;
-  top: 12px;
+  top: 40px;
   left: 16px;
   right: 16px;
   z-index: 5;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 6px;
+  padding: 8px 12px;
   border: none;
   border-radius: 9999px;
   background: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   text-align: left;
 `;
 
-const SearchGlyph = styled.svg`
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: ${colors.gray[400]};
-  stroke-width: 2;
-  stroke-linecap: round;
-`;
-
 const SearchPlaceholder = styled.span`
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  font-weight: 300;
+  letter-spacing: -0.28px;
   color: ${colors.gray[400]};
 `;
 
@@ -1669,13 +1901,19 @@ const LocationButton = styled(ControlButton)<{ $active: boolean }>`
   color: ${(props) => (props.$active ? "#3b82f6" : colors.gray[900])};
 `;
 
-const LocationGlyph = styled.svg`
+const LocationGlyph = styled.span<{ $src: string }>`
+  display: inline-block;
   width: 20px;
   height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
+  background-color: currentColor;
+  -webkit-mask-image: url("${(props) => props.$src}");
+  mask-image: url("${(props) => props.$src}");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
 `;
 
 const ConsentSheet = styled.div`
@@ -1687,10 +1925,10 @@ const ConsentSheet = styled.div`
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: 8px 20px 24px;
-  border-radius: 20px 20px 0 0;
+  padding: 8px 16px 18px;
+  border-radius: 16px 16px 0 0;
   background: #ffffff;
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -2px 16px rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
 `;
 
@@ -1706,15 +1944,16 @@ const SheetHandle = styled.span`
 
 const ConsentTitle = styled.p`
   margin: 0;
-  font-size: 1.0625rem;
+  font-size: 1.125rem;
   font-weight: 700;
   line-height: 1.4;
+  letter-spacing: -0.36px;
   text-align: left;
   color: ${colors.gray[900]};
 `;
 
 const ConsentDesc = styled.p`
-  margin: 8px 0 0;
+  margin: 12px 0 0;
   font-size: 0.8125rem;
   color: ${colors.gray[400]};
   text-align: left;
@@ -1729,14 +1968,16 @@ const ConsentError = styled.p`
 
 const ConsentAgreeButton = styled.button`
   width: 100%;
-  margin-top: 20px;
-  padding: 14px;
+  height: 48px;
+  margin-top: 32px;
+  padding: 12px 16px;
   border: none;
-  border-radius: 12px;
+  border-radius: 8px;
   background-color: ${colors.primary[500]};
   color: #ffffff;
-  font-size: 0.9375rem;
+  font-size: 1rem;
   font-weight: 700;
+  letter-spacing: -0.32px;
   cursor: pointer;
 
   &:disabled {
@@ -1747,12 +1988,14 @@ const ConsentAgreeButton = styled.button`
 
 const ConsentSkipButton = styled.button`
   align-self: center;
-  margin-top: 10px;
+  width: 100%;
   border: none;
   background: transparent;
-  padding: 4px;
-  font-size: 0.8125rem;
-  color: ${colors.gray[400]};
+  padding: 14px;
+  font-size: 0.875rem;
+  font-weight: 300;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[500]};
   cursor: pointer;
 `;
 
@@ -1764,7 +2007,7 @@ const Sheet = styled.div`
   z-index: 7;
   display: flex;
   flex-direction: column;
-  border-radius: 20px 20px 0 0;
+  border-radius: 16px 16px 0 0;
   background: #ffffff;
   box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
   overflow: hidden;
@@ -1776,15 +2019,15 @@ const FloatingCard = styled.div`
   position: absolute;
   left: 16px;
   right: 16px;
-  bottom: 16px;
+  bottom: 32px;
   z-index: 9;
   max-height: 60%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 20px 16px;
-  border-radius: 20px;
+  padding: 16px;
+  border-radius: 16px;
   background: #ffffff;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
 `;
 
@@ -1808,7 +2051,7 @@ const SheetScroll = styled.div`
 
 const ChipRow = styled.div`
   display: flex;
-  gap: 8px;
+  gap: 6px;
   padding: 4px 0 14px;
   overflow-x: auto;
 
@@ -1835,8 +2078,8 @@ const CategoryChip = styled.button<{ $active: boolean }>`
 
 const ChipIcon = styled.span<{ $src: string; $color: string }>`
   display: inline-block;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   background-color: ${(props) => props.$color};
   -webkit-mask-image: url("${(props) => props.$src}");
   mask-image: url("${(props) => props.$src}");
@@ -1855,6 +2098,13 @@ const EmptyCategoryNotice = styled.p`
   color: ${colors.gray[400]};
 `;
 
+const LoaderCenter = styled.div<{ $height: number }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: ${(props) => props.$height}px;
+`;
+
 const RecommendedSection = styled.div`
   padding: 12px 0 24px;
 `;
@@ -1869,7 +2119,7 @@ const RecommendedTitle = styled.h2`
 const RecommendedGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
+  gap: 24px 16px;
 
   img {
     height: 200px;
@@ -1972,8 +2222,8 @@ const PlaceList = styled.div`
 const PlaceRow = styled.button`
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 15px 0;
+  gap: 10px;
+  padding: 12px 0;
   border: none;
   border-top: 1px solid ${colors.gray[100]};
   background: transparent;
@@ -1992,18 +2242,6 @@ const PlaceThumb = styled.img`
   border-radius: 8px;
   object-fit: cover;
   background-color: ${colors.gray[50]};
-`;
-
-const PlaceThumbFallback = styled.span`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 8px;
-  background-color: ${colors.gray[50]};
-  font-size: 1.5rem;
 `;
 
 const PlaceBody = styled.div`
@@ -2026,9 +2264,15 @@ const PlaceMeta = styled.p`
   color: ${colors.gray[500]};
 `;
 
-const PlaceMetaPart = styled.span`
+const PlaceMetaPart = styled.span<{ $tone?: "primary" | "secondary" }>`
   display: flex;
   align-items: center;
+  color: ${(props) =>
+    props.$tone === "primary"
+      ? colors.gray[600]
+      : props.$tone === "secondary"
+        ? colors.gray[400]
+        : "inherit"};
 `;
 
 const PlaceMetaDot = styled.span`
@@ -2040,21 +2284,23 @@ const PlaceMetaDot = styled.span`
   background-color: ${colors.gray[500]};
 `;
 
-const DetailWrap = styled.div`
-  padding-top: 4px;
-`;
+const DetailWrap = styled.div``;
 
 const DetailHeaderRow = styled.div`
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: space-between;
   gap: 8px;
 `;
 
 const DetailName = styled.h2`
   flex: 1;
+  min-width: 0;
   margin: 0;
   font-size: 1.25rem;
   font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.4px;
   color: ${colors.gray[900]};
 `;
 
@@ -2067,20 +2313,44 @@ const DetailCloseButton = styled.button`
   height: 24px;
   border: none;
   background: transparent;
-  font-size: 1.25rem;
-  line-height: 1;
-  color: ${colors.gray[400]};
   cursor: pointer;
 `;
 
 const DetailMetaLine = styled.p`
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   font-size: 0.75rem;
   color: ${colors.gray[500]};
 `;
 
+const DetailMetaRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+`;
+
+const DetailMetaPrimary = styled.span`
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: ${colors.gray[900]};
+`;
+
+const DetailMetaSecondary = styled.span`
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: ${colors.gray[500]};
+`;
+
+const DetailMetaDot = styled.span`
+  display: inline-block;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background-color: ${colors.gray[500]};
+`;
+
 const DetailVisitLine = styled.p`
-  margin: 4px 0 0;
+  margin: 6px 0 0;
   font-size: 0.8125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
@@ -2103,12 +2373,12 @@ const InlineCopyRow = styled.div`
 
 const InlineCopyButton = styled.button`
   flex-shrink: 0;
-  padding: 4px 10px;
-  border: 1px solid ${colors.gray[200]};
-  border-radius: 9999px;
-  background: #ffffff;
-  font-size: 0.75rem;
+  border: none;
+  background: transparent;
+  padding: 0;
+  font-size: 0.6875rem;
   font-weight: 600;
+  text-decoration: underline;
   color: ${colors.gray[600]};
   cursor: pointer;
 `;
@@ -2147,10 +2417,10 @@ const DetailAction = styled.button`
   padding: 8px 12px;
   border: 1px solid ${colors.border};
   border-radius: 9999px;
-  background: #ffffff;
+  background: transparent;
   font-size: 0.8125rem;
   font-weight: 400;
-  color: ${colors.gray[700]};
+  color: ${colors.gray[900]};
   cursor: pointer;
   white-space: nowrap;
 `;
@@ -2165,12 +2435,15 @@ const DetailActionPrimary = styled(DetailAction)`
 const DetailActionFull = styled(DetailAction)`
   flex: 1;
   justify-content: center;
+  height: 40px;
   border-color: transparent;
-  border-radius: 12px;
-  background-color: ${colors.gray[900]};
+  border-radius: 9999px;
+  background-color: ${colors.gray[700]};
   color: #ffffff;
-  padding: 12px;
-  font-size: 0.8125rem;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.28px;
 `;
 
 const MaskIcon = styled.span<{ $src: string }>`
@@ -2192,7 +2465,7 @@ const MaskIcon = styled.span<{ $src: string }>`
 const DetailPhotoRow = styled.div`
   display: flex;
   gap: 8px;
-  margin-top: 14px;
+  margin-top: 12px;
   overflow-x: auto;
 
   &::-webkit-scrollbar {
@@ -2204,7 +2477,7 @@ const DetailPhoto = styled.img<{ $single: boolean }>`
   flex-shrink: 0;
   width: ${(props) => (props.$single ? "100%" : "150px")};
   height: ${(props) => (props.$single ? "200px" : "180px")};
-  border-radius: 10px;
+  border-radius: 8px;
   object-fit: cover;
   background-color: ${colors.gray[50]};
 `;
