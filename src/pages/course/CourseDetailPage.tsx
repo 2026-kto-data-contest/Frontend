@@ -168,9 +168,10 @@ export default function CourseDetailPage() {
 
   const handleShare = async () => {
     if (!winery) return;
+    // text를 넘기면 일부 공유 대상(문자 메시지 등)이 제목·본문·링크를 한 줄로 이어붙여
+    // 보내버려서, 링크만 깔끔하게 전달되도록 제목과 URL만 넘깁니다.
     const shareData = {
       title: `${winery.name} 코스`,
-      text: course?.title ?? `${winery.name} 코스`,
       url: window.location.href,
     };
     if (navigator.share) {
