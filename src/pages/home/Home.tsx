@@ -247,13 +247,11 @@ export default function Home() {
   };
 
   const handlePreferenceBannerClick = () => {
-    if (home?.banner.actionPath) {
-      navigate(home.banner.actionPath);
-      return;
-    }
     if (auth.hasOnboarded) {
       // 사용자 취향과 일치하는 양조장(추천 양조장 섹션과 같은 목록) 중 1곳을 무작위로 골라
-      // 그 양조장의 추천 코스 화면으로 보냅니다.
+      // 그 양조장의 추천 코스 화면으로 보냅니다. 위 isPromptBanner와 같은 이유로, 온보딩을
+      // 마친 뒤에는 백엔드 banner.actionPath도 신뢰하지 않고(실기기에서 온보딩 전 경로가
+      // 그대로 내려오는 경우가 확인됨) 항상 이 로직으로 이동시킵니다.
       const matchedBreweries = home?.recommendedBreweries ?? [];
       if (matchedBreweries.length > 0) {
         const picked = matchedBreweries[Math.floor(Math.random() * matchedBreweries.length)];
@@ -261,6 +259,10 @@ export default function Home() {
       } else {
         navigate("/explore");
       }
+      return;
+    }
+    if (home?.banner.actionPath) {
+      navigate(home.banner.actionPath);
     } else if (auth.isLoggedIn && auth.termsAgreed) {
       navigate("/onboarding");
     } else if (auth.isLoggedIn) {
