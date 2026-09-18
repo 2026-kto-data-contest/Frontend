@@ -42,14 +42,10 @@ export const router = createBrowserRouter([
         path: "/explore",
         element: <WineryListPage />,
       },
-      {
-        path: "/course/:id",
-        element: <CourseDetailPage />,
-      },
     ],
   },
   {
-    // 네비게이션 바 없이 보여줘야 하는 화면들 (양조장 상세, 로그인/약관/온보딩 등)
+    // 네비게이션 바 없이 보여줘야 하는 화면들 (양조장 상세, 코스 보기, 로그인/약관/온보딩 등)
     // 아래 /login, /terms, /onboarding 경로는 배포된 백엔드가 그대로 리다이렉트하는
     // 절대 경로이므로 임의로 바꾸면 안 됩니다.
     element: <AuthLayout />,
@@ -57,6 +53,10 @@ export const router = createBrowserRouter([
       {
         path: "/winery/:id",
         element: <WineryDetailPage />,
+      },
+      {
+        path: "/course/:id",
+        element: <CourseDetailPage />,
       },
       {
         path: "/mypage/withdraw",
