@@ -17,27 +17,15 @@ function toErrorMessage(error: unknown, fallback: string): string {
 }
 
 /**
- * "건너뛰기"처럼 취향 선택 없이 온보딩을 마칠 때 씁니다.
- * 성공 시에만 응답의 nextPath로 이동합니다. 실패하면 화면을 그대로 두고 실패 사유를 반환하므로,
- * 호출하는 쪽에서 반드시 success를 확인한 뒤에만 다음 동작(이동 등)을 진행해야 합니다.
+ * "건너뛰기" 버튼에서 씁니다. 아무것도 저장·완료 처리하지 않고 그냥 이동만 해서,
+ * 온보딩은 여전히 미완료 상태로 남겨둡니다(다음에 다시 들어오면 처음부터 물어봅니다).
  */
 export async function finishOnboarding(
-  auth: { refresh: () => Promise<void> },
   navigate: (path: string) => void,
   fallbackPath: string
 ): Promise<FinishOnboardingResult> {
-  try {
-    const { nextPath } = await completeOnboardingApi();
-    await auth.refresh();
-    navigate(nextPath || fallbackPath);
-    return { success: true };
-  } catch (error) {
-    console.error("온보딩 완료 처리 실패", error);
-    return {
-      success: false,
-      message: toErrorMessage(error, "온보딩 완료 처리에 실패했어요. 다시 시도해주세요."),
-    };
-  }
+  navigate(fallbackPath);
+  return { success: true };
 }
 
 /**

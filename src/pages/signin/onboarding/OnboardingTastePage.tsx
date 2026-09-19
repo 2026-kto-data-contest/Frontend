@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../../../shared/lib/authContext";
 import { usePersistentState } from "../../../shared/lib/pageState";
 import { Button } from "../../../shared/components/Button";
 import { OnboardingLayout } from "./OnboardingLayout";
@@ -42,7 +41,6 @@ const ICONS: Record<string, string> = {
 
 export default function OnboardingTastePage() {
   const navigate = useNavigate();
-  const auth = useAuth();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
   const isEditMode = from === "/mypage";
@@ -83,7 +81,7 @@ export default function OnboardingTastePage() {
     if (isSkipping) return;
     setIsSkipping(true);
     setSkipError(null);
-    const result = await finishOnboarding(auth, navigate, from);
+    const result = await finishOnboarding(navigate, from);
     if (!result.success) {
       setSkipError(result.message ?? null);
     }
