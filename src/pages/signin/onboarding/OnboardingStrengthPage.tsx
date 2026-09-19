@@ -11,7 +11,7 @@ import {
   finishOnboardingWithPreferences,
   saveOnboardingPreferenceField,
 } from "./finishOnboarding";
-import { TASTE_OPTIONS } from "./OnboardingTastePage";
+import { deriveLiquorTypes } from "./OnboardingTastePage";
 import { REAL_REGIONS } from "./OnboardingRegionPage";
 import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import { fetchOnboardingPreferences } from "../../../shared/api/api";
@@ -83,20 +83,12 @@ export default function OnboardingStrengthPage() {
     setIsSubmitting(true);
     setErrorMessage(null);
 
-    const liquorTypes = Array.from(
-      new Set(
-        TASTE_OPTIONS.filter((option) => selectedTaste.includes(option.id) && option.type).map(
-          (option) => option.type
-        )
-      )
-    );
     // "전국"으로 전 지역을 선택한 경우, 백엔드 규약대로 빈 배열을 보내 전국 취급이 되게 합니다.
     const isNationwide = REAL_REGIONS.every((region) => selectedRegion.includes(region));
     const regions = isNationwide ? [] : selectedRegion;
 
     const result = await finishOnboardingWithPreferences(auth, navigate, from, {
-      // "어떤 맛이든 좋아요"만 고른 경우처럼 특정 주종이 없으면 전체 주종을 선호하는 것으로 보냅니다.
-      liquorTypes: liquorTypes.length > 0 ? liquorTypes : [...ALL_TYPE_FILTERS],
+      liquorTypes: deriveLiquorTypes(selectedTaste),
       regions,
       alcoholLevel: ALCOHOL_LEVEL_MAP[selectedStrength] ?? "MEDIUM",
     });
