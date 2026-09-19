@@ -20,7 +20,7 @@ import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
 import type { HomeResponse, RecommendedCourseCard } from "../../shared/api/breweriesApi";
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
-import { TASTE_OPTIONS, isAnyFlavorPreference } from "../signin/onboarding/OnboardingTastePage";
+import { TASTE_OPTIONS, isOnlyAnyFlavor } from "../signin/onboarding/OnboardingTastePage";
 
 const ROTATE_INTERVAL_MS = 3000;
 const BANNER_EXIT_DURATION_MS = 700;
@@ -49,7 +49,7 @@ function buildPreferenceLine(preferences: OnboardingPreferencesData): string {
   const regionLabel = preferences.regions.length === 0 ? "전국" : preferences.regions.join("·");
   // "어떤 맛이든 좋아요"를 골랐을 때는 특정 주종을 선호하는 것처럼 보이면 안 되므로
   // 형용사 없이 "전통주"로만 표시합니다.
-  if (isAnyFlavorPreference(preferences.liquorTypes)) {
+  if (isOnlyAnyFlavor(preferences.liquorTypes)) {
     return `${regionLabel}의 전통주${PREFERENCE_SUFFIX}`;
   }
   const primaryType = preferences.liquorTypes[0];
