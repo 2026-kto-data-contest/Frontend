@@ -124,6 +124,9 @@ const DEFAULT_CLUSTER_CENTER = { lat: 37.892, lng: 127.199 };
 const DEFAULT_LEVEL = 7;
 const FOCUS_LEVEL = 5;
 const USER_LOCATION_LEVEL = 6;
+// 코스 모드에서 정거장 핀이 겹치면 이 레벨까지는 계속 확대합니다(그 이상은 코스 전체를
+// 보여준다는 의미가 없어질 만큼 과하게 확대되는 걸 막는 하한선).
+const COURSE_MIN_ZOOM_LEVEL = 3;
 const TOAST_DURATION_MS = 3000;
 // 양조장을 선택했을 때 바텀시트의 기본 높이입니다. 사용자가 핸들로 직접 늘리거나 줄일 수 있습니다.
 const DETAIL_SHEET_HEIGHT = 320;
@@ -350,15 +353,29 @@ export default function Map() {
   const [locationBusy, setLocationBusy] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
 
-  const [places, setPlaces] = useState<MapPlace[]>([]);
-  const [placesLoadState, setPlacesLoadState] = useState<PlacesLoadState>("idle");
+  // 양조장 풀시트(상세 페이지)로 넘어갔다 뒤로 왔을 때 지도가 새로 마운트되며 목록이
+  // 잠깐 비었다가 다시 채워지는 게 아니라, 이전에 불러온 내용을 그대로 이어서 보여주기
+  // 위해 마운트 시점에 기억해둔 값으로 초기화합니다(재조회 자체는 그대로 진행되고, 그
+  // 결과가 오면 자연스럽게 갱신됩니다 — 화면이 비는 순간만 없앱니다).
+  const [places, setPlaces] = useState<MapPlace[]>(() =>
+    isCourseMode ? [] : (getMemory<MapPlace[]>("map:places") ?? [])
+  );
+  const [placesLoadState, setPlacesLoadState] = useState<PlacesLoadState>(() =>
+    !isCourseMode && (getMemory<MapPlace[]>("map:places")?.length ?? 0) > 0 ? "ready" : "idle"
+  );
   // 검색 결과에서 "지도에서 보기"로 넘어온 경우, 지도가 뜨자마자 뷰포트 기준 조회가
   // 그 결과를 덮어쓰지 않도록 이 플래그가 true인 동안만 자동 조회를 막습니다.
   const [isSearchResultMode, setIsSearchResultMode] = useState(Boolean(searchBreweryIds?.length));
   const [courseStops, setCourseStops] = useState<RecommendedCourseStop[]>([]);
-  const [recommendedBreweries, setRecommendedBreweries] = useState<MapRecommendedBrewery[]>([]);
-  const [awardedLiquors, setAwardedLiquors] = useState<MapAwardedLiquor[]>([]);
-  const [mapMenus, setMapMenus] = useState<MapMenu[]>([]);
+  const [recommendedBreweries, setRecommendedBreweries] = useState<MapRecommendedBrewery[]>(() =>
+    isCourseMode ? [] : (getMemory<MapRecommendedBrewery[]>("map:recommendedBreweries") ?? [])
+  );
+  const [awardedLiquors, setAwardedLiquors] = useState<MapAwardedLiquor[]>(() =>
+    isCourseMode ? [] : (getMemory<MapAwardedLiquor[]>("map:awardedLiquors") ?? [])
+  );
+  const [mapMenus, setMapMenus] = useState<MapMenu[]>(() =>
+    isCourseMode ? [] : (getMemory<MapMenu[]>("map:mapMenus") ?? [])
+  );
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
   // 칩을 하나라도 눌러야 그 카테고리의 실제 목록으로 바뀝니다. 누르기 전(진입 초기 포함)에는
   // 백그라운드에서 이미 양조장 결과가 도착했더라도 Figma의 "Default BottomSheet"(추천 콘텐츠)를
@@ -730,6 +747,12 @@ export default function Map() {
     setMemory("map:activeCategory", activeCategory);
     setMemory("map:categorySelected", categorySelected);
     if (sheetHeight > 0) setMemory("map:sheetHeight", sheetHeight);
+    // 카테고리 핀 목록·기본 시트(추천/수상 전통주·메뉴)도 같이 기억해둬서, 풀시트로
+    // 넘어갔다 뒤로 왔을 때 다시 불러오는 동안 화면이 비지 않게 합니다.
+    if (placesLoadState === "ready") setMemory("map:places", places);
+    setMemory("map:recommendedBreweries", recommendedBreweries);
+    setMemory("map:awardedLiquors", awardedLiquors);
+    setMemory("map:mapMenus", mapMenus);
   }, [
     isCourseMode,
     sheetMode,
@@ -738,6 +761,11 @@ export default function Map() {
     activeCategory,
     categorySelected,
     sheetHeight,
+    places,
+    placesLoadState,
+    recommendedBreweries,
+    awardedLiquors,
+    mapMenus,
     setMemory,
   ]);
 
@@ -989,6 +1017,51 @@ export default function Map() {
     stopOverlaysRef.current = [];
 
     const validStops = courseStops.filter((stop) => STOP_TYPE_TO_CATEGORY[stop.type]);
+    const stopPins = validStops.map((stop) => ({
+      key: stop.contentId,
+      lat: stop.latitude,
+      lng: stop.longitude,
+    }));
+
+    // 정거장 핀 전부가 "실제로 눈에 보이는" 영역 안에 들어오는 한도 안에서 최대한 확대합니다.
+    // map.getBounds()는 시트 아래 가려진 부분까지 포함한 지도 컨테이너 전체 기준이라, 코스
+    // 모드에서 하단을 늘 덮고 있는 시트(DETAIL_SHEET_HEIGHT) 영역은 화면 픽셀 좌표로 직접
+    // 제외하고 판정합니다. 겹침 여부는 안 보고 "한 단계 더 확대해도 전부 보이는가"만으로
+    // 판단해서, 이미 안 겹치는 상태여도 더 확대할 여지가 있으면 계속 확대합니다. 항상
+    // FOCUS_LEVEL에서부터 다시 판정해야 courseStops가 바뀌었을 때 이전에 확대해둔 레벨이
+    // 누적되지 않습니다.
+    const containerWidth = mapElRef.current?.clientWidth ?? 0;
+    const containerHeight = mapElRef.current?.clientHeight ?? 0;
+    const PIN_EDGE_MARGIN = 30;
+    const visibleLeft = PIN_EDGE_MARGIN;
+    const visibleRight = containerWidth - PIN_EDGE_MARGIN;
+    const visibleTop = PIN_EDGE_MARGIN;
+    const visibleBottom = containerHeight - DETAIL_SHEET_HEIGHT - PIN_EDGE_MARGIN;
+
+    let zoomLevel = FOCUS_LEVEL;
+    map.setLevel(zoomLevel);
+    if (containerWidth > 0 && containerHeight > 0 && visibleBottom > visibleTop) {
+      while (zoomLevel > COURSE_MIN_ZOOM_LEVEL) {
+        const candidateLevel = zoomLevel - 1;
+        map.setLevel(candidateLevel);
+        const candidateProjection = map.getProjection();
+        const allStopsVisible = stopPins.every((pin) => {
+          const point = candidateProjection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng));
+          return (
+            point.x >= visibleLeft &&
+            point.x <= visibleRight &&
+            point.y >= visibleTop &&
+            point.y <= visibleBottom
+          );
+        });
+        if (!allStopsVisible) {
+          map.setLevel(zoomLevel);
+          break;
+        }
+        zoomLevel = candidateLevel;
+      }
+    }
+
     // 핀이 겹쳐 있으면 유저 현재 위치(없으면 양조장)와 가장 가까운 핀만 이름표를 보여줍니다.
     const projection = map.getProjection();
     const reference =
@@ -996,11 +1069,6 @@ export default function Map() {
       (focusWinery?.lat && focusWinery?.lng
         ? { lat: focusWinery.lat, lng: focusWinery.lng }
         : null);
-    const stopPins = validStops.map((stop) => ({
-      key: stop.contentId,
-      lat: stop.latitude,
-      lng: stop.longitude,
-    }));
     const hiddenLabels = resolveHiddenPinLabels(stopPins, kakao, projection, reference);
     // 아이콘 자체가 서로 겹쳐 가려지지 않도록, 겹친 핀들은 원래 위치 주위로 살짝 흩어 그립니다.
     const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
@@ -1815,7 +1883,7 @@ function DetailContent({
             {experienceCount > 0 ? ` · 체험 프로그램 ${experienceCount}개` : ""}
           </DetailMetaLine>
           {visitLabel && <DetailVisitLine>{visitLabel}</DetailVisitLine>}
-          <DetailAddressText>{winery.address ?? winery.detailRegion}</DetailAddressText>
+          <DetailAddressTextSpaced>{winery.address ?? winery.detailRegion}</DetailAddressTextSpaced>
         </>
       )}
 
@@ -2585,6 +2653,14 @@ const DetailAddressText = styled.p`
   color: ${colors.gray[600]};
 `;
 
+// DetailAddressText는 InlineCopyRow(복사 버튼과 한 줄)에서도 쓰이는데, 거기서는 줄 자체의
+// margin-top이 필요 없어서(InlineCopyRow가 이미 margin-top을 가짐, 버튼과 나란히 정렬돼야
+// 함) 공용 컴포넌트는 그대로 두고, 상시 방문 줄 바로 아래에 오는 양조장 카드 주소에만
+// Figma 기준 간격(6px)을 더합니다.
+const DetailAddressTextSpaced = styled(DetailAddressText)`
+  margin-top: 6px;
+`;
+
 const InlineCopyRow = styled.div`
   display: flex;
   align-items: center;
@@ -2624,6 +2700,13 @@ const DetailActionRow = styled.div`
   gap: 8px;
   margin-top: 14px;
   overflow-x: auto;
+  /* SheetScroll의 좌우 패딩(16px) 안에 갇혀 있으면 스크롤 끝에서 칩이 그 패딩 경계에
+     바로 잘려 보입니다. 폭을 그 패딩만큼 넓히고 안쪽에 같은 패딩을 다시 줘서, 칩
+     자체는 화면 끝까지 쓰되 시작·끝 위치는 원래와 똑같이 보이게 합니다. */
+  width: calc(100% + 32px);
+  margin-left: -16px;
+  padding: 0 16px;
+  box-sizing: border-box;
 
   &::-webkit-scrollbar {
     display: none;
@@ -2669,8 +2752,8 @@ const DetailActionFull = styled(DetailAction)`
 
 const MaskIcon = styled.span<{ $src: string }>`
   display: inline-block;
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
   background-color: currentColor;
   -webkit-mask-image: url("${(props) => props.$src}");
   mask-image: url("${(props) => props.$src}");
