@@ -20,7 +20,7 @@ import type {
   KakaoMapInstance,
   KakaoCustomOverlayInstance,
 } from "../../shared/api/kakaoMaps";
-import { resolveHiddenPinLabels } from "../../shared/lib/mapPinOverlap";
+import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
 import mapIcon from "../../assets/icon/Map.svg";
 import restaurantIcon from "../../assets/icon/Restaurant.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
@@ -262,6 +262,9 @@ export default function CourseDetailPage() {
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
     if (!kakao || !map || !mapReady || !winery?.lat || !winery?.lng) return;
+    // 아래 forEach 콜백 안에서도 숫자로 좁혀진 타입을 그대로 쓰기 위해 지역 변수로 뽑아둡니다.
+    const wineryLat = winery.lat;
+    const wineryLng = winery.lng;
 
     pinOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
     pinOverlaysRef.current = [];
@@ -274,12 +277,20 @@ export default function CourseDetailPage() {
     );
 
     if (validStops.length === 0) {
-      map.setCenter(new kakao.LatLng(winery.lat, winery.lng));
+      map.setCenter(new kakao.LatLng(wineryLat, wineryLng));
       map.setLevel(PREVIEW_DEFAULT_LEVEL);
     } else {
+      // 양조장 핀이 항상 미리보기 지도 한가운데 오도록, 각 정거장의 양조장 기준 대칭점도
+      // 함께 bounds에 포함시킵니다. 이렇게 하면 bounds가 양조장을 중심으로 좌우대칭이 되어,
+      // setBounds가 계산하는 중심이 곧 양조장 좌표가 됩니다(그 다음 setCenter는 안전망).
       const bounds = new kakao.LatLngBounds();
-      bounds.extend(new kakao.LatLng(winery.lat, winery.lng));
-      validStops.forEach((stop) => bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude)));
+      bounds.extend(new kakao.LatLng(wineryLat, wineryLng));
+      validStops.forEach((stop) => {
+        const dLat = stop.latitude - wineryLat;
+        const dLng = stop.longitude - wineryLng;
+        bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude));
+        bounds.extend(new kakao.LatLng(wineryLat - dLat, wineryLng - dLng));
+      });
       map.setBounds(
         bounds,
         PREVIEW_BOUNDS_PADDING.top,
@@ -287,30 +298,39 @@ export default function CourseDetailPage() {
         PREVIEW_BOUNDS_PADDING.bottom,
         PREVIEW_BOUNDS_PADDING.left
       );
+      map.setCenter(new kakao.LatLng(wineryLat, wineryLng));
     }
 
-    // 확대를 마친 뒤의 화면 기준으로 겹침을 판정해야 실제로 겹치는 이름표만 숨습니다.
+    // 확대를 마친 뒤의 화면 기준으로 겹침을 판정해야 실제로 겹치는 핀만 처리합니다.
     const projection = map.getProjection();
-    const hiddenLabels = resolveHiddenPinLabels(
-      validStops.map((stop) => ({ key: stop.contentId, lat: stop.latitude, lng: stop.longitude })),
-      kakao,
-      projection,
-      { lat: winery.lat, lng: winery.lng }
+    const stopPins = validStops.map((stop) => ({
+      key: stop.contentId,
+      lat: stop.latitude,
+      lng: stop.longitude,
+    }));
+    const hiddenLabels = resolveHiddenPinLabels(stopPins, kakao, projection, {
+      lat: wineryLat,
+      lng: wineryLng,
+    });
+    // 이름표를 숨기는 것만으로는 아이콘끼리 여전히 겹쳐 보이므로, 겹친 핀들은 원래 위치
+    // 주위로 살짝 흩어 그려 아이콘 자체가 서로 가리지 않게 합니다.
+    const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
+
+    // 카카오맵 CustomOverlay는 나중에 그린 것이 위로 쌓이므로, 이름표가 남아 다른 핀을
+    // 가릴 수 있는 정거장을 먼저 그리고(뒤에 깔림), 이름표를 숨긴 정거장을 그 위에 그립니다.
+    const orderedStops = [...validStops].sort(
+      (a, b) => Number(hiddenLabels.has(b.contentId)) - Number(hiddenLabels.has(a.contentId))
     );
 
-    const breweryOverlay = new kakao.CustomOverlay({
-      map,
-      position: new kakao.LatLng(winery.lat, winery.lng),
-      content: createPreviewBreweryPin(pinBreweryIcon),
-      yAnchor: 1,
-    });
-    pinOverlaysRef.current.push(breweryOverlay);
-
-    validStops.forEach((stop) => {
+    orderedStops.forEach((stop) => {
       const key = CATEGORY_BY_STOP_TYPE[stop.type]!;
+      const position = overlapOffsets[stop.contentId] ?? {
+        lat: stop.latitude,
+        lng: stop.longitude,
+      };
       const overlay = new kakao.CustomOverlay({
         map,
-        position: new kakao.LatLng(stop.latitude, stop.longitude),
+        position: new kakao.LatLng(position.lat, position.lng),
         content: createPreviewStopPin({
           iconSrc: CATEGORY_META[key].icon,
           color: CATEGORY_META[key].color,
@@ -321,6 +341,15 @@ export default function CourseDetailPage() {
       });
       pinOverlaysRef.current.push(overlay);
     });
+
+    // 양조장 핀은 정거장 핀·이름표에 절대 가려지지 않도록 맨 마지막(맨 위)에 그립니다.
+    const breweryOverlay = new kakao.CustomOverlay({
+      map,
+      position: new kakao.LatLng(wineryLat, wineryLng),
+      content: createPreviewBreweryPin(pinBreweryIcon),
+      yAnchor: 1,
+    });
+    pinOverlaysRef.current.push(breweryOverlay);
   }, [mapReady, winery?.lat, winery?.lng, course]);
 
   const stopsByCategory: Record<CategoryKey, RecommendedCourseStop[]> = {
