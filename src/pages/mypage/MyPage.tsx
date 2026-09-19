@@ -194,7 +194,11 @@ export default function MyPage() {
         ) : (
           <PromoBanner
             type="button"
-            onClick={() => navigate(`/onboarding/taste?from=${FROM_MYPAGE}`)}
+            // from을 FROM_MYPAGE("/mypage")로 주면 온보딩 페이지들이 "마이페이지에서 항목 하나만
+            // 고치는 중"으로 오인해(isEditMode) 3단계 전체가 아니라 취향 한 항목만 저장하고
+            // 끝내버립니다. 아직 온보딩을 마치지 않은 사람용 배너이므로 from을 비워서, 다른
+            // 진짜 온보딩 진입점(홈 화면 등)과 똑같이 취향→지역→도수 3단계를 다 거치게 합니다.
+            onClick={() => navigate("/onboarding")}
           >
             <PromoIcon src={bannerBeforeIcon} alt="" />
             <PromoTextArea>
