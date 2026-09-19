@@ -12,6 +12,7 @@ import {
 } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { STRENGTH_OPTIONS, ALCOHOL_LEVEL_TO_ID } from "../signin/onboarding/OnboardingStrengthPage";
+import { isAnyFlavorPreference } from "../signin/onboarding/OnboardingTastePage";
 import bannerBeforeIcon from "../../assets/icon/BannerBefore.png";
 import kakaoLogoIcon from "../../assets/icon/KakaoLogo.svg";
 import outwardIcon from "../../assets/icon/Outward.svg";
@@ -127,7 +128,11 @@ export default function MyPage() {
     return null;
   }
 
-  const tasteLabel = preferences?.liquorTypes.join("·") ?? "";
+  const tasteLabel = preferences
+    ? isAnyFlavorPreference(preferences.liquorTypes)
+      ? "추천받기"
+      : preferences.liquorTypes.join("·")
+    : "";
   const regionLabel = preferences
     ? preferences.regions.length === 0
       ? "전국"

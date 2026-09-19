@@ -8,6 +8,7 @@ import { OptionRow } from "./OptionRow";
 import { finishOnboarding, saveOnboardingPreferenceField } from "./finishOnboarding";
 import { fetchOnboardingPreferences } from "../../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../../shared/api/api";
+import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import sweetIcon from "../../../assets/icon/Sweet.svg";
 import nuttyIcon from "../../../assets/icon/Nutty.svg";
 import cleanIcon from "../../../assets/icon/Clean.svg";
@@ -38,26 +39,26 @@ const ICONS: Record<string, string> = {
   any: whateverIcon,
 };
 
-const ANY_OPTION = TASTE_OPTIONS.find((option) => option.id === "any")!;
+// "어떤 맛이든 좋아요"를 고르면 마이페이지에는 실제 주종 다섯 가지(기타 제외)를
+// 다 고른 것처럼 보여줍니다. 백엔드가 liquorTypes 값으로 실제 주종명만 허용해서
+// ("추천받기" 같은 문구는 저장 시 거부됨), 화면 문구("추천받기")와 저장값을 분리합니다.
+const ANY_LIQUOR_TYPES = ALL_TYPE_FILTERS.filter((type) => type !== "기타");
 
-/**
- * 선택한 취향 옵션 id들을 저장용 문자열 목록으로 바꿉니다. 구체적인 주종을 고르면
- * 그 주종명을, "어떤 맛이든 좋아요"를 고르면 그 문구("추천받기")를 그대로 넣어서,
- * 다른 주종과 함께 골라도 마이페이지에 고른 것 그대로("과실주·탁주·추천받기") 나열됩니다.
- */
+/** 저장된 주종이 "어떤 맛이든 좋아요"를 선택했을 때 저장되는 다섯 가지를 전부 포함하는지 봅니다. */
+export function isAnyFlavorPreference(liquorTypes: string[]): boolean {
+  return ANY_LIQUOR_TYPES.every((type) => liquorTypes.includes(type));
+}
+
+/** 선택한 취향 옵션 id들을 저장용 주종 문자열 목록으로 바꿉니다. */
 export function deriveLiquorTypes(selectedIds: string[]): string[] {
+  if (selectedIds.includes("any")) return [...ANY_LIQUOR_TYPES];
   return Array.from(
     new Set(
-      TASTE_OPTIONS.filter((option) => selectedIds.includes(option.id)).map(
-        (option) => option.type || ANY_OPTION.sub
+      TASTE_OPTIONS.filter((option) => selectedIds.includes(option.id) && option.type).map(
+        (option) => option.type
       )
     )
   );
-}
-
-/** "어떤 맛이든 좋아요"만 단독으로 선택된 경우인지 봅니다(다른 주종과 함께 고르면 해당 안 됨). */
-export function isOnlyAnyFlavor(liquorTypes: string[]): boolean {
-  return liquorTypes.length === 1 && liquorTypes[0] === ANY_OPTION.sub;
 }
 
 export default function OnboardingTastePage() {
@@ -81,9 +82,14 @@ export default function OnboardingTastePage() {
       .then((preferences) => {
         if (cancelled) return;
         setOtherPreferences(preferences);
-        const matchedIds = TASTE_OPTIONS.filter((option) =>
-          preferences.liquorTypes.includes(option.type || ANY_OPTION.sub)
-        ).map((option) => option.id);
+        // 저장된 주종이 "어떤 맛이든 좋아요"가 채워 넣는 다섯 가지를 전부 포함하면,
+        // 온보딩 화면에서는 구체적인 다섯 항목이 아니라 "어떤 맛이든 좋아요" 하나만
+        // 선택된 것으로 되돌립니다.
+        const matchedIds = isAnyFlavorPreference(preferences.liquorTypes)
+          ? ["any"]
+          : TASTE_OPTIONS.filter(
+              (option) => option.type && preferences.liquorTypes.includes(option.type)
+            ).map((option) => option.id);
         setSelected(matchedIds);
       })
       .catch((error) => console.error("취향 정보 조회 실패", error));
