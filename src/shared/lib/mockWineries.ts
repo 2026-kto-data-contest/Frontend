@@ -54,6 +54,9 @@ export interface Winery {
   intro?: string;
   drinks?: DrinkProduct[];
   experiences?: ExperienceProgram[];
+  /** 백엔드가 내려주는 "한 줄 요약" 원문. 값이 있으면 이걸 그대로 쓰고, 없거나 비어있으면
+   * buildSummaryBullets가 설립연도·뱃지·체험 정보로 문장을 생성합니다. */
+  summaryLines?: string[];
 }
 
 export const ALL_TYPE_FILTERS = ["탁주", "약주", "청주", "증류주", "과실주", "기타"] as const;
@@ -444,8 +447,13 @@ export function getRepresentativeTypeLabel(winery: Winery, preferredType?: strin
   return `${top2.join("·")} 외 ${restCount}종`;
 }
 
-// '이 양조장의 한 줄 요약' 3줄을 자동 생성합니다. 확정된 정보가 없는 항목은 건너뜁니다.
+// '이 양조장의 한 줄 요약' 3줄을 만듭니다. 백엔드가 내려준 summaryLines가 있으면 그대로 쓰고,
+// 없거나 비어있으면 설립연도·뱃지·체험 정보로 문장을 자동 생성합니다(확정된 정보가 없는 항목은 건너뜀).
 export function buildSummaryBullets(winery: Winery): string[] {
+  if (winery.summaryLines && winery.summaryLines.length > 0) {
+    return winery.summaryLines.slice(0, 3);
+  }
+
   const bullets: string[] = [];
 
   if (winery.establishedYear && winery.generationCount) {

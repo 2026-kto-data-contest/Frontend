@@ -117,5 +117,6 @@ export function adaptBreweryToWinery(detail: BreweryDetail, products: ProductCar
     intro,
     drinks: products.map(adaptProduct),
     experiences: detail.experiences.map(adaptExperience),
+    summaryLines: detail.summaryLines,
   };
 }

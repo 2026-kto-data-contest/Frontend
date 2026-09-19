@@ -184,4 +184,13 @@ export async function logoutApi(): Promise<void> {
   await apiWithCsrf("/api/v1/auth/logout", { method: "POST" });
 }
 
+/**
+ * 회원 탈퇴. 계정과 회원에 종속된 세션·약관 동의·온보딩 취향·최근 검색을 삭제합니다.
+ * 카카오 Admin Key가 설정돼 있으면 카카오 계정 연결도 함께 해제됩니다. 성공(204) 시
+ * 세션·CSRF 쿠키가 함께 삭제되므로, 이후 auth.refresh()를 호출하면 비로그인 상태로 갱신됩니다.
+ */
+export async function withdrawApi(): Promise<void> {
+  await apiWithCsrf("/api/v1/auth/me", { method: "DELETE" });
+}
+
 export { ApiError };

@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { AppBar } from "../../shared/components/AppBar";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
+import { withdrawApi, ApiError } from "../../shared/api/api";
 import checkCircleIcon from "../../assets/icon/CheckCircle.svg";
 import circleIcon from "../../assets/icon/Circle.svg";
 
@@ -17,13 +18,25 @@ export default function WithdrawPage() {
   const navigate = useNavigate();
   const auth = useAuth();
   const [checked, setChecked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleWithdraw = async () => {
-    // TODO: 회원 탈퇴 API가 아직 없어서, 실제 계정·데이터 삭제는 이루어지지 않습니다.
-    // 백엔드에 DELETE /api/v1/members/me 같은 엔드포인트가 생기면 이 부분을 실제 호출로
-    // 교체해주세요. 그 전까지는 임시로 로그아웃만 처리하고 홈으로 이동시킵니다.
-    await auth.logout();
-    navigate("/", { replace: true });
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await withdrawApi();
+      // 성공 시 서버가 세션·CSRF 쿠키를 이미 지웠으므로, refresh()로 비로그인 상태로 갱신합니다.
+      await auth.refresh();
+      navigate("/", { replace: true });
+    } catch (error) {
+      console.error("회원 탈퇴 실패", error);
+      setErrorMessage(
+        error instanceof ApiError ? error.message : "탈퇴 처리에 실패했어요. 다시 시도해주세요."
+      );
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -44,8 +57,13 @@ export default function WithdrawPage() {
           <CheckCircle $active={checked} aria-hidden />
           위 유의사항을 모두 확인하였고, 탈퇴 할게요
         </AgreeRow>
-        <WithdrawButton type="button" disabled={!checked} onClick={handleWithdraw}>
-          탈퇴하기
+        {errorMessage && <ErrorText>{errorMessage}</ErrorText>}
+        <WithdrawButton
+          type="button"
+          disabled={!checked || isSubmitting}
+          onClick={handleWithdraw}
+        >
+          {isSubmitting ? "탈퇴 처리 중..." : "탈퇴하기"}
         </WithdrawButton>
       </Footer>
     </PageContainer>
@@ -111,6 +129,13 @@ const Footer = styled.div`
   flex-direction: column;
   gap: 12px;
   padding: 16px 16px 32px;
+`;
+
+const ErrorText = styled.p`
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #ef4444;
+  text-align: center;
 `;
 
 const AgreeRow = styled.button`

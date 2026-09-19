@@ -67,6 +67,8 @@ export interface BreweryDetail {
   designationNote: string | null;
   experiences: ExperienceItem[];
   kakaoPlaceUrl: string | null;
+  /** "이 양조장의 한 줄 요약" 문장. 값이 있으면 그대로 쓰고, 빈 배열이면 프론트에서 생성합니다. */
+  summaryLines: string[];
 }
 
 export interface ProductCard {
