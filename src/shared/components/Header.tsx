@@ -162,7 +162,7 @@ const HeaderContainer = styled.div`
 const LogoButton = styled.button`
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
   border: none;
   background: transparent;
   padding: 0;
