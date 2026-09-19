@@ -63,6 +63,29 @@ export function loginWithKakao(returnTo: string) {
   );
 }
 
+// 카카오 "로그인" REST 앱 키입니다(카카오맵 JS 키와는 다른 키). 우리 서비스 로그아웃은
+// 우리 세션 쿠키만 지울 뿐 브라우저에 남아있는 카카오 자체 로그인 세션은 못 건드려서,
+// 로그아웃 후 다시 "카카오 로그인"을 눌러도 계정 선택 없이 같은 계정으로 자동 로그인됩니다.
+// 아래 카카오 로그아웃 주소로 한 번 더 보내야 카카오 세션까지 끊기고 계정을 바꿀 수 있는데,
+// 여기 필요한 키가 아직 백엔드에서 공유되지 않아 비어 있습니다. 키가 채워지면(.env에
+// VITE_KAKAO_LOGIN_REST_KEY 설정) 바로 동작합니다 — 카카오 개발자 콘솔에 Logout Redirect
+// URI로 "{배포 주소}/login"도 등록돼 있어야 합니다.
+const KAKAO_LOGIN_REST_KEY = import.meta.env.VITE_KAKAO_LOGIN_REST_KEY;
+
+/**
+ * 설정된 경우 카카오 자체 로그인 세션까지 끊는 주소로 전체 페이지 이동시키고 true를
+ * 반환합니다. 키가 아직 없으면 아무 것도 하지 않고 false를 반환해, 호출한 쪽이 우리
+ * 서비스 세션만 지운 기존 동작을 그대로 이어가게 합니다.
+ */
+export function redirectToKakaoLogout(): boolean {
+  if (!KAKAO_LOGIN_REST_KEY) return false;
+  const logoutRedirectUri = `${window.location.origin}/login`;
+  window.location.assign(
+    `https://kauth.kakao.com/oauth/logout?client_id=${KAKAO_LOGIN_REST_KEY}&logout_redirect_uri=${encodeURIComponent(logoutRedirectUri)}`
+  );
+  return true;
+}
+
 /** 로그인 회원 정보를 조회합니다. 비로그인/세션 만료(401)면 null을 반환합니다. */
 export async function fetchMe(signal?: AbortSignal): Promise<Member | null> {
   const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
