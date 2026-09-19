@@ -85,6 +85,15 @@ export function isOnlyAnyFlavorLabel(label: string | null): boolean {
   return label === ANY_OPTION.sub;
 }
 
+/**
+ * 화면 문구에서 "어떤 맛이든 좋아요"를 뺀 첫 번째 구체적인 주종을 가져옵니다. 백엔드
+ * 저장값은 "어떤 맛이든 좋아요"를 고르면 무엇과 같이 골랐든 항상 같은 순서로 다섯
+ * 주종을 채워서, 실제로 어떤 주종을 같이 골랐는지는 이 로컬 문구로만 알 수 있습니다.
+ */
+export function primaryConcreteTypeFromLabel(label: string | null): string | undefined {
+  return label?.split("·").find((token) => token !== ANY_OPTION.sub);
+}
+
 export default function OnboardingTastePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
