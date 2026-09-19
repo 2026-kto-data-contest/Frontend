@@ -21,6 +21,16 @@ import chevronRightIcon from "../../assets/icon/ChevronRight.svg";
 const FROM_MYPAGE = "%2Fmypage";
 const TOAST_DURATION_MS = 3000;
 
+// 백엔드에 아직 약관 문서 링크가 없어서, 실제 링크가 생길 때까지 프론트에서 직접 둡니다.
+const SERVICE_TERMS_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d804e8579ffe9e5cebc34?source=copy_link";
+const PRIVACY_POLICY_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80a09400eaca7173716b?source=copy_link";
+const PRIVACY_COLLECTION_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d806d9a9fe4e8e2b32788?source=copy_link";
+const LOCATION_TERMS_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80b5a0a6df4f9935eb8d?source=copy_link";
+
 export default function MyPage() {
   const navigate = useNavigate();
   const auth = useAuth();
@@ -258,15 +268,24 @@ export default function MyPage() {
         <Section>
           <SectionTitle>이용 안내</SectionTitle>
           <RowGroup>
-            <InfoLinkRow type="button">
+            <InfoLinkRow as="a" href={SERVICE_TERMS_URL} target="_blank" rel="noopener noreferrer">
               서비스 이용약관 <img src={outwardIcon} alt="" width={18} height={18} />
             </InfoLinkRow>
             <RowDivider />
-            <InfoLinkRow type="button">
+            <InfoLinkRow as="a" href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer">
+              개인정보 처리방침 <img src={outwardIcon} alt="" width={18} height={18} />
+            </InfoLinkRow>
+            <RowDivider />
+            <InfoLinkRow
+              as="a"
+              href={PRIVACY_COLLECTION_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               개인정보 수집·이용 <img src={outwardIcon} alt="" width={18} height={18} />
             </InfoLinkRow>
             <RowDivider />
-            <InfoLinkRow type="button">
+            <InfoLinkRow as="a" href={LOCATION_TERMS_URL} target="_blank" rel="noopener noreferrer">
               위치기반 서비스 이용약관 <img src={outwardIcon} alt="" width={18} height={18} />
             </InfoLinkRow>
           </RowGroup>

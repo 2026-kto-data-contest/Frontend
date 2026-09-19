@@ -25,6 +25,24 @@ function displayTermTitle(item: TermItem): string {
   return TERM_TITLE_OVERRIDES[item.code] ?? item.title;
 }
 
+// 백엔드가 아직 contentUrl을 내려주지 않아서, 실제 약관 문서 링크가 생길 때까지 프론트에서
+// 코드별로 직접 지정해둡니다. 백엔드가 contentUrl을 채워주기 시작하면 이 값은 자연히
+// 안 쓰이게 되므로(resolveTermContentUrl이 item.contentUrl을 우선함) 그때 지워도 됩니다.
+const TERM_CONTENT_URL_OVERRIDES: Record<string, string> = {
+  SERVICE_USE:
+    "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d804e8579ffe9e5cebc34?source=copy_link",
+  PRIVACY:
+    "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d806d9a9fe4e8e2b32788?source=copy_link",
+  LOCATION:
+    "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80b5a0a6df4f9935eb8d?source=copy_link",
+  MARKETING:
+    "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80c2a6e0e1d92f443f57?source=copy_link",
+};
+
+function resolveTermContentUrl(item: TermItem): string | null {
+  return item.contentUrl ?? TERM_CONTENT_URL_OVERRIDES[item.code] ?? null;
+}
+
 // 백엔드 조회가 실패했을 때(오프라인 등) 화면이 비지 않도록 쓰는 기본값입니다.
 const FALLBACK_TERMS: TermItem[] = [
   {
@@ -181,12 +199,16 @@ export default function TermsPage() {
               </ItemLabel>
             </ItemLeft>
             {VIEWABLE_TERM_CODES.has(item.code) &&
-              (item.contentUrl ? (
-                <ViewLink as="a" href={item.contentUrl} target="_blank" rel="noopener noreferrer">
+              (resolveTermContentUrl(item) ? (
+                <ViewLink
+                  as="a"
+                  href={resolveTermContentUrl(item)!}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   보기
                 </ViewLink>
               ) : (
-                // TODO: 약관 상세 페이지가 생기면 그 경로로 navigate 하도록 바꿔주세요.
                 <ViewLink as="button" type="button">
                   보기
                 </ViewLink>
