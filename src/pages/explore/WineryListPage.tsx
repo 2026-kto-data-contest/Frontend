@@ -6,7 +6,7 @@ import { ErrorState } from "../../shared/components/ErrorState";
 import { WineryCard } from "../../shared/components/WineryCard";
 import searchIcon from "../../assets/icon/Search.svg";
 import { colors } from "../../shared/styles/colors";
-import { usePersistentState } from "../../shared/lib/pageState";
+import { usePersistentState, useCacheGeneration } from "../../shared/lib/pageState";
 import { useAuth } from "../../shared/lib/authContext";
 import { ApiError } from "../../shared/api/api";
 import {
@@ -92,7 +92,12 @@ export default function WineryListPage() {
   const [searchParams] = useSearchParams();
   const forcedError = searchParams.get("error");
   const [loadState, setLoadState] = usePersistentState<LoadState>("explore:loadState", "loading");
-  const [items, setItems] = useState<BreweryListItem[]>([]);
+  const [items, setItems] = usePersistentState<BreweryListItem[]>("explore:items", []);
+  const [itemsSignature, setItemsSignature] = usePersistentState<string | null>(
+    "explore:signature",
+    null
+  );
+  const cacheGeneration = useCacheGeneration();
   const [filters, setFilters] = usePersistentState<WineryFilters>("explore:filters", EMPTY_FILTERS);
   const [filterOrder, setFilterOrder] = usePersistentState<SectionKey[]>("explore:filterOrder", []);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -128,11 +133,20 @@ export default function WineryListPage() {
       return () => clearTimeout(timer);
     }
 
+    const signature = `${JSON.stringify(filters)}|${cacheGeneration}`;
+
+    // 탭을 벗어났다가 같은 필터로 다시 들어온 경우, 이미 받아온 목록을 그대로 재사용합니다.
+    if (itemsSignature === signature) {
+      setLoadState("success");
+      return;
+    }
+
     const controller = new AbortController();
     setLoadState("loading");
     fetchBreweries(buildBreweryParams(filters), controller.signal)
       .then((response) => {
         setItems(response.content);
+        setItemsSignature(signature);
         setLoadState("success");
       })
       .catch((error) => {
@@ -146,7 +160,7 @@ export default function WineryListPage() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, forcedError]);
+  }, [filters, forcedError, cacheGeneration]);
 
   const openFilter = (section?: SectionKey) => {
     setSheetSection(section ?? filterOrder[0] ?? "types");

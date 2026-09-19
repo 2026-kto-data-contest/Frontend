@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { AppBar } from "../../shared/components/AppBar";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
+import { invalidateTabCache } from "../../shared/lib/pageState";
 import { withdrawApi, ApiError } from "../../shared/api/api";
 import checkCircleIcon from "../../assets/icon/CheckCircle.svg";
 import circleIcon from "../../assets/icon/Circle.svg";
@@ -29,6 +30,7 @@ export default function WithdrawPage() {
       await withdrawApi();
       // 성공 시 서버가 세션·CSRF 쿠키를 이미 지웠으므로, refresh()로 비로그인 상태로 갱신합니다.
       await auth.refresh();
+      invalidateTabCache();
       navigate("/", { replace: true });
     } catch (error) {
       console.error("회원 탈퇴 실패", error);

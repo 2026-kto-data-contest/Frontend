@@ -4,6 +4,7 @@ import {
   ApiError,
 } from "../../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../../shared/api/api";
+import { invalidateTabCache } from "../../../shared/lib/pageState";
 
 export interface FinishOnboardingResult {
   success: boolean;
@@ -62,6 +63,7 @@ export async function finishOnboardingWithPreferences(
   try {
     const { nextPath } = await completeOnboardingApi();
     await auth.refresh();
+    invalidateTabCache();
     navigate(nextPath || fallbackPath);
     return { success: true };
   } catch (error) {
@@ -84,6 +86,7 @@ export async function saveOnboardingPreferenceField(
 ): Promise<FinishOnboardingResult> {
   try {
     await saveOnboardingPreferences(preferences);
+    invalidateTabCache();
     navigate(fallbackPath);
     return { success: true };
   } catch (error) {

@@ -2,6 +2,29 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import type { ReactNode } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
+// 탭 화면들이 usePersistentState로 캐싱해둔 데이터 중, 화면 자체에 반영되지 않는 변경(예:
+// 마이페이지에서 취향 항목만 개별 수정)이 일어났을 때 그 캐시를 무효화하기 위한 전역 카운터입니다.
+// Context 밖(훅이 아닌 일반 함수)에서도 호출해야 해서 React 상태가 아니라 모듈 전역 값+구독자로 둡니다.
+let cacheGeneration = 0;
+const cacheGenerationListeners = new Set<() => void>();
+
+export function invalidateTabCache() {
+  cacheGeneration += 1;
+  cacheGenerationListeners.forEach((listener) => listener());
+}
+
+export function useCacheGeneration() {
+  const [generation, setGeneration] = useState(cacheGeneration);
+  useEffect(() => {
+    const listener = () => setGeneration(cacheGeneration);
+    cacheGenerationListeners.add(listener);
+    return () => {
+      cacheGenerationListeners.delete(listener);
+    };
+  }, []);
+  return generation;
+}
+
 interface PageStateStore {
   data: Record<string, unknown>;
   activeScrollContainer: { current: HTMLDivElement | null };

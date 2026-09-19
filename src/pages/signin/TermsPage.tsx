@@ -12,9 +12,18 @@ import checkMarkMutedIcon from "../../assets/icon/CheckMarkMuted.svg";
 import checkCircleOutlineIcon from "../../assets/icon/CheckCircleOutline.svg";
 import checkCircleOutlineMutedIcon from "../../assets/icon/CheckCircleOutlineMuted.svg";
 
-// "보기"를 눌렀을 때 상세 약관 페이지로 이동하는 항목들입니다(마케팅·연령확인 제외).
+// "보기"를 눌렀을 때 상세 약관 페이지로 이동하는 항목들입니다(연령확인 제외).
 // 아직 그 페이지가 없어서, 페이지가 생기면 여기서 실제 경로로 연결해주세요.
-const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "LOCATION"]);
+const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "LOCATION", "MARKETING"]);
+
+// 백엔드가 내려주는 약관 제목을 그대로 쓰지 않고 화면 문구를 고정하고 싶은 항목입니다.
+const TERM_TITLE_OVERRIDES: Record<string, string> = {
+  MARKETING: "마케팅 수신 동의",
+};
+
+function displayTermTitle(item: TermItem): string {
+  return TERM_TITLE_OVERRIDES[item.code] ?? item.title;
+}
 
 // 백엔드 조회가 실패했을 때(오프라인 등) 화면이 비지 않도록 쓰는 기본값입니다.
 const FALLBACK_TERMS: TermItem[] = [
@@ -45,7 +54,7 @@ const FALLBACK_TERMS: TermItem[] = [
   {
     code: "MARKETING",
     version: "1",
-    title: "마케팅 정보 수신 동의 (카카오톡, 이메일 등)",
+    title: "마케팅 수신 동의",
     required: false,
     contentUrl: null,
     agreed: false,
@@ -166,7 +175,7 @@ export default function TermsPage() {
                 height={24}
               />
               <ItemLabel>
-                [{item.required ? "필수" : "선택"}] {item.title}
+                [{item.required ? "필수" : "선택"}] {displayTermTitle(item)}
               </ItemLabel>
             </ItemLeft>
             {VIEWABLE_TERM_CODES.has(item.code) &&

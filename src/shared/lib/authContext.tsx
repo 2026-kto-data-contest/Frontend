@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { fetchMe, logoutApi } from "../api/api";
 import type { Member } from "../api/api";
+import { invalidateTabCache } from "./pageState";
 
 interface AuthContextValue {
   isLoading: boolean;
@@ -60,6 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       console.error("로그아웃 요청 실패", error);
     } finally {
       setMember(null);
+      // 다른 계정으로 다시 로그인했을 때 이전 계정의 캐시된 탭 데이터가 잠깐이라도
+      // 보이지 않도록, 로그아웃 시점에 탭별 캐시를 전부 무효화합니다.
+      invalidateTabCache();
     }
   }, []);
 
