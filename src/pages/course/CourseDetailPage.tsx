@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
@@ -13,6 +13,13 @@ import type {
   RecommendedCourseStop,
   CourseStopType,
 } from "../../shared/api/breweriesApi";
+import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
+import type {
+  KakaoMapsNamespace,
+  KakaoMapInstance,
+  KakaoCustomOverlayInstance,
+} from "../../shared/api/kakaoMaps";
+import { resolveHiddenPinLabels } from "../../shared/lib/mapPinOverlap";
 import mapIcon from "../../assets/icon/Map.svg";
 import restaurantIcon from "../../assets/icon/Restaurant.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
@@ -46,7 +53,6 @@ const CATEGORY_META: Record<
   cafes: { label: "카페 · 디저트", icon: cafeIcon, color: "#B27060", fallback: fallbackCafe },
   lodging: { label: "숙소", icon: bedIcon, color: "#8A8A88", fallback: fallbackLodging },
 };
-const BREWERY_COLOR = "#FF8A00";
 
 // 관광공사 세부 분류를 화면 카테고리 4종으로 정규화합니다. 문화시설·전통시장·기타는 '가볼 만한 곳'에 포함합니다.
 const CATEGORY_BY_STOP_TYPE: Partial<Record<CourseStopType, CategoryKey>> = {
@@ -68,6 +74,62 @@ interface CourseWineryInfo {
   lng?: number;
 }
 
+// 장소가 양조장 하나뿐일 때(정거장이 아직 없거나 0개) 쓰는 기본 줌 레벨입니다.
+const PREVIEW_DEFAULT_LEVEL = 4;
+// 핀·이름표가 미리보기 박스 가장자리에 잘리지 않도록 setBounds에 주는 여백(픽셀)입니다.
+const PREVIEW_BOUNDS_PADDING = { top: 30, right: 30, bottom: 40, left: 30 };
+
+function createPreviewBreweryPin(iconSrc: string): HTMLDivElement {
+  const el = document.createElement("div");
+  el.style.cssText = "display:flex;align-items:center;justify-content:center;";
+  const img = document.createElement("img");
+  img.src = iconSrc;
+  img.alt = "";
+  img.width = 32;
+  img.height = 32;
+  el.appendChild(img);
+  return el;
+}
+
+function createPreviewStopPin(options: {
+  iconSrc: string;
+  color: string;
+  label: string;
+  showLabel: boolean;
+}): HTMLDivElement {
+  const { iconSrc, color, label, showLabel } = options;
+  const wrap = document.createElement("div");
+  wrap.style.cssText = "display:flex;flex-direction:column;align-items:center;gap:4px;";
+
+  const dot = document.createElement("div");
+  dot.style.cssText = `
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    width:18px;height:18px;border-radius:50%;
+    border:1px solid #ffffff;background-color:${color};
+  `;
+  const icon = document.createElement("span");
+  icon.style.cssText = `
+    display:block;width:9.8px;height:9.8px;background-color:#ffffff;
+    -webkit-mask-image:url("${iconSrc}");mask-image:url("${iconSrc}");
+    -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+    -webkit-mask-position:center;mask-position:center;
+    -webkit-mask-size:contain;mask-size:contain;
+  `;
+  dot.appendChild(icon);
+  wrap.appendChild(dot);
+
+  if (showLabel) {
+    const labelEl = document.createElement("span");
+    labelEl.textContent = label;
+    labelEl.style.cssText = `
+      font-size:11px;line-height:1;color:#171716;white-space:nowrap;
+      -webkit-text-stroke:3px #ffffff;paint-order:stroke fill;
+    `;
+    wrap.appendChild(labelEl);
+  }
+  return wrap;
+}
+
 function formatDistanceKm(distanceMeters: number | null): string | null {
   if (distanceMeters == null) return null;
   return (distanceMeters / 1000).toFixed(1);
@@ -84,6 +146,13 @@ export default function CourseDetailPage() {
   const [wineryLoading, setWineryLoading] = useState(true);
   const [course, setCourse] = useState<RecommendedCourseDetail | null>(null);
   const [courseState, setCourseState] = useState<CourseLoadState>("loading");
+
+  const mapElRef = useRef<HTMLDivElement>(null);
+  const kakaoRef = useRef<KakaoMapsNamespace | null>(null);
+  const mapInstanceRef = useRef<KakaoMapInstance | null>(null);
+  const pinOverlaysRef = useRef<KakaoCustomOverlayInstance[]>([]);
+  const [mapReady, setMapReady] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -151,6 +220,106 @@ export default function CourseDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, navStateWinery]);
 
+  // 미리보기 지도(카카오맵)를 한 번만 만듭니다. 스크롤 중인 페이지 안에 들어가므로
+  // 드래그·휠줌은 꺼서 페이지 스크롤과 충돌하지 않게 합니다.
+  useEffect(() => {
+    if (!winery?.lat || !winery?.lng || !mapElRef.current) return;
+    let cancelled = false;
+    loadKakaoMaps()
+      .then((kakao) => {
+        if (cancelled || !mapElRef.current) return;
+        kakaoRef.current = kakao;
+        const map = new kakao.Map(mapElRef.current, {
+          center: new kakao.LatLng(winery.lat!, winery.lng!),
+          level: PREVIEW_DEFAULT_LEVEL,
+          draggable: false,
+          scrollwheel: false,
+          disableDoubleClickZoom: true,
+        });
+        map.setDraggable(false);
+        map.setZoomable(false);
+        mapInstanceRef.current = map;
+        setMapReady(true);
+        requestAnimationFrame(() => map.relayout());
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("코스 미리보기 지도 로드 실패", error);
+        setMapFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winery?.lat, winery?.lng]);
+
+  // 양조장·코스 정거장 핀을 그리고, 전부 화면에 들어오는 한도 안에서 최대한 확대해
+  // 이름표가 서로 겹치지 않게 합니다.
+  useEffect(() => {
+    const kakao = kakaoRef.current;
+    const map = mapInstanceRef.current;
+    if (!kakao || !map || !mapReady || !winery?.lat || !winery?.lng) return;
+
+    pinOverlaysRef.current.forEach((overlay) => overlay.setMap(null));
+    pinOverlaysRef.current = [];
+
+    const validStops = (course?.stops ?? []).filter(
+      (stop) =>
+        CATEGORY_BY_STOP_TYPE[stop.type] &&
+        Number.isFinite(stop.latitude) &&
+        Number.isFinite(stop.longitude)
+    );
+
+    if (validStops.length === 0) {
+      map.setCenter(new kakao.LatLng(winery.lat, winery.lng));
+      map.setLevel(PREVIEW_DEFAULT_LEVEL);
+    } else {
+      const bounds = new kakao.LatLngBounds();
+      bounds.extend(new kakao.LatLng(winery.lat, winery.lng));
+      validStops.forEach((stop) => bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude)));
+      map.setBounds(
+        bounds,
+        PREVIEW_BOUNDS_PADDING.top,
+        PREVIEW_BOUNDS_PADDING.right,
+        PREVIEW_BOUNDS_PADDING.bottom,
+        PREVIEW_BOUNDS_PADDING.left
+      );
+    }
+
+    // 확대를 마친 뒤의 화면 기준으로 겹침을 판정해야 실제로 겹치는 이름표만 숨습니다.
+    const projection = map.getProjection();
+    const hiddenLabels = resolveHiddenPinLabels(
+      validStops.map((stop) => ({ key: stop.contentId, lat: stop.latitude, lng: stop.longitude })),
+      kakao,
+      projection,
+      { lat: winery.lat, lng: winery.lng }
+    );
+
+    const breweryOverlay = new kakao.CustomOverlay({
+      map,
+      position: new kakao.LatLng(winery.lat, winery.lng),
+      content: createPreviewBreweryPin(pinBreweryIcon),
+      yAnchor: 1,
+    });
+    pinOverlaysRef.current.push(breweryOverlay);
+
+    validStops.forEach((stop) => {
+      const key = CATEGORY_BY_STOP_TYPE[stop.type]!;
+      const overlay = new kakao.CustomOverlay({
+        map,
+        position: new kakao.LatLng(stop.latitude, stop.longitude),
+        content: createPreviewStopPin({
+          iconSrc: CATEGORY_META[key].icon,
+          color: CATEGORY_META[key].color,
+          label: stop.name,
+          showLabel: !hiddenLabels.has(stop.contentId),
+        }),
+        yAnchor: 1,
+      });
+      pinOverlaysRef.current.push(overlay);
+    });
+  }, [mapReady, winery?.lat, winery?.lng, course]);
+
   const stopsByCategory: Record<CategoryKey, RecommendedCourseStop[]> = {
     restaurants: [],
     attractions: [],
@@ -207,88 +376,7 @@ export default function CourseDetailPage() {
     );
   }
 
-  // 실제 위·경도 비율로 미리보기 박스 안 마커 위치를 계산합니다(양조장 좌표가 없으면 중앙에 고정).
-  const previewPoints: {
-    key: string;
-    lat: number;
-    lng: number;
-    icon: string;
-    color: string;
-    label?: string;
-    isBrewery: boolean;
-  }[] = [];
-  if (winery.lat != null && winery.lng != null) {
-    previewPoints.push({
-      key: "brewery",
-      lat: winery.lat,
-      lng: winery.lng,
-      icon: pinBreweryIcon,
-      color: BREWERY_COLOR,
-      isBrewery: true,
-    });
-  }
-  course?.stops.forEach((stop) => {
-    const key = CATEGORY_BY_STOP_TYPE[stop.type];
-    if (!key) return;
-    previewPoints.push({
-      key: stop.contentId,
-      lat: stop.latitude,
-      lng: stop.longitude,
-      icon: CATEGORY_META[key].icon,
-      color: CATEGORY_META[key].color,
-      label: stop.name,
-      isBrewery: false,
-    });
-  });
-
-  // 양조장 좌표를 박스 정중앙(50%, 50%)에 고정하고, 나머지 장소는 양조장 기준 상대
-  // 위치로 투영합니다. 실제 거리를 그대로 선형 축척하면 가까운 장소들이 중앙에 몰려
-  // 서로/양조장 핀과 겹쳐 보이므로, 제곱근 축척 + 최소 반지름으로 가까운 장소들을
-  // 바깥쪽으로 밀어내 겹침을 줄입니다.
-  const brewery = previewPoints.find((p) => p.isBrewery) ?? previewPoints[0];
-  const centerLat = brewery?.lat ?? 0;
-  const centerLng = brewery?.lng ?? 0;
-  const PAD = 12;
-  const MAX_RADIUS = 50 - PAD;
-  const MIN_RADIUS = 16;
-  const distances = previewPoints.map((p) => Math.hypot(p.lat - centerLat, p.lng - centerLng));
-  const maxDistance = Math.max(0, ...distances) || 1;
-  const baseAngles = previewPoints.map((p) => Math.atan2(p.lat - centerLat, p.lng - centerLng));
-
-  // 방향(각도)이 비슷한 장소끼리는 라벨이 겹치므로, 양조장이 아닌 장소들을 각도순으로
-  // 정렬한 뒤 인접한 항목 사이 각도가 너무 좁으면 서로 밀어내 최소 간격을 확보합니다.
-  const MIN_ANGLE_GAP = (20 * Math.PI) / 180;
-  const adjustedAngles = [...baseAngles];
-  const stopOrder = previewPoints
-    .map((_, index) => index)
-    .filter((index) => !previewPoints[index].isBrewery)
-    .sort((a, b) => baseAngles[a] - baseAngles[b]);
-  for (let pass = 0; pass < 6; pass++) {
-    for (let i = 1; i < stopOrder.length; i++) {
-      const prevIndex = stopOrder[i - 1];
-      const curIndex = stopOrder[i];
-      const gap = adjustedAngles[curIndex] - adjustedAngles[prevIndex];
-      if (gap < MIN_ANGLE_GAP) {
-        const shift = (MIN_ANGLE_GAP - gap) / 2;
-        adjustedAngles[prevIndex] -= shift;
-        adjustedAngles[curIndex] += shift;
-      }
-    }
-  }
-
-  const projected = previewPoints.map((p, index) => {
-    const distance = distances[index];
-    const angle = adjustedAngles[index];
-    const radius =
-      distance === 0
-        ? 0
-        : MIN_RADIUS + Math.sqrt(distance / maxDistance) * (MAX_RADIUS - MIN_RADIUS);
-    return {
-      ...p,
-      left: 50 + Math.cos(angle) * radius,
-      top: 50 - Math.sin(angle) * radius,
-    };
-  });
+  const hasWineryCoords = winery.lat != null && winery.lng != null;
 
   return (
     <PageContainer>
@@ -304,25 +392,12 @@ export default function CourseDetailPage() {
       />
 
       <MapPreview aria-hidden>
-        {projected.length === 0 ? (
+        {hasWineryCoords && !mapFailed ? (
+          <MapPreviewEl ref={mapElRef} />
+        ) : (
           <BreweryPin style={{ left: "50%", top: "50%" }}>
             <img src={pinBreweryIcon} alt="" width={32} height={32} />
           </BreweryPin>
-        ) : (
-          projected.map((point) =>
-            point.isBrewery ? (
-              <BreweryPin key={point.key} style={{ left: `${point.left}%`, top: `${point.top}%` }}>
-                <img src={point.icon} alt="" width={32} height={32} />
-              </BreweryPin>
-            ) : (
-              <StopPin key={point.key} style={{ left: `${point.left}%`, top: `${point.top}%` }}>
-                <StopPinDot $bg={point.color}>
-                  <StopPinIcon $src={point.icon} />
-                </StopPinDot>
-                <StopPinLabel>{point.label}</StopPinLabel>
-              </StopPin>
-            )
-          )
         )}
         <MapExpandButton
           type="button"
@@ -367,13 +442,19 @@ export default function CourseDetailPage() {
                   {section.items.map((item, index) => {
                     const distanceKm = formatDistanceKm(item.distanceMeters);
                     const badge = item.subcategoryName || item.categoryName;
-                    const note = item.pairingComment || item.recommendationReason;
+                    // 페어링 코멘트는 Figma대로 식당 섹션의 첫 번째 항목에만 보여줍니다.
+                    const note =
+                      section.key === "restaurants" && index === 0
+                        ? item.pairingComment || item.recommendationReason
+                        : undefined;
                     const metaParts = [
                       distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음",
                       badge || undefined,
                     ].filter((part): part is string => Boolean(part));
                     return (
-                      <StopRow key={item.contentId} $divider={index > 0}>
+                      <Fragment key={item.contentId}>
+                        {index > 0 && <StopDivider />}
+                        <StopRow>
                         {item.imageUrl ? (
                           <StopThumb src={item.imageUrl} alt="" />
                         ) : (
@@ -414,7 +495,8 @@ export default function CourseDetailPage() {
                         ) : (
                           <img src={chevronRightIcon} alt="" width={20} height={20} />
                         )}
-                      </StopRow>
+                        </StopRow>
+                      </Fragment>
                     );
                   })}
                 </StopList>
@@ -470,57 +552,19 @@ const MapPreview = styled.div`
   overflow: hidden;
 `;
 
+// 카카오맵 인스턴스가 들어갈 컨테이너입니다. 실제 핀은 useEffect에서 CustomOverlay로 그립니다.
+const MapPreviewEl = styled.div`
+  width: 100%;
+  height: 100%;
+`;
+
+// 좌표가 없거나 지도 로드에 실패했을 때만 쓰는 정적 대체 화면입니다.
 const BreweryPin = styled.span`
   position: absolute;
   display: flex;
   align-items: center;
   justify-content: center;
   transform: translate(-50%, -50%);
-`;
-
-const StopPin = styled.span`
-  position: absolute;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  transform: translate(-50%, -50%);
-`;
-
-const StopPinDot = styled.span<{ $bg: string }>`
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 1px solid #ffffff;
-  background-color: ${(props) => props.$bg};
-`;
-
-const StopPinIcon = styled.span<{ $src: string }>`
-  display: block;
-  width: 9.8px;
-  height: 9.8px;
-  background-color: #ffffff;
-  -webkit-mask-image: url("${(props) => props.$src}");
-  mask-image: url("${(props) => props.$src}");
-  -webkit-mask-repeat: no-repeat;
-  mask-repeat: no-repeat;
-  -webkit-mask-position: center;
-  mask-position: center;
-  -webkit-mask-size: contain;
-  mask-size: contain;
-`;
-
-const StopPinLabel = styled.span`
-  font-size: 11px;
-  line-height: 1;
-  color: ${colors.gray[900]};
-  white-space: nowrap;
-  -webkit-text-stroke: 3px #ffffff;
-  paint-order: stroke fill;
 `;
 
 const MapExpandButton = styled.button`
@@ -620,12 +664,18 @@ const StopList = styled.div`
   flex-direction: column;
 `;
 
-const StopRow = styled.div<{ $divider?: boolean }>`
+const StopRow = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border-top: ${(props) => (props.$divider ? `1px solid ${colors.divider}` : "none")};
+`;
+
+// Figma의 "Horizontal"(Inset)처럼 구분선 양옆에 16px 여백을 둡니다(카드 폭 그대로 걸치지 않음).
+const StopDivider = styled.div`
+  height: 1px;
+  margin: 0 16px;
+  background-color: ${colors.divider};
 `;
 
 const StopThumb = styled.img`

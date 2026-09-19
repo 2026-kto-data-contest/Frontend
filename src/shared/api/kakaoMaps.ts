@@ -37,11 +37,16 @@ export interface KakaoMapInstance {
   /** 지도를 픽셀 단위로 이동합니다(마우스 드래그와 동일한 효과). */
   panBy(dx: number, dy: number): void;
   getProjection(): KakaoProjection;
+  /** 코스 상세의 미리보기 지도처럼, 스크롤 중인 페이지 안에 들어가는 비인터랙티브 지도에 씁니다. */
+  setDraggable(draggable: boolean): void;
+  setZoomable(zoomable: boolean): void;
 }
 
 export interface KakaoProjection {
   /** 위경도를 지도 컨테이너 기준 화면 픽셀 좌표로 변환합니다(핀 겹침 판정에 사용). */
   pointFromCoords(latlng: KakaoLatLng): KakaoPoint;
+  /** 지도 컨테이너 기준 화면 픽셀 좌표를 위경도로 변환합니다(핀을 화면상 원하는 위치로 옮길 때 사용). */
+  coordsFromPoint(point: KakaoPoint): KakaoLatLng;
 }
 
 export interface KakaoMarkerInstance {
@@ -58,7 +63,13 @@ export interface KakaoMapsNamespace {
   LatLngBounds: new () => KakaoLatLngBounds;
   Map: new (
     container: HTMLElement,
-    options: { center: KakaoLatLng; level?: number }
+    options: {
+      center: KakaoLatLng;
+      level?: number;
+      draggable?: boolean;
+      scrollwheel?: boolean;
+      disableDoubleClickZoom?: boolean;
+    }
   ) => KakaoMapInstance;
   Marker: new (options: {
     map?: KakaoMapInstance;
