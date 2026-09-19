@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import styled from "styled-components";
 import { Link, useLocation } from "react-router-dom";
-import { useAuth } from "../lib/authContext";
 import { useScrollToTop } from "../lib/pageState";
 import homeIcon from "../../assets/icon/HomeIcon.svg";
 import mapIcon from "../../assets/icon/MapIcon.svg";
@@ -25,7 +24,6 @@ interface NavLinkProps {
 
 export const Navbar = () => {
   const location = useLocation();
-  const auth = useAuth();
   const { pathname } = location;
   const scrollHomeToTop = useScrollToTop("/");
 
@@ -55,11 +53,12 @@ export const Navbar = () => {
     {
       id: "mypage",
       label: "마이",
-      path: !auth.isLoggedIn
-        ? "/login?from=%2F"
-        : !auth.termsAgreed
-          ? "/terms"
-          : "/mypage",
+      // 로그인 여부를 여기서 미리 판단해 목적지를 바꾸면, 앱 진입 직후 auth.isLoading이
+      // 아직 끝나지 않은 짧은 순간(백엔드가 콜드 스타트 중일 때는 꽤 길어질 수 있음)에
+      // "마이"를 누르면 실제로는 로그인돼 있어도 auth.isLoggedIn 기본값(false) 때문에
+      // 로그인 화면으로 가버립니다. 항상 /mypage로 보내고, isLoading을 기다렸다가
+      // 정확히 판단하는 MyPage 자신의 가드(리다이렉트)에 맡깁니다.
+      path: "/mypage",
       isActive: pathname === "/mypage",
       icon: <NavIcon $src={myIcon} />,
     },
