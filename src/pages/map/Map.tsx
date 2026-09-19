@@ -34,7 +34,7 @@ import type {
   MapMenu,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
-import { resolveImageUrl } from "../../shared/api/api";
+import { resolveImageUrl, fetchTerms } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory } from "../../shared/lib/pageState";
 import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
@@ -764,26 +764,47 @@ export default function Map() {
   useEffect(() => {
     if (isCourseMode) return;
     let cancelled = false;
-    const nav = navigator as Navigator & {
-      permissions?: { query: (opts: { name: string }) => Promise<{ state: string }> };
+
+    const checkBrowserPermission = () => {
+      const nav = navigator as Navigator & {
+        permissions?: { query: (opts: { name: string }) => Promise<{ state: string }> };
+      };
+      if (nav.permissions?.query) {
+        nav.permissions
+          .query({ name: "geolocation" })
+          .then((status) => {
+            if (cancelled) return;
+            if (status.state === "granted") {
+              acquireLocation();
+            } else {
+              setShowLocationConsent(true);
+            }
+          })
+          .catch(() => {
+            if (!cancelled) setShowLocationConsent(true);
+          });
+      } else {
+        setShowLocationConsent(true);
+      }
     };
-    if (nav.permissions?.query) {
-      nav.permissions
-        .query({ name: "geolocation" })
-        .then((status) => {
-          if (cancelled) return;
-          if (status.state === "granted") {
-            acquireLocation();
-          } else {
-            setShowLocationConsent(true);
-          }
-        })
-        .catch(() => {
-          if (!cancelled) setShowLocationConsent(true);
-        });
-    } else {
-      setShowLocationConsent(true);
-    }
+
+    // 마이페이지(약관 동의)에서 위치 기반 서비스 이용약관에 이미 동의한 회원이면, 여기서
+    // 다시 앱 자체 안내 시트를 띄우지 않고 바로 위치를 가져옵니다(브라우저 자체 권한 팝업은
+    // 아직 허용 전이면 별도로 뜰 수 있고, 이건 앱이 막을 수 있는 대상이 아닙니다).
+    fetchTerms()
+      .then((items) => {
+        if (cancelled) return;
+        const locationAgreed = items.find((item) => item.code === "LOCATION")?.agreed;
+        if (locationAgreed) {
+          acquireLocation();
+        } else {
+          checkBrowserPermission();
+        }
+      })
+      .catch(() => {
+        if (!cancelled) checkBrowserPermission();
+      });
+
     return () => {
       cancelled = true;
     };
