@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { fetchMe, logoutApi } from "../api/api";
+import { fetchMe, logoutApi, redirectToKakaoLogout } from "../api/api";
 import type { Member } from "../api/api";
 import { invalidateTabCache } from "./pageState";
 
@@ -65,6 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // 보이지 않도록, 로그아웃 시점에 탭별 캐시를 전부 무효화합니다.
       invalidateTabCache();
     }
+    // 카카오 로그인 REST 앱 키가 준비되면, 우리 세션뿐 아니라 카카오 자체 로그인 세션도
+    // 끊어서 로그아웃 후 다른 계정으로 다시 로그인할 수 있게 합니다. 키가 아직 없으면
+    // false를 반환해 아무 것도 하지 않고, 호출한 쪽이 원래대로 직접 다음 화면으로 이동합니다.
+    redirectToKakaoLogout();
   }, []);
 
   const value = useMemo<AuthContextValue>(
