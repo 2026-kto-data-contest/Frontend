@@ -16,7 +16,6 @@ import bannerBeforeIcon from "../../assets/icon/BannerBefore.png";
 import kakaoLogoIcon from "../../assets/icon/KakaoLogo.svg";
 import outwardIcon from "../../assets/icon/Outward.svg";
 import chevronRightIcon from "../../assets/icon/ChevronRight.svg";
-import chevronRightMutedIcon from "../../assets/icon/ChevronRightMuted.svg";
 
 const FROM_MYPAGE = "%2Fmypage";
 const TOAST_DURATION_MS = 3000;
@@ -275,8 +274,8 @@ export default function MyPage() {
               로그아웃 <img src={chevronRightIcon} alt="" width={18} height={18} />
             </AccountRow>
             <RowDivider />
-            <AccountRow type="button" $muted onClick={() => navigate("/mypage/withdraw")}>
-              회원탈퇴 <img src={chevronRightMutedIcon} alt="" width={18} height={18} />
+            <AccountRow type="button" onClick={() => navigate("/mypage/withdraw")}>
+              회원탈퇴 <img src={chevronRightIcon} alt="" width={18} height={18} />
             </AccountRow>
           </RowGroup>
         </Section>
