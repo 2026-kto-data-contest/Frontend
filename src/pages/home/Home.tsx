@@ -24,6 +24,7 @@ import {
   TASTE_OPTIONS,
   useTasteDisplayLabel,
   isOnlyAnyFlavorLabel,
+  primaryConcreteTypeFromLabel,
 } from "../signin/onboarding/OnboardingTastePage";
 
 const ROTATE_INTERVAL_MS = 3000;
@@ -59,7 +60,10 @@ function buildPreferenceLine(
   if (isOnlyAnyFlavorLabel(tasteDisplayLabel)) {
     return `${regionLabel}의 전통주${PREFERENCE_SUFFIX}`;
   }
-  const primaryType = preferences.liquorTypes[0];
+  // 백엔드 저장값은 "어떤 맛이든 좋아요"를 고르면 무엇과 같이 골랐든 항상 같은 순서로
+  // 주종 다섯 개를 채우기 때문에, 실제로 같이 고른 주종(예: 탁주+추천받기 → 탁주)은
+  // 로컬 문구를 우선으로 봐야 정확합니다. 로컬에 없으면(다른 기기 등) 저장값을 씁니다.
+  const primaryType = primaryConcreteTypeFromLabel(tasteDisplayLabel) ?? preferences.liquorTypes[0];
   const tasteOption = TASTE_OPTIONS.find((option) => option.type === primaryType);
   const adjective = tasteOption?.tag ? `${tagToAdjective(tasteOption.tag)} ` : "";
   return `${regionLabel}의 ${adjective}${primaryType ?? "전통주"}${PREFERENCE_SUFFIX}`;
