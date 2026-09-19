@@ -1,5 +1,5 @@
 import styled from "styled-components";
-import bannerBeforeIcon from "../../assets/icon/BannerBefore.svg";
+import bannerBeforeIcon from "../../assets/icon/BannerBefore.png";
 import bannerAfterIcon from "../../assets/icon/BannerAfter.svg";
 
 export interface ExplorePromoBannerProps {

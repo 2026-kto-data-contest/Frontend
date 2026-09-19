@@ -12,7 +12,7 @@ import {
 } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { STRENGTH_OPTIONS, ALCOHOL_LEVEL_TO_ID } from "../signin/onboarding/OnboardingStrengthPage";
-import bannerBeforeIcon from "../../assets/icon/BannerBefore.svg";
+import bannerBeforeIcon from "../../assets/icon/BannerBefore.png";
 import kakaoLogoIcon from "../../assets/icon/KakaoLogo.svg";
 import outwardIcon from "../../assets/icon/Outward.svg";
 import chevronRightIcon from "../../assets/icon/ChevronRight.svg";

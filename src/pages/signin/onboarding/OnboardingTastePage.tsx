@@ -8,7 +8,6 @@ import { OptionRow } from "./OptionRow";
 import { finishOnboarding, saveOnboardingPreferenceField } from "./finishOnboarding";
 import { fetchOnboardingPreferences } from "../../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../../shared/api/api";
-import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import sweetIcon from "../../../assets/icon/Sweet.svg";
 import nuttyIcon from "../../../assets/icon/Nutty.svg";
 import cleanIcon from "../../../assets/icon/Clean.svg";
@@ -39,6 +38,23 @@ const ICONS: Record<string, string> = {
   any: whateverIcon,
 };
 
+const ANY_OPTION = TASTE_OPTIONS.find((option) => option.id === "any")!;
+
+/**
+ * 선택한 취향 옵션 id들을 저장·표시용 문자열 목록으로 바꿉니다. 구체적인 주종을
+ * 고르면 그 주종명을, "어떤 맛이든 좋아요"를 고르면 그 항목의 문구("추천받기")를
+ * 그대로 넣어서 마이페이지 등에서 고른 것을 그대로 나열해 보여줄 수 있게 합니다.
+ */
+export function deriveLiquorTypes(selectedIds: string[]): string[] {
+  return Array.from(
+    new Set(
+      TASTE_OPTIONS.filter((option) => selectedIds.includes(option.id)).map(
+        (option) => option.type || ANY_OPTION.sub
+      )
+    )
+  );
+}
+
 export default function OnboardingTastePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -60,11 +76,10 @@ export default function OnboardingTastePage() {
       .then((preferences) => {
         if (cancelled) return;
         setOtherPreferences(preferences);
-        const concreteOptions = TASTE_OPTIONS.filter((option) => option.type);
-        const matchedIds = concreteOptions
-          .filter((option) => preferences.liquorTypes.includes(option.type))
-          .map((option) => option.id);
-        setSelected(matchedIds.length === concreteOptions.length ? ["any"] : matchedIds);
+        const matchedIds = TASTE_OPTIONS.filter((option) =>
+          preferences.liquorTypes.includes(option.type || ANY_OPTION.sub)
+        ).map((option) => option.id);
+        setSelected(matchedIds);
       })
       .catch((error) => console.error("취향 정보 조회 실패", error));
     return () => {
@@ -92,15 +107,8 @@ export default function OnboardingTastePage() {
     if (isSaving) return;
     setIsSaving(true);
     setSaveError(null);
-    const liquorTypes = Array.from(
-      new Set(
-        TASTE_OPTIONS.filter((option) => selected.includes(option.id) && option.type).map(
-          (option) => option.type
-        )
-      )
-    );
     const result = await saveOnboardingPreferenceField(navigate, from, {
-      liquorTypes: liquorTypes.length > 0 ? liquorTypes : [...ALL_TYPE_FILTERS],
+      liquorTypes: deriveLiquorTypes(selected),
       regions: otherPreferences?.regions ?? [],
       alcoholLevel: otherPreferences?.alcoholLevel ?? "MEDIUM",
     });
