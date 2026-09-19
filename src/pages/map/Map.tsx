@@ -6,6 +6,7 @@ import { colors } from "../../shared/styles/colors";
 import { AppBar } from "../../shared/components/AppBar";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { DotsLoader } from "../../shared/components/DotsLoader";
+import { Skeleton } from "../../shared/components/Skeleton";
 import { Badge } from "../../shared/components/Badge";
 import { PhotoCard } from "../../shared/components/PhotoCard";
 import { WINERIES, getRepresentativeTypeLabel, getWineryVisitLabel } from "../../shared/lib/mockWineries";
@@ -31,12 +32,13 @@ import type {
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
 import { resolveImageUrl } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
+import { usePageMemory } from "../../shared/lib/pageState";
+import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
   KakaoMapsNamespace,
   KakaoMapInstance,
   KakaoCustomOverlayInstance,
-  KakaoProjection,
 } from "../../shared/api/kakaoMaps";
 import callIcon from "../../assets/icon/MapArticle.svg";
 import outwardIcon from "../../assets/icon/MapArrowOutward.svg";
@@ -51,6 +53,7 @@ import restaurantIcon from "../../assets/icon/MapCategoryRestaurant.svg";
 import awardIcon from "../../assets/icon/Award.svg";
 import searchIcon from "../../assets/icon/MapSearch.svg";
 import targetIcon from "../../assets/icon/MapTarget.svg";
+import mapViewIcon from "../../assets/icon/MapViewIcon.svg";
 import placeCardFallbackBrewery from "../../assets/icon/MapPlaceCardFallback.svg";
 import placeCardFallbackRestaurant from "../../assets/icon/CourseFallbackRestaurant.svg";
 import placeCardFallbackAttraction from "../../assets/icon/CourseFallbackAttraction.svg";
@@ -180,17 +183,20 @@ function stopToInfo(stop: RecommendedCourseStop): SimplePlaceInfo {
     mapUrl:
       stop.placeUrl ||
       `https://map.kakao.com/link/map/${encodeURIComponent(stop.name)},${stop.latitude},${stop.longitude}`,
-    note: stop.pairingComment || stop.recommendationReason || undefined,
+    // 지도에서 핀 눌러 뜨는 간단 카드에는 페어링 코멘트·추천 이유("함께 둘러보기 좋은 추천
+    // 명소" 등)를 보여주지 않습니다. 코스 상세 페이지(CourseDetailPage)에서만 보여줍니다.
   };
 }
 
-// 바텀시트는 리스트·상세 모드 구분 없이 딱 세 가지 높이만 가집니다:
-// collapsed(핸들+카테고리 칩 줄까지만), mid(320px), full(검색바까지 가리는 최대 높이).
+// 바텀시트 높이는 리스트/상세 모드가 공유하는 mid(320px)·full(검색바까지 가리는 최대 높이)와,
+// 모드별로 다른 collapsed 높이를 가집니다: 리스트는 핸들+카테고리 칩 줄까지만(96px),
+// 상세는 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
 function getSnapPoints(areaHeight: number) {
   const safeHeight = areaHeight || 600;
-  const full = Math.max(260, safeHeight - 72);
+  const full = Math.max(260, safeHeight - 8);
   return {
     collapsed: Math.min(96, full),
+    detailCollapsed: Math.min(130, full),
     mid: Math.min(DETAIL_SHEET_HEIGHT, full),
     full,
   };
@@ -264,60 +270,6 @@ function createUserDotElement(): HTMLDivElement {
   return dot;
 }
 
-const PIN_OVERLAP_THRESHOLD_PX = 32;
-
-// 화면 픽셀 기준으로 겹치는 핀들을 한 묶음으로 모은 뒤, 묶음마다 기준점(유저 현재 위치,
-// 없으면 양조장)과 가장 가까운 핀 하나만 이름표를 보이도록 나머지 핀들의 key를 돌려줍니다.
-function resolveHiddenPinLabels(
-  pins: { key: string; lat: number; lng: number }[],
-  kakao: KakaoMapsNamespace,
-  projection: KakaoProjection,
-  reference: { lat: number; lng: number } | null
-): Set<string> {
-  const points = pins.map((pin) => ({
-    ...pin,
-    screen: projection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng)),
-  }));
-
-  const assigned = new Set<string>();
-  const clusters: (typeof points)[] = [];
-  points.forEach((pin) => {
-    if (assigned.has(pin.key)) return;
-    const cluster = [pin];
-    assigned.add(pin.key);
-    points.forEach((other) => {
-      if (assigned.has(other.key)) return;
-      const distancePx = Math.hypot(pin.screen.x - other.screen.x, pin.screen.y - other.screen.y);
-      if (distancePx <= PIN_OVERLAP_THRESHOLD_PX) {
-        cluster.push(other);
-        assigned.add(other.key);
-      }
-    });
-    clusters.push(cluster);
-  });
-
-  const hidden = new Set<string>();
-  clusters.forEach((cluster) => {
-    if (cluster.length <= 1) return;
-    let winner = cluster[0];
-    if (reference) {
-      let bestDistance = Infinity;
-      cluster.forEach((pin) => {
-        const distance = (pin.lat - reference.lat) ** 2 + (pin.lng - reference.lng) ** 2;
-        if (distance < bestDistance) {
-          bestDistance = distance;
-          winner = pin;
-        }
-      });
-    }
-    cluster.forEach((pin) => {
-      if (pin.key !== winner.key) hidden.add(pin.key);
-    });
-  });
-
-  return hidden;
-}
-
 export default function Map() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -335,6 +287,10 @@ export default function Map() {
   const navStateWinery =
     navState?.winery && navState.winery.id === focusId ? navState.winery : undefined;
   const searchBreweryIds = navState?.searchBreweryIds;
+  // 양조장 상세를 보다가(코스 모드 아님) 다른 화면(양조장 상세 페이지 등)으로 넘어갔다 뒤로
+  // 왔을 때, 새로고침한 것처럼 처음부터 다시 보이지 않도록 지도 중심·시트 상태를 기억해뒀다가
+  // 복원합니다. 코스 모드는 매번 focusId 기준으로 새로 시작해야 하므로 이 복원 대상에서 뺍니다.
+  const { get: getMemory, set: setMemory } = usePageMemory();
 
   const areaRef = useRef<HTMLDivElement>(null);
   const mapElRef = useRef<HTMLDivElement>(null);
@@ -347,6 +303,7 @@ export default function Map() {
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetInitialized = useRef(false);
+  const restoredFocusRef = useRef(false);
   const activeCategoryRef = useRef<CategoryKey>("brewery");
   const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   const refetchPlacesRef = useRef<(category: CategoryKey) => void>(() => {});
@@ -360,10 +317,18 @@ export default function Map() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [areaHeight, setAreaHeight] = useState(0);
 
-  const [activeCategory, setActiveCategory] = useState<CategoryKey>("brewery");
-  const [sheetMode, setSheetMode] = useState<SheetMode>(isCourseMode ? "detail" : "list");
-  const [detailKind, setDetailKind] = useState<DetailKind>("winery");
-  const [selectedId, setSelectedId] = useState<string | null>(focusId);
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>(() =>
+    isCourseMode ? "brewery" : (getMemory<CategoryKey>("map:activeCategory") ?? "brewery")
+  );
+  const [sheetMode, setSheetMode] = useState<SheetMode>(() =>
+    isCourseMode ? "detail" : (getMemory<SheetMode>("map:sheetMode") ?? "list")
+  );
+  const [detailKind, setDetailKind] = useState<DetailKind>(() =>
+    isCourseMode ? "winery" : (getMemory<DetailKind>("map:detailKind") ?? "winery")
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(() =>
+    isCourseMode ? focusId : (getMemory<string | null>("map:selectedId") ?? null)
+  );
   const [focusWinery, setFocusWinery] = useState<Winery | undefined>(
     mockFocusWinery ?? navStateWinery
   );
@@ -391,6 +356,12 @@ export default function Map() {
   const [awardedLiquors, setAwardedLiquors] = useState<MapAwardedLiquor[]>([]);
   const [mapMenus, setMapMenus] = useState<MapMenu[]>([]);
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
+  // 칩을 하나라도 눌러야 그 카테고리의 실제 목록으로 바뀝니다. 누르기 전(진입 초기 포함)에는
+  // 백그라운드에서 이미 양조장 결과가 도착했더라도 Figma의 "Default BottomSheet"(추천 콘텐츠)를
+  // 계속 보여줍니다.
+  const [categorySelected, setCategorySelected] = useState(() =>
+    isCourseMode ? false : (getMemory<boolean>("map:categorySelected") ?? false)
+  );
 
   const [toast, setToast] = useState<string | null>(null);
 
@@ -590,18 +561,48 @@ export default function Map() {
         if (cancelled || !mapElRef.current) return;
         kakaoRef.current = kakao;
         const initialFocusWinery = mockFocusWinery ?? navStateWinery;
+        // 양조장 상세를 보다가(코스 모드 아님) 다른 화면으로 넘어갔다 뒤로 왔으면, 떠나기 직전
+        // 지도 중심·줌으로 그대로 복원합니다(처음 보는 진입이면 저장된 값이 없습니다).
+        const savedCenter = !isCourseMode
+          ? getMemory<{ lat: number; lng: number }>("map:center")
+          : undefined;
+        const savedLevel = !isCourseMode ? getMemory<number>("map:level") : undefined;
+        // 위치 권한이 이미 허용돼 있으면, 카카오맵 SDK 로딩(비동기)이 끝나기 전에
+        // 위치 동의 확인 효과가 먼저 끝나 userPositionRef가 채워져 있을 수 있습니다.
+        // 이 경우 기본 클러스터 중심 대신 바로 현재 위치를 초기 중심으로 씁니다.
         const initialCenter =
           isCourseMode && initialFocusWinery?.lat && initialFocusWinery?.lng
             ? { lat: initialFocusWinery.lat, lng: initialFocusWinery.lng }
-            : DEFAULT_CLUSTER_CENTER;
+            : (savedCenter ?? userPositionRef.current ?? DEFAULT_CLUSTER_CENTER);
         const map = new kakao.Map(mapElRef.current, {
           center: new kakao.LatLng(initialCenter.lat, initialCenter.lng),
-          level: isCourseMode ? FOCUS_LEVEL : DEFAULT_LEVEL,
+          level: isCourseMode
+            ? FOCUS_LEVEL
+            : (savedLevel ?? (userPositionRef.current ? USER_LOCATION_LEVEL : DEFAULT_LEVEL)),
         });
         mapInstanceRef.current = map;
+        // 코스 모드는 양조장 상세 시트(mid, DETAIL_SHEET_HEIGHT)가 처음부터 하단을 덮으므로,
+        // focusMapOn과 동일하게 양조장 핀이 "시트를 제외한 지도 영역"의 가운데 오도록 지도
+        // 중심을 살짝 아래로 옮깁니다. 그렇지 않으면 핀이 화면 위쪽으로 치우쳐 보입니다.
+        if (isCourseMode && initialFocusWinery?.lat && initialFocusWinery?.lng) {
+          const projection = map.getProjection();
+          const pinPoint = projection.pointFromCoords(
+            new kakao.LatLng(initialFocusWinery.lat, initialFocusWinery.lng)
+          );
+          const shiftedPoint = new kakao.Point(
+            pinPoint.x,
+            pinPoint.y + DETAIL_SHEET_HEIGHT / 3
+          );
+          map.setCenter(projection.coordsFromPoint(shiftedPoint));
+        }
         kakao.event.addListener(map, "idle", () => {
           if (!isCourseMode && !isSearchResultModeRef.current) {
             refetchPlacesRef.current(activeCategoryRef.current);
+          }
+          if (!isCourseMode) {
+            const center = map.getCenter();
+            setMemory("map:center", { lat: center.getLat(), lng: center.getLng() });
+            setMemory("map:level", map.getLevel());
           }
         });
         setLoadState("ready");
@@ -668,30 +669,24 @@ export default function Map() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCourseMode, focusId]);
 
-  // 양조장 정보·코스 정거장이 (비동기로) 준비되면, 양조장과 코스 장소가 모두 한 화면에
-  // 들어오도록 지도 범위를 다시 맞춰줍니다. 정거장이 아직 없으면 양조장 중심으로만 맞춥니다.
+  // 양조장 정보가 (비동기로) 준비되면 그 위치로 지도를 맞춥니다. 정거장이 여러 곳이어도
+  // 전체를 화면에 맞추려고 bounds로 fit하지 않고, 항상 양조장 핀이 가운데 오도록 고정합니다.
   useEffect(() => {
     if (!isCourseMode || loadState !== "ready" || !focusWinery?.lat || !focusWinery?.lng) return;
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
     if (!kakao || !map) return;
 
-    const validStops = courseStops.filter(
-      (stop) => Number.isFinite(stop.latitude) && Number.isFinite(stop.longitude)
-    );
-
-    if (validStops.length === 0) {
-      map.setCenter(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
-      map.setLevel(FOCUS_LEVEL);
-      return;
-    }
-
-    const bounds = new kakao.LatLngBounds();
-    bounds.extend(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
-    validStops.forEach((stop) => bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude)));
-    // 하단 시트가 지도 아래쪽 절반 가까이 덮으므로, 핀이 시트 뒤에 가려지지 않게 아래쪽 여백을 넉넉히 둡니다.
-    map.setBounds(bounds, 80, 40, 260, 40);
-  }, [isCourseMode, loadState, focusWinery, courseStops]);
+    const wineryLatLng = new kakao.LatLng(focusWinery.lat, focusWinery.lng);
+    map.setCenter(wineryLatLng);
+    map.setLevel(FOCUS_LEVEL);
+    // 시트(mid, DETAIL_SHEET_HEIGHT)가 덮는 만큼 양조장 핀이 화면 가운데(시트 제외 영역
+    // 기준)에 오도록 중심을 살짝 아래로 옮깁니다.
+    const projection = map.getProjection();
+    const pinPoint = projection.pointFromCoords(wineryLatLng);
+    const shiftedPoint = new kakao.Point(pinPoint.x, pinPoint.y + DETAIL_SHEET_HEIGHT / 3);
+    map.setCenter(projection.coordsFromPoint(shiftedPoint));
+  }, [isCourseMode, loadState, focusWinery]);
 
   // 바텀시트 높이 계산의 기준이 되는 지도 영역 실측 높이를 추적합니다.
   useEffect(() => {
@@ -708,9 +703,61 @@ export default function Map() {
     if (sheetInitialized.current || areaHeight === 0) return;
     sheetInitialized.current = true;
     const points = getSnapPoints(areaHeight);
-    setSheetHeight(isCourseMode ? points.mid : points.collapsed);
+    if (isCourseMode) {
+      setSheetHeight(points.mid);
+      return;
+    }
+    // 상세(양조장) 화면은 끝까지 올리면 곧장 양조장 상세 페이지로 이동해버려서, 복원된
+    // sheetMode가 "detail"이면 저장된 높이가 사실상 항상 그 이동 직전(full 근처) 값입니다.
+    // 그대로 복원하면 매번 풀시트로 보이므로, 상세 복원은 하프시트(mid) 고정으로 시작합니다.
+    if (sheetMode === "detail") {
+      setSheetHeight(points.mid);
+      return;
+    }
+    const savedHeight = getMemory<number>("map:sheetHeight");
+    setSheetHeight(savedHeight != null ? Math.min(savedHeight, points.full) : points.collapsed);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [areaHeight]);
+
+  // 지금 보고 있는 목록/상세 상태를 계속 기억해둡니다(코스 모드는 제외) — 다른 화면에 갔다
+  // 돌아와도 이 상태로 복원됩니다.
+  useEffect(() => {
+    if (isCourseMode) return;
+    setMemory("map:sheetMode", sheetMode);
+    setMemory("map:selectedId", selectedId);
+    setMemory("map:detailKind", detailKind);
+    setMemory("map:activeCategory", activeCategory);
+    setMemory("map:categorySelected", categorySelected);
+    if (sheetHeight > 0) setMemory("map:sheetHeight", sheetHeight);
+  }, [
+    isCourseMode,
+    sheetMode,
+    selectedId,
+    detailKind,
+    activeCategory,
+    categorySelected,
+    sheetHeight,
+    setMemory,
+  ]);
+
+  // 양조장 상세가 복원됐는데(다른 화면에서 뒤로 옴) 실제 데이터가 아직 없으면 다시 불러옵니다.
+  useEffect(() => {
+    if (isCourseMode || sheetMode !== "detail" || detailKind !== "winery" || !selectedId) return;
+    if (findWineryById(selectedId)) return;
+    ensureWineryLoaded(selectedId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCourseMode, sheetMode, detailKind, selectedId]);
+
+  // 하프시트로 복원한 양조장이, 지도에서도 그 핀 위치로 다시 포커스되게 합니다(하프시트만
+  // 복원되고 지도는 떠나기 직전 위치 그대로면 핀이 화면 밖일 수 있습니다). 한 번만 실행합니다.
+  useEffect(() => {
+    if (isCourseMode || restoredFocusRef.current) return;
+    if (loadState !== "ready" || sheetMode !== "detail" || detailKind !== "winery") return;
+    if (!selectedWinery?.lat || !selectedWinery?.lng) return;
+    restoredFocusRef.current = true;
+    focusMapOn(selectedWinery.lat, selectedWinery.lng, DETAIL_SHEET_HEIGHT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCourseMode, loadState, sheetMode, detailKind, selectedWinery]);
 
   // 위치 동의 상태를 최초 진입 시 한 번 확인합니다(코스 모드에서는 생략).
   useEffect(() => {
@@ -921,12 +968,14 @@ export default function Map() {
       userPosition ?? (focusWinery?.lat && focusWinery?.lng
         ? { lat: focusWinery.lat, lng: focusWinery.lng }
         : null);
-    const hiddenLabels = resolveHiddenPinLabels(
-      validStops.map((stop) => ({ key: stop.contentId, lat: stop.latitude, lng: stop.longitude })),
-      kakao,
-      projection,
-      reference
-    );
+    const stopPins = validStops.map((stop) => ({
+      key: stop.contentId,
+      lat: stop.latitude,
+      lng: stop.longitude,
+    }));
+    const hiddenLabels = resolveHiddenPinLabels(stopPins, kakao, projection, reference);
+    // 아이콘 자체가 서로 겹쳐 가려지지 않도록, 겹친 핀들은 원래 위치 주위로 살짝 흩어 그립니다.
+    const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
     const orderedStops = [...validStops].sort(
       (a, b) => Number(hiddenLabels.has(b.contentId)) - Number(hiddenLabels.has(a.contentId))
     );
@@ -934,6 +983,10 @@ export default function Map() {
     orderedStops.forEach((stop) => {
       const category = STOP_TYPE_TO_CATEGORY[stop.type];
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
+      const position = overlapOffsets[stop.contentId] ?? {
+        lat: stop.latitude,
+        lng: stop.longitude,
+      };
       const el = createPinElement({
         emoji: CATEGORY_META[category].icon,
         iconSrc: CATEGORY_PIN_ICON[category],
@@ -946,7 +999,7 @@ export default function Map() {
       el.addEventListener("click", () => handleSelectStop(stop));
       const overlay = new kakao.CustomOverlay({
         map,
-        position: new kakao.LatLng(stop.latitude, stop.longitude),
+        position: new kakao.LatLng(position.lat, position.lng),
         content: el,
         yAnchor: 1,
         clickable: true,
@@ -1028,11 +1081,8 @@ export default function Map() {
 
   const handleLocationButtonClick = () => {
     if (isCourseMode) {
-      const kakao = kakaoRef.current;
-      const map = mapInstanceRef.current;
-      if (kakao && map && focusWinery?.lat && focusWinery?.lng) {
-        map.setCenter(new kakao.LatLng(focusWinery.lat, focusWinery.lng));
-        map.setLevel(FOCUS_LEVEL);
+      if (focusWinery?.lat && focusWinery?.lng) {
+        focusMapOn(focusWinery.lat, focusWinery.lng, DETAIL_SHEET_HEIGHT);
       }
       return;
     }
@@ -1053,15 +1103,22 @@ export default function Map() {
     if (map) map.setLevel(map.getLevel() + 1);
   };
 
-  // 바텀시트가 지도 아래쪽을 덮는 만큼, 핀이 "시트를 제외한 나머지 지도 영역"의 가운데 오도록
-  // 시트 높이의 절반만큼 지도를 아래로 더 이동시켜(panBy) 핀이 화면상 더 위쪽에 보이게 합니다.
+  // 바텀시트가 지도 아래쪽을 덮는 만큼, 핀이 "시트를 제외한 나머지 지도 영역"에서 살짝 위쪽에
+  // 오도록 지도 중심을 핀보다 아래인 지점으로 옮깁니다(그래야 상대적으로 핀이 화면상 위로 올라와
+  // 보입니다). panBy는 드래그와 동일하게 동작해 줌 레벨 전환 애니메이션 중에는 픽셀↔좌표 환산이
+  // 어긋날 수 있어서, 대신 프로젝션으로 정확한 목표 좌표를 계산합니다.
   function focusMapOn(lat: number, lng: number, coveredBottom = 0) {
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
-    if (kakao && map) {
-      map.setCenter(new kakao.LatLng(lat, lng));
-      map.setLevel(FOCUS_LEVEL);
-      if (coveredBottom > 0) map.panBy(0, coveredBottom / 2);
+    if (!kakao || !map) return;
+    const pinLatLng = new kakao.LatLng(lat, lng);
+    map.setCenter(pinLatLng);
+    map.setLevel(FOCUS_LEVEL);
+    if (coveredBottom > 0) {
+      const projection = map.getProjection();
+      const pinPoint = projection.pointFromCoords(pinLatLng);
+      const shiftedPoint = new kakao.Point(pinPoint.x, pinPoint.y + coveredBottom / 3);
+      map.setCenter(projection.coordsFromPoint(shiftedPoint));
     }
   }
 
@@ -1122,10 +1179,11 @@ export default function Map() {
   const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
     const points = getSnapPoints(areaHeight);
+    const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
     const delta = dragRef.current.startY - e.clientY;
     const next = Math.min(
       points.full,
-      Math.max(points.collapsed - 40, dragRef.current.startHeight + delta)
+      Math.max(minHeight - 40, dragRef.current.startHeight + delta)
     );
     setSheetHeight(next);
   };
@@ -1135,7 +1193,8 @@ export default function Map() {
     dragRef.current = null;
     setIsDragging(false);
     const points = getSnapPoints(areaHeight);
-    const candidates = [points.collapsed, points.mid, points.full];
+    const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
+    const candidates = [minHeight, points.mid, points.full];
     const snapped = candidates.reduce((a, b) =>
       Math.abs(b - sheetHeight) < Math.abs(a - sheetHeight) ? b : a
     );
@@ -1170,6 +1229,9 @@ export default function Map() {
   };
 
   const consentActive = !isCourseMode && showLocationConsent;
+  // 칩도 메뉴 칩도 아직 안 눌렀고, 검색 결과에서 넘어온 것도 아닐 때만 Figma의
+  // "Default BottomSheet"(추천 콘텐츠)를 보여줍니다.
+  const showRecommendedDefault = !categorySelected && !selectedMenu && !isSearchResultMode;
   const floatingInfo =
     detailKind === "place" && selectedPlace
       ? placeToInfo(selectedPlace)
@@ -1200,7 +1262,7 @@ export default function Map() {
     !consentActive && !floatingInfo && sheetHeight >= getSnapPoints(areaHeight).full - 2;
   // 바텀시트를 접힌 스냅 지점까지 끌어내리면, Figma의 "Brewery Card Collapsed" 상태처럼
   // 이름·버튼만 남기고 종류/주소/사진 등 부가 정보는 숨깁니다.
-  const isDetailCollapsed = sheetHeight <= getSnapPoints(areaHeight).collapsed + 20;
+  const isDetailCollapsed = sheetHeight <= getSnapPoints(areaHeight).detailCollapsed + 20;
 
   return (
     <PageContainer>
@@ -1208,6 +1270,7 @@ export default function Map() {
         <AppBar
           onBack={() => navigate(-1)}
           title={focusWinery ? `${focusWinery.name} 코스` : "코스"}
+          align="left"
           trailing={
             focusWinery && (
               <ShareButton
@@ -1244,7 +1307,7 @@ export default function Map() {
           </StatusOverlay>
         )}
 
-        {loadState === "ready" && !consentActive && (
+        {loadState === "ready" && !consentActive && !isSheetFullyExpanded && (
           <MapControls style={{ bottom: activeSheetHeight + 12 }}>
             <ZoomControl>
               <ZoomButton type="button" aria-label="확대" onClick={handleZoomIn}>
@@ -1308,7 +1371,7 @@ export default function Map() {
                   <ChipRow>
                     {CATEGORY_ORDER.map((key) => {
                       const pinIcon = CATEGORY_PIN_ICON[key];
-                      const active = activeCategory === key;
+                      const active = categorySelected && activeCategory === key;
                       return (
                         <CategoryChip
                           key={key}
@@ -1318,6 +1381,7 @@ export default function Map() {
                             const wasMenuMode = selectedMenu != null;
                             setSelectedMenu(null);
                             setActiveCategory(key);
+                            setCategorySelected(true);
                             if (wasMenuMode) refetchPlacesByRadius(key);
                           }}
                         >
@@ -1336,13 +1400,17 @@ export default function Map() {
                     })}
                   </ChipRow>
 
-                  {activeCategory === "brewery" &&
-                  places.length === 0 &&
-                  recommendedBreweries.length > 0 ? (
-                    // Figma의 "Default BottomSheet"처럼, 추천 양조장 그리드 사이사이에 수상
-                    // 전통주·추천 메뉴 섹션을 끼워 보여줍니다. 실제 조회 결과가 아직 없어도
-                    // (진입 초기 포함) 이 추천 콘텐츠는 로딩 여부와 상관없이 바로 보여줍니다.
-                    <>
+                  {showRecommendedDefault ? (
+                    recommendedBreweries.length === 0 ? (
+                      // 추천 콘텐츠가 아직 도착하기 전에는 점 3개 로더 대신, 아래에 채워질
+                      // 카드들과 같은 모양의 스켈레톤을 보여줍니다.
+                      <DefaultBottomSheetSkeleton />
+                    ) : (
+                      // Figma의 "Default BottomSheet"처럼, 칩을 하나도 안 눌렀을 때는 추천 양조장
+                      // 그리드 사이사이에 수상 전통주·추천 메뉴 섹션을 끼워 보여줍니다. 백그라운드에서
+                      // 이미 실제 양조장 결과(places)가 도착했어도, 칩을 누르기 전까지는 이 추천
+                      // 콘텐츠를 계속 보여줍니다.
+                      <>
                       <RecommendedSection>
                         <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
                         <RecommendedGrid>
@@ -1438,6 +1506,7 @@ export default function Map() {
                         </RecommendedSection>
                       )}
                     </>
+                    )
                   ) : (
                     <>
                       {placesLoadState === "loading" && (
@@ -1464,7 +1533,7 @@ export default function Map() {
                         ))}
                     </>
                   )}
-                  {placesLoadState === "ready" && places.length > 0 && (
+                  {!showRecommendedDefault && placesLoadState === "ready" && places.length > 0 && (
                     <PlaceList>
                       {places.map((place) => {
                         const isBrewery = place.category === "BREWERY";
@@ -1565,6 +1634,18 @@ export default function Map() {
             />
           </FloatingCard>
         )}
+
+        {/* 시트를 끝까지 올리면 지도가 안 보이므로, Figma의 "Map - Basic Sheet Expanded"처럼
+            시트를 다시 접는 지름길 버튼을 띄웁니다. */}
+        {isSheetFullyExpanded && (
+          <MapViewButton
+            type="button"
+            onClick={() => setSheetHeight(getSnapPoints(areaHeight).collapsed)}
+          >
+            <img src={mapViewIcon} alt="" width={16} height={16} />
+            지도보기
+          </MapViewButton>
+        )}
       </MapArea>
 
       <Snackbar message={toast} />
@@ -1590,6 +1671,72 @@ function RecommendedBreweryCard({
       photoUrl={resolveImageUrl(item.mainImage?.url)}
       onClick={() => onNavigate(`/winery/${item.breweryId}`)}
     />
+  );
+}
+
+// 추천 콘텐츠(추천 양조장·수상 전통주·추천 메뉴)가 아직 도착하기 전, 그 콘텐츠가 채워질
+// 자리에 똑같은 모양의 스켈레톤을 보여줍니다. 실제 콘텐츠가 도착하면 레이아웃이 튀지 않도록
+// 각 카드 크기를 PhotoCard(fluid)·AwardCard·MenuChip과 맞췄습니다.
+function DefaultBottomSheetSkeleton() {
+  return (
+    <>
+      <RecommendedSection>
+        <SkeletonTitle $width="180px" $height="20px" />
+        <RecommendedGrid>
+          {Array.from({ length: 4 }, (_, i) => (
+            <BrewerySkeletonCard key={i} />
+          ))}
+        </RecommendedGrid>
+      </RecommendedSection>
+
+      <AwardSection>
+        <SkeletonTitle $width="140px" $height="20px" />
+        <AwardRow>
+          {Array.from({ length: 3 }, (_, i) => (
+            <LiquorSkeletonCard key={i} />
+          ))}
+        </AwardRow>
+      </AwardSection>
+
+      <RecommendedSection>
+        <RecommendedGrid>
+          {Array.from({ length: 2 }, (_, i) => (
+            <BrewerySkeletonCard key={i} />
+          ))}
+        </RecommendedGrid>
+      </RecommendedSection>
+
+      <RecommendedSection>
+        <SkeletonTitle $width="160px" $height="20px" />
+        <MenuChipRow>
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} $width="64px" $height="37px" $radius="9999px" />
+          ))}
+        </MenuChipRow>
+      </RecommendedSection>
+    </>
+  );
+}
+
+function BrewerySkeletonCard() {
+  return (
+    <SkeletonCard>
+      <Skeleton $height="120px" $radius="8px" />
+      <SkeletonCardBody>
+        <Skeleton $width="70%" $height="16px" />
+        <Skeleton $width="50%" $height="12px" />
+      </SkeletonCardBody>
+    </SkeletonCard>
+  );
+}
+
+function LiquorSkeletonCard() {
+  return (
+    <SkeletonAwardCard>
+      <Skeleton $width="150px" $height="200px" $radius="8px" />
+      <Skeleton $width="120px" $height="16px" />
+      <Skeleton $width="90px" $height="13px" />
+    </SkeletonAwardCard>
   );
 }
 
@@ -1801,6 +1948,25 @@ const SearchBarButton = styled.button`
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
   cursor: pointer;
   text-align: left;
+`;
+
+const MapViewButton = styled.button`
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 9999px;
+  background-color: #2a2a28;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+  cursor: pointer;
 `;
 
 const SearchPlaceholder = styled.span`
@@ -2114,6 +2280,29 @@ const RecommendedTitle = styled.h2`
   font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
+`;
+
+const SkeletonTitle = styled(Skeleton)`
+  margin: 0 0 12px;
+`;
+
+const SkeletonCard = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+`;
+
+const SkeletonCardBody = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+`;
+
+const SkeletonAwardCard = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 `;
 
 const RecommendedGrid = styled.div`

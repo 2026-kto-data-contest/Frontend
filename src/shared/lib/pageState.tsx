@@ -74,6 +74,23 @@ export function useLocalStorageState<T>(key: string, initialValue: T) {
   return [state, update] as const;
 }
 
+/**
+ * usePersistentState는 마운트 시점에 store 값을 한 번 읽어 React state로 고정하기 때문에,
+ * "코스 모드처럼 같은 컴포넌트를 다른 초기값으로 다시 마운트해야 하는 경우"에는 쓰기 어렵습니다.
+ * 이 훅은 값을 구독하지 않고 그때그때 직접 읽고/쓰는 저수준 접근을 제공합니다 — 예를 들어
+ * 렌더 시점에 조건부로 초기값을 고를 때, 혹은 지도 중심처럼 리렌더가 필요 없는 값을 저장할 때 씁니다.
+ */
+export function usePageMemory() {
+  const store = usePageStateStore();
+  const get = useCallback(<T,>(key: string): T | undefined => store.data[key] as T | undefined, [
+    store,
+  ]);
+  const set = useCallback(<T,>(key: string, value: T) => {
+    store.data[key] = value;
+  }, [store]);
+  return { get, set };
+}
+
 export function useScrollRestoration(pathname: string) {
   const store = usePageStateStore();
   const ref = useRef<HTMLDivElement>(null);
