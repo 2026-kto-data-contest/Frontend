@@ -14,7 +14,7 @@ import { PhotoCard } from "../../shared/components/PhotoCard";
 import { DotsLoader } from "../../shared/components/DotsLoader";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
-import { usePersistentState } from "../../shared/lib/pageState";
+import { usePersistentState, useCacheGeneration } from "../../shared/lib/pageState";
 import { ApiError, fetchOnboardingPreferences, resolveImageUrl } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
@@ -82,7 +82,12 @@ export default function Home() {
   const [searchParams] = useSearchParams();
   const forcedError = searchParams.get("error");
   const [loadState, setLoadState] = usePersistentState<LoadState>("home:loadState", "loading");
-  const [home, setHome] = useState<HomeResponse | null>(null);
+  const [home, setHome] = usePersistentState<HomeResponse | null>("home:data", null);
+  const [homeSignature, setHomeSignature] = usePersistentState<string | null>(
+    "home:signature",
+    null
+  );
+  const cacheGeneration = useCacheGeneration();
   const [typeFilter, setTypeFilter] = usePersistentState<string>(
     "home:typeFilter",
     DEFAULT_TYPE_FILTER
@@ -108,6 +113,10 @@ export default function Home() {
   const [isRegionRefetching, setIsRegionRefetching] = useState(false);
   const prevFiltersRef = useRef({ typeFilter, regionFilter });
   const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
+  // 재시도 버튼(reloadKey)이 "이전 값과 실제로 달라졌는지"를 판단하기 위한 기준값입니다.
+  // 마운트 시점의 effect가 개발 모드(StrictMode)에서 두 번 실행되어도 두 번 다 같은 값끼리
+  // 비교하게 되므로(둘 다 재시도로 오판하지 않음) 안전합니다.
+  const lastReloadKeyRef = useRef(reloadKey);
 
   useEffect(() => {
     if (forcedError === "network" || forcedError === "server") {
@@ -115,6 +124,18 @@ export default function Home() {
         setLoadState(forcedError === "network" ? "network-error" : "server-error");
       }, 500);
       return () => clearTimeout(timer);
+    }
+
+    const isForcedRetry = lastReloadKeyRef.current !== reloadKey;
+    lastReloadKeyRef.current = reloadKey;
+    const signature = `${regionFilter}|${typeFilter}|${auth.isLoggedIn}|${auth.hasOnboarded}|${cacheGeneration}`;
+
+    // 탭을 벗어났다가 조건 변화 없이 다시 들어온 경우, 이미 받아온 데이터를 그대로 재사용하고
+    // API를 다시 호출하지 않습니다. 재진입할 때마다 뜨던 로딩이 여기서 사라집니다.
+    if (!isForcedRetry && home && homeSignature === signature) {
+      setLoadState("success");
+      prevFiltersRef.current = { typeFilter, regionFilter };
+      return;
     }
 
     // 개발 모드(StrictMode)에서 같은 효과가 두 번 실행되며 이전 요청이 그대로 남아있으면
@@ -142,6 +163,7 @@ export default function Home() {
     fetchHome(regionFilter, typeFilter, controller.signal)
       .then((response) => {
         setHome(response);
+        setHomeSignature(signature);
         setLoadState("success");
         setIsTypeRefetching(false);
         setIsRegionRefetching(false);
@@ -163,7 +185,7 @@ export default function Home() {
       controller.abort();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regionFilter, typeFilter, forcedError, reloadKey]);
+  }, [regionFilter, typeFilter, forcedError, reloadKey, auth.isLoggedIn, auth.hasOnboarded, cacheGeneration]);
 
   useEffect(() => {
     if (!filterErrorToast) return;

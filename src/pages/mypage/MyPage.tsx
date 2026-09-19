@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { colors } from "../../shared/styles/colors";
 import { useAuth } from "../../shared/lib/authContext";
+import { usePersistentState, useCacheGeneration } from "../../shared/lib/pageState";
 import {
   fetchTerms,
   fetchOnboardingPreferences,
@@ -23,9 +24,21 @@ const TOAST_DURATION_MS = 3000;
 export default function MyPage() {
   const navigate = useNavigate();
   const auth = useAuth();
-  const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
-  const [locationRecommend, setLocationRecommend] = useState(false);
-  const [marketing, setMarketing] = useState(false);
+  const [preferences, setPreferences] = usePersistentState<OnboardingPreferencesData | null>(
+    "mypage:preferences",
+    null
+  );
+  const [preferencesSignature, setPreferencesSignature] = usePersistentState<string | null>(
+    "mypage:preferencesSignature",
+    null
+  );
+  const [locationRecommend, setLocationRecommend] = usePersistentState("mypage:locationRecommend", false);
+  const [marketing, setMarketing] = usePersistentState("mypage:marketing", false);
+  const [termsSignature, setTermsSignature] = usePersistentState<string | null>(
+    "mypage:termsSignature",
+    null
+  );
+  const cacheGeneration = useCacheGeneration();
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -46,25 +59,39 @@ export default function MyPage() {
 
   useEffect(() => {
     if (!auth.isLoggedIn) return;
+    const signature = `${auth.isLoggedIn}|${cacheGeneration}`;
+    // 탭을 벗어났다가 다시 들어온 경우, 이미 받아온 약관 동의 상태를 그대로 재사용합니다.
+    if (termsSignature === signature) return;
+
     fetchTerms()
       .then((items) => {
         setLocationRecommend(!!items.find((item) => item.code === "LOCATION")?.agreed);
         setMarketing(!!items.find((item) => item.code === "MARKETING")?.agreed);
+        setTermsSignature(signature);
       })
       .catch((error) => console.error("약관 동의 상태 조회 실패", error));
-  }, [auth.isLoggedIn]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.isLoggedIn, cacheGeneration]);
 
   useEffect(() => {
     if (!auth.isLoggedIn || !auth.hasOnboarded) return;
+    const signature = `${auth.isLoggedIn}|${auth.hasOnboarded}|${cacheGeneration}`;
+    // 탭을 벗어났다가 다시 들어온 경우, 이미 받아온 취향 정보를 그대로 재사용합니다.
+    if (preferencesSignature === signature) return;
+
     const controller = new AbortController();
     fetchOnboardingPreferences(controller.signal)
-      .then(setPreferences)
+      .then((data) => {
+        setPreferences(data);
+        setPreferencesSignature(signature);
+      })
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("취향 정보 조회 실패", error);
       });
     return () => controller.abort();
-  }, [auth.isLoggedIn, auth.hasOnboarded]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.isLoggedIn, auth.hasOnboarded, cacheGeneration]);
 
   useEffect(() => {
     return () => {
