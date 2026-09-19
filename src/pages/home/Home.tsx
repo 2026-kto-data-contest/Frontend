@@ -20,7 +20,11 @@ import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { fetchHome, breweryToCardData } from "../../shared/api/breweriesApi";
 import type { HomeResponse, RecommendedCourseCard } from "../../shared/api/breweriesApi";
 import { ALL_TYPE_FILTERS, ALL_REGION_FILTERS } from "../../shared/lib/mockWineries";
-import { TASTE_OPTIONS } from "../signin/onboarding/OnboardingTastePage";
+import {
+  TASTE_OPTIONS,
+  useTasteDisplayLabel,
+  isOnlyAnyFlavorLabel,
+} from "../signin/onboarding/OnboardingTastePage";
 
 const ROTATE_INTERVAL_MS = 3000;
 const BANNER_EXIT_DURATION_MS = 700;
@@ -45,8 +49,16 @@ function tagToAdjective(tag: string): string {
   return tag;
 }
 
-function buildPreferenceLine(preferences: OnboardingPreferencesData): string {
+function buildPreferenceLine(
+  preferences: OnboardingPreferencesData,
+  tasteDisplayLabel: string | null
+): string {
   const regionLabel = preferences.regions.length === 0 ? "전국" : preferences.regions.join("·");
+  // "어떤 맛이든 좋아요"만 단독으로 골랐을 때는 특정 주종을 선호하는 것처럼 보이면
+  // 안 되므로 형용사 없이 "전통주"로만 표시합니다.
+  if (isOnlyAnyFlavorLabel(tasteDisplayLabel)) {
+    return `${regionLabel}의 전통주${PREFERENCE_SUFFIX}`;
+  }
   const primaryType = preferences.liquorTypes[0];
   const tasteOption = TASTE_OPTIONS.find((option) => option.type === primaryType);
   const adjective = tasteOption?.tag ? `${tagToAdjective(tasteOption.tag)} ` : "";
@@ -113,6 +125,7 @@ export default function Home() {
   const [isRegionRefetching, setIsRegionRefetching] = useState(false);
   const prevFiltersRef = useRef({ typeFilter, regionFilter });
   const [preferences, setPreferences] = useState<OnboardingPreferencesData | null>(null);
+  const [tasteDisplayLabel] = useTasteDisplayLabel();
   // 재시도 버튼(reloadKey)이 "이전 값과 실제로 달라졌는지"를 판단하기 위한 기준값입니다.
   // 마운트 시점의 effect가 개발 모드(StrictMode)에서 두 번 실행되어도 두 번 다 같은 값끼리
   // 비교하게 되므로(둘 다 재시도로 오판하지 않음) 안전합니다.
@@ -296,7 +309,7 @@ export default function Home() {
   };
 
   const greetingTitle = auth.isLoggedIn ? `${auth.nickname}님` : GUEST_GREETING_TITLE;
-  const preferenceLine = preferences ? buildPreferenceLine(preferences) : null;
+  const preferenceLine = preferences ? buildPreferenceLine(preferences, tasteDisplayLabel) : null;
   // Figma상 "로그인 전"과 "로그인 후·온보딩 전" 배너는 같은 스타일(주황 배경+서브타이틀+사진)이고,
   // 온보딩을 마친 뒤에만 다른(초록빛 배경, 서브타이틀 없음) 배너를 씁니다.
   // 백엔드 banner.type은 온보딩을 마친 뒤에도 계속 ONBOARDING으로 내려오는 경우가 있어서
