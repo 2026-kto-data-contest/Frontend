@@ -6,6 +6,7 @@ import { AppBar } from "../../shared/components/AppBar";
 import { DotsLoader } from "../../shared/components/DotsLoader";
 import { WINERIES } from "../../shared/lib/mockWineries";
 import type { Winery } from "../../shared/lib/mockWineries";
+import { useSmartBack } from "../../shared/lib/pageState";
 import { ApiError } from "../../shared/api/api";
 import { fetchBreweryDetail, fetchRecommendedCourse } from "../../shared/api/breweriesApi";
 import type {
@@ -139,6 +140,8 @@ export default function CourseDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams();
+  // 공유 링크로 이 페이지에 곧장 들어왔으면(인앱 이전 화면이 없으면) 뒤로가기를 홈으로 보냅니다.
+  const handleBack = useSmartBack();
   // 양조장 상세 화면에서 이미 조회해둔 전체 정보를 넘겨받으면 재조회를 건너뜁니다.
   const navStateWinery = (location.state as { winery?: Winery } | null)?.winery;
 
@@ -361,7 +364,7 @@ export default function CourseDetailPage() {
   if (wineryLoading) {
     return (
       <PageContainer>
-        <AppBar onBack={() => navigate(-1)} />
+        <AppBar onBack={handleBack} />
         <DotsLoader />
       </PageContainer>
     );
@@ -370,7 +373,7 @@ export default function CourseDetailPage() {
   if (!winery) {
     return (
       <PageContainer>
-        <AppBar onBack={() => navigate(-1)} />
+        <AppBar onBack={handleBack} />
         <NotFound>코스 정보를 찾을 수 없어요</NotFound>
       </PageContainer>
     );
@@ -381,7 +384,7 @@ export default function CourseDetailPage() {
   return (
     <PageContainer>
       <AppBar
-        onBack={() => navigate(-1)}
+        onBack={handleBack}
         title={course?.title ?? `${winery.name} 코스`}
         align="left"
         trailing={
