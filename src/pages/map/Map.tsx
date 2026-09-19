@@ -127,6 +127,8 @@ const USER_LOCATION_LEVEL = 6;
 // 코스 모드에서 정거장 핀이 겹치면 이 레벨까지는 계속 확대합니다(그 이상은 코스 전체를
 // 보여준다는 의미가 없어질 만큼 과하게 확대되는 걸 막는 하한선).
 const COURSE_MIN_ZOOM_LEVEL = 3;
+// 정거장이 FOCUS_LEVEL 기준으로도 화면 밖에 있으면 다 보일 때까지 이 레벨까지는 축소합니다.
+const COURSE_MAX_ZOOM_LEVEL = 12;
 const TOAST_DURATION_MS = 3000;
 // 양조장을 선택했을 때 바텀시트의 기본 높이입니다. 사용자가 핸들로 직접 늘리거나 줄일 수 있습니다.
 const DETAIL_SHEET_HEIGHT = 320;
@@ -1023,13 +1025,11 @@ export default function Map() {
       lng: stop.longitude,
     }));
 
-    // 정거장 핀 전부가 "실제로 눈에 보이는" 영역 안에 들어오는 한도 안에서 최대한 확대합니다.
+    // 정거장 핀 전부가 "실제로 눈에 보이는" 영역 안에 들어오는 선에서 최대한 확대합니다.
     // map.getBounds()는 시트 아래 가려진 부분까지 포함한 지도 컨테이너 전체 기준이라, 코스
     // 모드에서 하단을 늘 덮고 있는 시트(DETAIL_SHEET_HEIGHT) 영역은 화면 픽셀 좌표로 직접
-    // 제외하고 판정합니다. 겹침 여부는 안 보고 "한 단계 더 확대해도 전부 보이는가"만으로
-    // 판단해서, 이미 안 겹치는 상태여도 더 확대할 여지가 있으면 계속 확대합니다. 항상
-    // FOCUS_LEVEL에서부터 다시 판정해야 courseStops가 바뀌었을 때 이전에 확대해둔 레벨이
-    // 누적되지 않습니다.
+    // 제외하고 판정합니다. 항상 FOCUS_LEVEL에서부터 다시 판정해야 courseStops가 바뀌었을 때
+    // 이전에 조정해둔 레벨이 누적되지 않습니다.
     const containerWidth = mapElRef.current?.clientWidth ?? 0;
     const containerHeight = mapElRef.current?.clientHeight ?? 0;
     const PIN_EDGE_MARGIN = 30;
@@ -1038,15 +1038,26 @@ export default function Map() {
     const visibleTop = PIN_EDGE_MARGIN;
     const visibleBottom = containerHeight - DETAIL_SHEET_HEIGHT - PIN_EDGE_MARGIN;
 
+    // 레벨을 바꿀 때마다, 양조장이 시트에 덮이지 않는 영역 한가운데 오도록 매번 다시
+    // 중심을 맞춥니다(그래야 아래 가시성 판정이 실제로 화면에 그려질 상태와 일치합니다).
+    const setLevelCenteredOnWinery = (level: number) => {
+      map.setLevel(level);
+      if (!focusWinery?.lat || !focusWinery?.lng) return;
+      const wineryLatLng = new kakao.LatLng(focusWinery.lat, focusWinery.lng);
+      map.setCenter(wineryLatLng);
+      const proj = map.getProjection();
+      const centerPoint = proj.pointFromCoords(wineryLatLng);
+      const shiftedPoint = new kakao.Point(centerPoint.x, centerPoint.y + DETAIL_SHEET_HEIGHT / 3);
+      map.setCenter(proj.coordsFromPoint(shiftedPoint));
+    };
+
     let zoomLevel = FOCUS_LEVEL;
-    map.setLevel(zoomLevel);
+    setLevelCenteredOnWinery(zoomLevel);
     if (containerWidth > 0 && containerHeight > 0 && visibleBottom > visibleTop) {
-      while (zoomLevel > COURSE_MIN_ZOOM_LEVEL) {
-        const candidateLevel = zoomLevel - 1;
-        map.setLevel(candidateLevel);
-        const candidateProjection = map.getProjection();
-        const allStopsVisible = stopPins.every((pin) => {
-          const point = candidateProjection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng));
+      const allStopsVisibleAtCurrentLevel = () => {
+        const currentProjection = map.getProjection();
+        return stopPins.every((pin) => {
+          const point = currentProjection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng));
           return (
             point.x >= visibleLeft &&
             point.x <= visibleRight &&
@@ -1054,8 +1065,24 @@ export default function Map() {
             point.y <= visibleBottom
           );
         });
-        if (!allStopsVisible) {
-          map.setLevel(zoomLevel);
+      };
+
+      // FOCUS_LEVEL 자체가 이미 정거장들이 흩어진 범위보다 확대돼 있을 수 있으므로, 먼저
+      // 전부 보일 때까지 축소합니다(코스는 흔히 양조장 근처가 아니라 꽤 떨어진 곳까지
+      // 포함하는데, 기존 FOCUS_LEVEL은 "양조장 상세" 화면용으로 정해진 고정값이라 코스
+      // 정거장 범위엔 너무 좁을 수 있습니다).
+      while (zoomLevel < COURSE_MAX_ZOOM_LEVEL && !allStopsVisibleAtCurrentLevel()) {
+        zoomLevel += 1;
+        setLevelCenteredOnWinery(zoomLevel);
+      }
+
+      // 그 상태에서 한 단계씩 더 확대해도 여전히 전부 보이면 계속 확대해, 보이는 한도
+      // 안에서 최대한 확대된 상태로 맞춥니다.
+      while (zoomLevel > COURSE_MIN_ZOOM_LEVEL) {
+        const candidateLevel = zoomLevel - 1;
+        setLevelCenteredOnWinery(candidateLevel);
+        if (!allStopsVisibleAtCurrentLevel()) {
+          setLevelCenteredOnWinery(zoomLevel);
           break;
         }
         zoomLevel = candidateLevel;
