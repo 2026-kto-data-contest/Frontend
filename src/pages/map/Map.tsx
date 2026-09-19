@@ -9,7 +9,11 @@ import { DotsLoader } from "../../shared/components/DotsLoader";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { Badge } from "../../shared/components/Badge";
 import { PhotoCard } from "../../shared/components/PhotoCard";
-import { WINERIES, getRepresentativeTypeLabel, getWineryVisitLabel } from "../../shared/lib/mockWineries";
+import {
+  WINERIES,
+  getRepresentativeTypeLabel,
+  getWineryVisitLabel,
+} from "../../shared/lib/mockWineries";
 import type { Winery } from "../../shared/lib/mockWineries";
 import {
   fetchMapPlaces,
@@ -193,7 +197,7 @@ function stopToInfo(stop: RecommendedCourseStop): SimplePlaceInfo {
 // 상세는 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
 function getSnapPoints(areaHeight: number) {
   const safeHeight = areaHeight || 600;
-  const full = Math.max(260, safeHeight - 8);
+  const full = Math.max(260, safeHeight - 52);
   return {
     collapsed: Math.min(96, full),
     detailCollapsed: Math.min(130, full),
@@ -589,10 +593,7 @@ export default function Map() {
           const pinPoint = projection.pointFromCoords(
             new kakao.LatLng(initialFocusWinery.lat, initialFocusWinery.lng)
           );
-          const shiftedPoint = new kakao.Point(
-            pinPoint.x,
-            pinPoint.y + DETAIL_SHEET_HEIGHT / 3
-          );
+          const shiftedPoint = new kakao.Point(pinPoint.x, pinPoint.y + DETAIL_SHEET_HEIGHT / 3);
           map.setCenter(projection.coordsFromPoint(shiftedPoint));
         }
         kakao.event.addListener(map, "idle", () => {
@@ -829,7 +830,9 @@ export default function Map() {
 
         if (validPlaces.length > 0) {
           const bounds = new kakao.LatLngBounds();
-          validPlaces.forEach((place) => bounds.extend(new kakao.LatLng(place.latitude, place.longitude)));
+          validPlaces.forEach((place) =>
+            bounds.extend(new kakao.LatLng(place.latitude, place.longitude))
+          );
           if (validPlaces.length === 1) {
             map.setCenter(new kakao.LatLng(validPlaces[0].latitude, validPlaces[0].longitude));
             map.setLevel(FOCUS_LEVEL);
@@ -904,7 +907,10 @@ export default function Map() {
     // 핀이 화면상 겹쳐 있으면, 유저 현재 위치(없으면 지도 중심)와 가장 가까운 핀만 이름표를
     // 보여주고 나머지는 숨깁니다. 이름표가 남는 핀이 겹친 핀들 위로 그려지도록 뒤에 그립니다.
     const projection = map.getProjection();
-    const reference = userPosition ?? { lat: map.getCenter().getLat(), lng: map.getCenter().getLng() };
+    const reference = userPosition ?? {
+      lat: map.getCenter().getLat(),
+      lng: map.getCenter().getLng(),
+    };
     const hiddenLabels = resolveHiddenPinLabels(
       pinSource.map((place) => ({ key: place.placeId, lat: place.latitude, lng: place.longitude })),
       kakao,
@@ -965,7 +971,8 @@ export default function Map() {
     // 핀이 겹쳐 있으면 유저 현재 위치(없으면 양조장)와 가장 가까운 핀만 이름표를 보여줍니다.
     const projection = map.getProjection();
     const reference =
-      userPosition ?? (focusWinery?.lat && focusWinery?.lng
+      userPosition ??
+      (focusWinery?.lat && focusWinery?.lng
         ? { lat: focusWinery.lat, lng: focusWinery.lng }
         : null);
     const stopPins = validStops.map((stop) => ({
@@ -1200,7 +1207,12 @@ export default function Map() {
     );
     // 양조장 상세를 맨 위까지 끌어올리면, Figma의 "Brewery Card Expanded" 미니 상세 페이지 대신
     // 이미 동일한 내용(대표주종·방문방식·한 줄 요약 등)을 갖춘 양조장 상세 페이지로 이동합니다.
-    if (snapped >= points.full && sheetMode === "detail" && detailKind === "winery" && selectedWinery) {
+    if (
+      snapped >= points.full &&
+      sheetMode === "detail" &&
+      detailKind === "winery" &&
+      selectedWinery
+    ) {
       navigate(`/winery/${selectedWinery.id}`);
       return;
     }
@@ -1411,101 +1423,105 @@ export default function Map() {
                       // 이미 실제 양조장 결과(places)가 도착했어도, 칩을 누르기 전까지는 이 추천
                       // 콘텐츠를 계속 보여줍니다.
                       <>
-                      <RecommendedSection>
-                        <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
-                        <RecommendedGrid>
-                          {recommendedBreweries.slice(0, 4).map((item) => (
-                            <RecommendedBreweryCard key={item.breweryId} item={item} onNavigate={navigate} />
-                          ))}
-                        </RecommendedGrid>
-                      </RecommendedSection>
+                        <RecommendedSection>
+                          <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
+                          <RecommendedGrid>
+                            {recommendedBreweries.slice(0, 4).map((item) => (
+                              <RecommendedBreweryCard
+                                key={item.breweryId}
+                                item={item}
+                                onNavigate={navigate}
+                              />
+                            ))}
+                          </RecommendedGrid>
+                        </RecommendedSection>
 
-                      {awardedLiquors.length > 0 && (
-                        <AwardSection>
-                          <RecommendedTitle>수상받은 전통주</RecommendedTitle>
-                          <AwardRow>
-                            {awardedLiquors.map((item) => (
-                              <AwardCard
-                                key={item.productId}
-                                type="button"
-                                onClick={() => navigate(`/winery/${item.breweryId}`)}
-                              >
-                                <AwardThumb
-                                  src={resolveImageUrl(item.image?.url) ?? noneImage}
-                                  alt=""
+                        {awardedLiquors.length > 0 && (
+                          <AwardSection>
+                            <RecommendedTitle>수상받은 전통주</RecommendedTitle>
+                            <AwardRow>
+                              {awardedLiquors.map((item) => (
+                                <AwardCard
+                                  key={item.productId}
+                                  type="button"
+                                  onClick={() => navigate(`/winery/${item.breweryId}`)}
+                                >
+                                  <AwardThumb
+                                    src={resolveImageUrl(item.image?.url) ?? noneImage}
+                                    alt=""
+                                  />
+                                  <AwardBadgeLine>
+                                    <img src={awardIcon} alt="" width={14} height={14} />
+                                    {item.awardBadge}
+                                  </AwardBadgeLine>
+                                  <AwardName>{item.productName}</AwardName>
+                                  <AwardMetaPrimary>
+                                    {item.breweryName}
+                                    {item.address
+                                      ? ` · ${item.address.split(" ").slice(0, 2).join(" ")}`
+                                      : ""}
+                                  </AwardMetaPrimary>
+                                  <AwardMetaSecondary>
+                                    {[
+                                      item.alcoholMin != null ? `${item.alcoholMin}도` : null,
+                                      item.volume,
+                                      item.liquorTypes[0],
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </AwardMetaSecondary>
+                                </AwardCard>
+                              ))}
+                            </AwardRow>
+                          </AwardSection>
+                        )}
+
+                        {recommendedBreweries.slice(4, 8).length > 0 && (
+                          <RecommendedSection>
+                            <RecommendedGrid>
+                              {recommendedBreweries.slice(4, 8).map((item) => (
+                                <RecommendedBreweryCard
+                                  key={item.breweryId}
+                                  item={item}
+                                  onNavigate={navigate}
                                 />
-                                <AwardBadgeLine>
-                                  <img src={awardIcon} alt="" width={14} height={14} />
-                                  {item.awardBadge}
-                                </AwardBadgeLine>
-                                <AwardName>{item.productName}</AwardName>
-                                <AwardMetaPrimary>
-                                  {item.breweryName}
-                                  {item.address
-                                    ? ` · ${item.address.split(" ").slice(0, 2).join(" ")}`
-                                    : ""}
-                                </AwardMetaPrimary>
-                                <AwardMetaSecondary>
-                                  {[
-                                    item.alcoholMin != null ? `${item.alcoholMin}도` : null,
-                                    item.volume,
-                                    item.liquorTypes[0],
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                </AwardMetaSecondary>
-                              </AwardCard>
-                            ))}
-                          </AwardRow>
-                        </AwardSection>
-                      )}
+                              ))}
+                            </RecommendedGrid>
+                          </RecommendedSection>
+                        )}
 
-                      {recommendedBreweries.slice(4, 8).length > 0 && (
-                        <RecommendedSection>
-                          <RecommendedGrid>
-                            {recommendedBreweries.slice(4, 8).map((item) => (
-                              <RecommendedBreweryCard
-                                key={item.breweryId}
-                                item={item}
-                                onNavigate={navigate}
-                              />
-                            ))}
-                          </RecommendedGrid>
-                        </RecommendedSection>
-                      )}
+                        {mapMenus.length > 0 && (
+                          <RecommendedSection>
+                            <RecommendedTitle>지금 찾아보면 좋은 메뉴</RecommendedTitle>
+                            <MenuChipRow>
+                              {mapMenus.map((item) => (
+                                <MenuChip
+                                  key={item.menu}
+                                  type="button"
+                                  $active={selectedMenu === item.menu}
+                                  onClick={() => handleSelectMenu(item.menu)}
+                                >
+                                  {item.displayName}
+                                </MenuChip>
+                              ))}
+                            </MenuChipRow>
+                          </RecommendedSection>
+                        )}
 
-                      {mapMenus.length > 0 && (
-                        <RecommendedSection>
-                          <RecommendedTitle>지금 찾아보면 좋은 메뉴</RecommendedTitle>
-                          <MenuChipRow>
-                            {mapMenus.map((item) => (
-                              <MenuChip
-                                key={item.menu}
-                                type="button"
-                                $active={selectedMenu === item.menu}
-                                onClick={() => handleSelectMenu(item.menu)}
-                              >
-                                {item.displayName}
-                              </MenuChip>
-                            ))}
-                          </MenuChipRow>
-                        </RecommendedSection>
-                      )}
-
-                      {recommendedBreweries.slice(8, 12).length > 0 && (
-                        <RecommendedSection>
-                          <RecommendedGrid>
-                            {recommendedBreweries.slice(8, 12).map((item) => (
-                              <RecommendedBreweryCard
-                                key={item.breweryId}
-                                item={item}
-                                onNavigate={navigate}
-                              />
-                            ))}
-                          </RecommendedGrid>
-                        </RecommendedSection>
-                      )}
-                    </>
+                        {recommendedBreweries.slice(8, 12).length > 0 && (
+                          <RecommendedSection>
+                            <RecommendedGrid>
+                              {recommendedBreweries.slice(8, 12).map((item) => (
+                                <RecommendedBreweryCard
+                                  key={item.breweryId}
+                                  item={item}
+                                  onNavigate={navigate}
+                                />
+                              ))}
+                            </RecommendedGrid>
+                          </RecommendedSection>
+                        )}
+                      </>
                     )
                   ) : (
                     <>
@@ -1565,11 +1581,7 @@ export default function Map() {
                                   <PlaceMetaPart
                                     key={part}
                                     $tone={
-                                      isBrewery
-                                        ? undefined
-                                        : index === 0
-                                          ? "primary"
-                                          : "secondary"
+                                      isBrewery ? undefined : index === 0 ? "primary" : "secondary"
                                     }
                                   >
                                     {index > 0 && <PlaceMetaDot aria-hidden />}
@@ -1917,7 +1929,6 @@ const ShareButton = styled.button`
   color: ${colors.gray[900]};
   cursor: pointer;
 `;
-
 
 const MapArea = styled.div`
   position: relative;
@@ -2272,11 +2283,11 @@ const LoaderCenter = styled.div<{ $height: number }>`
 `;
 
 const RecommendedSection = styled.div`
-  padding: 12px 0 24px;
+  padding: 15px 0 45px;
 `;
 
 const RecommendedTitle = styled.h2`
-  margin: 0 0 12px;
+  margin: 0 0 20px;
   font-size: 1.125rem;
   font-weight: 700;
   color: ${colors.gray[900]};
@@ -2308,7 +2319,7 @@ const SkeletonAwardCard = styled.div`
 const RecommendedGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 24px 16px;
+  gap: 30px 16px;
 
   img {
     height: 200px;
@@ -2649,7 +2660,6 @@ const MaskIcon = styled.span<{ $src: string }>`
   -webkit-mask-size: contain;
   mask-size: contain;
 `;
-
 
 const DetailPhotoRow = styled.div`
   display: flex;
