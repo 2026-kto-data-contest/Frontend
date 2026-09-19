@@ -110,7 +110,7 @@ export default function OnboardingStrengthPage() {
     if (isSubmitting) return;
     setIsSubmitting(true);
     setErrorMessage(null);
-    const result = await finishOnboarding(auth, navigate, from);
+    const result = await finishOnboarding(navigate, from);
     if (!result.success) {
       setErrorMessage(result.message ?? null);
     }

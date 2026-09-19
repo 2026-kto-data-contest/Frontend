@@ -37,7 +37,10 @@ export default function SinginPage() {
 
   return (
     <PageContainer>
-      <BackButton onClick={() => navigate(-1)} onDark />
+      {/* 이 화면 직전 브라우저 히스토리는 카카오 로그인 리다이렉트 체인(카카오 플랫폼→백엔드
+          콜백)일 수 있어서, navigate(-1)을 쓰면 카카오 취소 후 뒤로가기가 다시 그 체인으로
+          들어갈 수 있습니다. 그래서 항상 홈으로 보냅니다. */}
+      <BackButton onClick={() => navigate("/")} onDark />
 
       <TopOverlay />
       <BottomOverlay />

@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../../../shared/lib/authContext";
 import { usePersistentState } from "../../../shared/lib/pageState";
 import { Button } from "../../../shared/components/Button";
 import { Chip } from "../../../shared/components/Chip";
@@ -16,7 +15,6 @@ const REGION_OPTIONS = [...REAL_REGIONS, "전국"];
 
 export default function OnboardingRegionPage() {
   const navigate = useNavigate();
-  const auth = useAuth();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
   const isEditMode = from === "/mypage";
@@ -62,7 +60,7 @@ export default function OnboardingRegionPage() {
     if (isSkipping) return;
     setIsSkipping(true);
     setSkipError(null);
-    const result = await finishOnboarding(auth, navigate, from);
+    const result = await finishOnboarding(navigate, from);
     if (!result.success) {
       setSkipError(result.message ?? null);
     }
