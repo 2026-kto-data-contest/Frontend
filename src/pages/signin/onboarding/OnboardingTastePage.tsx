@@ -82,14 +82,15 @@ export default function OnboardingTastePage() {
       .then((preferences) => {
         if (cancelled) return;
         setOtherPreferences(preferences);
+        const concreteMatchedIds = TASTE_OPTIONS.filter(
+          (option) => option.type && preferences.liquorTypes.includes(option.type)
+        ).map((option) => option.id);
         // 저장된 주종이 "어떤 맛이든 좋아요"가 채워 넣는 다섯 가지를 전부 포함하면,
-        // 온보딩 화면에서는 구체적인 다섯 항목이 아니라 "어떤 맛이든 좋아요" 하나만
-        // 선택된 것으로 되돌립니다.
+        // 그 다섯 항목과 함께 "어떤 맛이든 좋아요"도 같이 선택된 것으로 보여줍니다
+        // (저장은 어차피 다섯 가지 전부로 되니, 화면에서 같이 골랐던 것처럼 보이게 함).
         const matchedIds = isAnyFlavorPreference(preferences.liquorTypes)
-          ? ["any"]
-          : TASTE_OPTIONS.filter(
-              (option) => option.type && preferences.liquorTypes.includes(option.type)
-            ).map((option) => option.id);
+          ? [...concreteMatchedIds, "any"]
+          : concreteMatchedIds;
         setSelected(matchedIds);
       })
       .catch((error) => console.error("취향 정보 조회 실패", error));
