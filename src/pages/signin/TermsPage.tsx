@@ -115,7 +115,14 @@ export default function TermsPage() {
 
   return (
     <PageContainer>
-      <CloseButton type="button" aria-label="닫기" onClick={() => navigate(-1)}>
+      {/* 이 화면 직전 브라우저 히스토리는 카카오 로그인 리다이렉트 체인(카카오 플랫폼→백엔드
+          콜백)이라, navigate(-1)을 쓰면 우리 로그인 화면이 아니라 카카오 플랫폼으로 되돌아갑니다.
+          그래서 히스토리를 타지 않고 로그인 화면으로 직접 이동시킵니다. */}
+      <CloseButton
+        type="button"
+        aria-label="닫기"
+        onClick={() => navigate("/login", { replace: true })}
+      >
         <img src={closeXIcon} alt="" width={24} height={24} />
       </CloseButton>
 

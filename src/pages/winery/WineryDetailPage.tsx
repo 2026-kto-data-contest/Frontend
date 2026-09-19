@@ -8,6 +8,7 @@ import { Badge } from "../../shared/components/Badge";
 import { Snackbar } from "../../shared/components/Snackbar";
 import { DotsLoader } from "../../shared/components/DotsLoader";
 import { useLocalPreferences } from "../../shared/lib/preferences";
+import { useSmartBack } from "../../shared/lib/pageState";
 import {
   WINERIES,
   getWineryVisitLabel,
@@ -43,6 +44,8 @@ const TOAST_DURATION_MS = 3000;
 export default function WineryDetailPage() {
   const navigate = useNavigate();
   const { id } = useParams();
+  // 공유 링크로 이 페이지에 곧장 들어왔으면(인앱 이전 화면이 없으면) 뒤로가기를 홈으로 보냅니다.
+  const handleBack = useSmartBack();
   const preferences = useLocalPreferences();
   const mockWinery = WINERIES.find((item) => item.id === id);
   const [remoteWinery, setRemoteWinery] = useState<Winery | null>(null);
@@ -183,7 +186,7 @@ export default function WineryDetailPage() {
     return (
       <PageContainer>
         <PlainHeader>
-          <BackButton onClick={() => navigate(-1)} />
+          <BackButton onClick={handleBack} />
         </PlainHeader>
         <NotFoundWrap>
           {remoteLoading ? (
@@ -269,7 +272,7 @@ export default function WineryDetailPage() {
     <PageContainer ref={pageRef}>
       <Header>
         <HeaderSide>
-          <BackButton onClick={() => navigate(-1)} />
+          <BackButton onClick={handleBack} />
         </HeaderSide>
         <HeaderTitle>{scrolled ? winery.name : ""}</HeaderTitle>
         <HeaderSide $end>

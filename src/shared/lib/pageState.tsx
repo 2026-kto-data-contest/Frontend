@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 
 interface PageStateStore {
   data: Record<string, unknown>;
@@ -119,4 +120,23 @@ export function useScrollToTop(pathname: string) {
       store.activeScrollContainer.current.scrollTop = 0;
     }
   }, [pathname, store]);
+}
+
+/**
+ * 공유 링크 등으로 양조장·코스 상세 같은 페이지에 곧장 들어온 경우(이 앱 안에서 이동해온
+ * 이전 화면이 없음)에는 navigate(-1)이 앱 밖(공유한 곳)으로 나가버리거나 아무 동작도 하지
+ * 않을 수 있습니다. React Router는 앱 진입 후 아직 한 번도 push되지 않은 최초 위치의
+ * location.key를 "default"로 표시하므로, 그 경우에만 홈으로 보내고 그 외에는 평소처럼
+ * 뒤로 갑니다.
+ */
+export function useSmartBack() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  return useCallback(() => {
+    if (location.key === "default") {
+      navigate("/", { replace: true });
+    } else {
+      navigate(-1);
+    }
+  }, [navigate, location.key]);
 }
