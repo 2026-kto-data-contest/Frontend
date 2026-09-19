@@ -603,6 +603,9 @@ const MapExpandButton = styled.button`
   position: absolute;
   top: 12px;
   right: 12px;
+  /* 카카오맵 SDK가 내부 레이어(타일·오버레이 pane)에 z-index를 직접 지정해서, 이 버튼도
+     z-index 없이 DOM 순서에만 맡기면 지도 레이어에 덮여 안 보일 수 있습니다. */
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
