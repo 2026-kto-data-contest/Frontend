@@ -629,7 +629,7 @@ const WinerySummary = styled.div`
   background: #ffffff;
   /* Figma dev-mode가 내보낸 값(0 0 1px)은 실제 캡처 스크린샷과 달리 거의 안 보이는
      수준이라, 스크린샷에서 실제로 보이는 만큼 더 넓고 부드러운 그림자로 맞췄습니다. */
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.2);
 `;
 
 const WineryInfo = styled.div`
