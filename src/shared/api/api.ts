@@ -2,9 +2,9 @@
 // 인증은 백엔드가 발급하는 HttpOnly 세션 쿠키(JT_SESSION)로 처리됩니다.
 // 카카오 REST API 키/시크릿은 백엔드에만 있고 프론트에는 필요하지 않습니다.
 //
-// 프론트(vercel.app)와 백엔드(onrender.com)가 서로 다른 도메인이면 사파리 등이
-// 로그인 쿠키를 서드파티 쿠키로 보고 차단합니다. 그래서 백엔드 주소를 직접 호출하지
-// 않고, 같은 오리진의 /api 경로로 호출한 뒤 Vercel(vercel.json)·로컬 개발 서버
+// 운영 프론트(jeontongjuro.com)와 백엔드(Render)가 서로 다른 호스트여도 사파리 등이
+// 로그인 쿠키를 서드파티 쿠키로 보지 않도록 백엔드 주소를 직접 호출하지 않고,
+// 같은 오리진의 /api 경로로 호출한 뒤 Vercel(vercel.json)·로컬 개발 서버
 // (vite.config.ts의 proxy)가 실제 백엔드로 그대로 전달(프록시)하게 합니다.
 // 이렇게 하면 브라우저 입장에서는 쿠키를 준 곳과 요청을 보내는 곳이 항상 같은
 // 오리진이라 서드파티 쿠키 차단의 영향을 받지 않습니다.
@@ -12,9 +12,8 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 // 추천 코스 카드 이미지처럼 백엔드가 "/recommended-courses/BRW-001.png"같은 상대 경로로
 // 내려주는 정적 파일용입니다. /api 프록시 대상이 아니라서 이 상대 경로는 프론트 자기
-// 오리진에서 그대로 찾으면 404가 나고, 쿠키가 필요 없는 공개 정적 파일이라 API_BASE_URL과
-// 달리 프록시 없이 백엔드 주소를 직접 붙여도 문제 없습니다.
-const IMAGE_ORIGIN = "https://jeontongjuro-backend.onrender.com";
+// 오리진에서 그대로 찾으면 404가 나고, Vercel rewrite가 백엔드 정적 파일로 전달합니다.
+const IMAGE_ORIGIN = "";
 
 export function resolveImageUrl(url: string | null | undefined): string | undefined {
   if (!url) return undefined;

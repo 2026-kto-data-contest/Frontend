@@ -11,7 +11,11 @@ export default defineConfig({
     // 실제 백엔드로 그대로 전달해 개발 중에도 동일하게 동작하게 합니다.
     proxy: {
       "/api": {
-        target: "https://jeontongjuro-backend.onrender.com",
+        target: process.env.VITE_BACKEND_ORIGIN || "https://jeontongjuro-backend.onrender.com",
+        changeOrigin: true,
+      },
+      "/recommended-courses": {
+        target: process.env.VITE_BACKEND_ORIGIN || "https://jeontongjuro-backend.onrender.com",
         changeOrigin: true,
       },
     },

@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/recommended-courses/:path*",
+      "destination": "https://jeontongjuro-backend.onrender.com/recommended-courses/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://jeontongjuro-backend.onrender.com/api/:path*"
     },
