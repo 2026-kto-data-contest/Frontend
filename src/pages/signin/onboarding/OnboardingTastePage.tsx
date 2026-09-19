@@ -80,6 +80,11 @@ export function useTasteDisplayLabel() {
   return useLocalStorageState<string | null>(TASTE_DISPLAY_LABEL_KEY, null);
 }
 
+/** "어떤 맛이든 좋아요"만 단독으로 골랐는지 봅니다(다른 주종과 같이 골랐으면 해당 안 됨). */
+export function isOnlyAnyFlavorLabel(label: string | null): boolean {
+  return label === ANY_OPTION.sub;
+}
+
 export default function OnboardingTastePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
