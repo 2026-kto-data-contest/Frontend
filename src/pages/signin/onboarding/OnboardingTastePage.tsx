@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { usePersistentState } from "../../../shared/lib/pageState";
+import { usePersistentState, useLocalStorageState } from "../../../shared/lib/pageState";
 import { Button } from "../../../shared/components/Button";
 import { OnboardingLayout } from "./OnboardingLayout";
 import { OptionRow } from "./OptionRow";
@@ -39,17 +39,14 @@ const ICONS: Record<string, string> = {
   any: whateverIcon,
 };
 
-// "어떤 맛이든 좋아요"를 고르면 마이페이지에는 실제 주종 다섯 가지(기타 제외)를
-// 다 고른 것처럼 보여줍니다. 백엔드가 liquorTypes 값으로 실제 주종명만 허용해서
-// ("추천받기" 같은 문구는 저장 시 거부됨), 화면 문구("추천받기")와 저장값을 분리합니다.
+const ANY_OPTION = TASTE_OPTIONS.find((option) => option.id === "any")!;
+
+// 백엔드는 liquorTypes 값으로 실제 주종명만 허용합니다("추천받기" 같은 문구는 저장 시
+// 거부됨). "전부 다 취급해달라"는 의미는 백엔드가 실제 주종 다섯 가지(기타 제외)를 받아
+// 자기 추천 로직에서 처리하므로, 프론트는 저장용 값만 이렇게 채워 보냅니다.
 const ANY_LIQUOR_TYPES = ALL_TYPE_FILTERS.filter((type) => type !== "기타");
 
-/** 저장된 주종이 "어떤 맛이든 좋아요"를 선택했을 때 저장되는 다섯 가지를 전부 포함하는지 봅니다. */
-export function isAnyFlavorPreference(liquorTypes: string[]): boolean {
-  return ANY_LIQUOR_TYPES.every((type) => liquorTypes.includes(type));
-}
-
-/** 선택한 취향 옵션 id들을 저장용 주종 문자열 목록으로 바꿉니다. */
+/** 선택한 취향 옵션 id들을 저장용 주종 문자열 목록으로 바꿉니다("어떤 맛이든 좋아요"는 다섯 가지로 채움). */
 export function deriveLiquorTypes(selectedIds: string[]): string[] {
   if (selectedIds.includes("any")) return [...ANY_LIQUOR_TYPES];
   return Array.from(
@@ -61,12 +58,35 @@ export function deriveLiquorTypes(selectedIds: string[]): string[] {
   );
 }
 
+/**
+ * 화면에 보여줄 문구는 저장값과 다릅니다("어떤 맛이든 좋아요"를 실제 주종으로 부풀리지
+ * 않고, 고른 그대로 "과실주·추천받기"처럼 보여줌). 저장에 쓰는 백엔드 주종 목록과
+ * 달리, 고른 것을 그대로 반영해야 해서 로컬(브라우저)에 따로 기억해둡니다.
+ */
+export function deriveTasteDisplayLabel(selectedIds: string[]): string {
+  return Array.from(
+    new Set(
+      TASTE_OPTIONS.filter((option) => selectedIds.includes(option.id)).map(
+        (option) => option.type || ANY_OPTION.sub
+      )
+    )
+  ).join("·");
+}
+
+const TASTE_DISPLAY_LABEL_KEY = "onboarding:tasteDisplayLabel";
+
+/** 마이페이지 등에서 저장된 취향을 고른 그대로("추천받기" 포함) 보여줄 때 씁니다. */
+export function useTasteDisplayLabel() {
+  return useLocalStorageState<string | null>(TASTE_DISPLAY_LABEL_KEY, null);
+}
+
 export default function OnboardingTastePage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const from = searchParams.get("from") || "/";
   const isEditMode = from === "/mypage";
   const [selected, setSelected] = usePersistentState<string[]>("onboarding:taste", []);
+  const [tasteDisplayLabel, setTasteDisplayLabel] = useTasteDisplayLabel();
   const [isSkipping, setIsSkipping] = useState(false);
   const [skipError, setSkipError] = useState<string | null>(null);
   const [otherPreferences, setOtherPreferences] = useState<OnboardingPreferencesData | null>(
@@ -82,15 +102,16 @@ export default function OnboardingTastePage() {
       .then((preferences) => {
         if (cancelled) return;
         setOtherPreferences(preferences);
-        const concreteMatchedIds = TASTE_OPTIONS.filter(
-          (option) => option.type && preferences.liquorTypes.includes(option.type)
-        ).map((option) => option.id);
-        // 저장된 주종이 "어떤 맛이든 좋아요"가 채워 넣는 다섯 가지를 전부 포함하면,
-        // 그 다섯 항목과 함께 "어떤 맛이든 좋아요"도 같이 선택된 것으로 보여줍니다
-        // (저장은 어차피 다섯 가지 전부로 되니, 화면에서 같이 골랐던 것처럼 보이게 함).
-        const matchedIds = isAnyFlavorPreference(preferences.liquorTypes)
-          ? [...concreteMatchedIds, "any"]
-          : concreteMatchedIds;
+        // 실제 고른 조합(예: 과실주+추천받기)은 저장값(백엔드용으로 부풀린 실제 주종
+        // 목록)만으로는 되살릴 수 없어서, 로컬에 기억해둔 화면 문구를 우선 씁니다.
+        // 그게 없으면(다른 기기 등) 저장된 주종과 겹치는 항목으로 최대한 복원합니다.
+        const matchedIds = tasteDisplayLabel
+          ? TASTE_OPTIONS.filter((option) =>
+              tasteDisplayLabel.split("·").includes(option.type || ANY_OPTION.sub)
+            ).map((option) => option.id)
+          : TASTE_OPTIONS.filter(
+              (option) => option.type && preferences.liquorTypes.includes(option.type)
+            ).map((option) => option.id);
         setSelected(matchedIds);
       })
       .catch((error) => console.error("취향 정보 조회 실패", error));
@@ -124,7 +145,9 @@ export default function OnboardingTastePage() {
       regions: otherPreferences?.regions ?? [],
       alcoholLevel: otherPreferences?.alcoholLevel ?? "MEDIUM",
     });
-    if (!result.success) {
+    if (result.success) {
+      setTasteDisplayLabel(deriveTasteDisplayLabel(selected));
+    } else {
       setSaveError(result.message ?? null);
     }
     setIsSaving(false);
