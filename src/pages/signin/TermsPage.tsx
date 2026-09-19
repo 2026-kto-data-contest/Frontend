@@ -18,7 +18,7 @@ const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "LOCATION", "MARK
 
 // 백엔드가 내려주는 약관 제목을 그대로 쓰지 않고 화면 문구를 고정하고 싶은 항목입니다.
 const TERM_TITLE_OVERRIDES: Record<string, string> = {
-  MARKETING: "마케팅 수신 동의",
+  MARKETING: "마케팅 수신 동의 (카카오톡, 이메일 등)",
 };
 
 function displayTermTitle(item: TermItem): string {
