@@ -487,46 +487,46 @@ export default function CourseDetailPage() {
                       <Fragment key={item.contentId}>
                         {index > 0 && <StopDivider />}
                         <StopRow>
-                        {item.imageUrl ? (
-                          <StopThumb src={item.imageUrl} alt="" />
-                        ) : (
-                          <StopThumbFallback
-                            src={CATEGORY_META[section.key].fallback}
-                            alt=""
-                            width={64}
-                            height={64}
-                          />
-                        )}
-                        <StopBody>
-                          {note && (
-                            <PairingNote $color={categoryColor}>
-                              <PairingIcon $src={verifiedIcon} $color={categoryColor} />
-                              {note}
-                            </PairingNote>
+                          {item.imageUrl ? (
+                            <StopThumb src={item.imageUrl} alt="" />
+                          ) : (
+                            <StopThumbFallback
+                              src={CATEGORY_META[section.key].fallback}
+                              alt=""
+                              width={64}
+                              height={64}
+                            />
                           )}
-                          <StopName>{item.name}</StopName>
-                          <StopMeta>
-                            {metaParts.map((part, partIndex) => (
-                              <StopMetaPart key={part}>
-                                {partIndex > 0 && <StopMetaDot aria-hidden />}
-                                {part}
-                              </StopMetaPart>
-                            ))}
-                          </StopMeta>
-                        </StopBody>
-                        {item.placeUrl ? (
-                          <ChevronButton
-                            type="button"
-                            aria-label={`${item.name} 카카오맵에서 보기`}
-                            onClick={() =>
-                              window.open(item.placeUrl!, "_blank", "noopener,noreferrer")
-                            }
-                          >
+                          <StopBody>
+                            {note && (
+                              <PairingNote $color={categoryColor}>
+                                <PairingIcon $src={verifiedIcon} $color={categoryColor} />
+                                {note}
+                              </PairingNote>
+                            )}
+                            <StopName>{item.name}</StopName>
+                            <StopMeta>
+                              {metaParts.map((part, partIndex) => (
+                                <StopMetaPart key={part}>
+                                  {partIndex > 0 && <StopMetaDot aria-hidden />}
+                                  {part}
+                                </StopMetaPart>
+                              ))}
+                            </StopMeta>
+                          </StopBody>
+                          {item.placeUrl ? (
+                            <ChevronButton
+                              type="button"
+                              aria-label={`${item.name} 카카오맵에서 보기`}
+                              onClick={() =>
+                                window.open(item.placeUrl!, "_blank", "noopener,noreferrer")
+                              }
+                            >
+                              <img src={chevronRightIcon} alt="" width={20} height={20} />
+                            </ChevronButton>
+                          ) : (
                             <img src={chevronRightIcon} alt="" width={20} height={20} />
-                          </ChevronButton>
-                        ) : (
-                          <img src={chevronRightIcon} alt="" width={20} height={20} />
-                        )}
+                          )}
                         </StopRow>
                       </Fragment>
                     );
@@ -603,6 +603,9 @@ const MapExpandButton = styled.button`
   position: absolute;
   top: 12px;
   right: 12px;
+  /* 카카오맵 SDK가 내부 레이어(타일·오버레이 pane)에 z-index를 직접 지정해서, 이 버튼도
+     z-index 없이 DOM 순서에만 맡기면 지도 레이어에 덮여 안 보일 수 있습니다. */
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -624,7 +627,9 @@ const WinerySummary = styled.div`
   padding: 12px 16px;
   border-radius: 8px;
   background: #ffffff;
-  box-shadow: 0 0 1px rgba(0, 0, 0, 0.25);
+  /* Figma dev-mode가 내보낸 값(0 0 1px)은 실제 캡처 스크린샷과 달리 거의 안 보이는
+     수준이라, 스크린샷에서 실제로 보이는 만큼 더 넓고 부드러운 그림자로 맞췄습니다. */
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.1);
 `;
 
 const WineryInfo = styled.div`
