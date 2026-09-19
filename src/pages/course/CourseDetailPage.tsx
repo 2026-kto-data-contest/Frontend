@@ -486,7 +486,17 @@ export default function CourseDetailPage() {
                     return (
                       <Fragment key={item.contentId}>
                         {index > 0 && <StopDivider />}
-                        <StopRow>
+                        <StopRow
+                          as={item.placeUrl ? "button" : "div"}
+                          type={item.placeUrl ? "button" : undefined}
+                          $clickable={Boolean(item.placeUrl)}
+                          aria-label={item.placeUrl ? `${item.name} 카카오맵에서 보기` : undefined}
+                          onClick={
+                            item.placeUrl
+                              ? () => window.open(item.placeUrl!, "_blank", "noopener,noreferrer")
+                              : undefined
+                          }
+                        >
                           {item.imageUrl ? (
                             <StopThumb src={item.imageUrl} alt="" />
                           ) : (
@@ -514,19 +524,7 @@ export default function CourseDetailPage() {
                               ))}
                             </StopMeta>
                           </StopBody>
-                          {item.placeUrl ? (
-                            <ChevronButton
-                              type="button"
-                              aria-label={`${item.name} 카카오맵에서 보기`}
-                              onClick={() =>
-                                window.open(item.placeUrl!, "_blank", "noopener,noreferrer")
-                              }
-                            >
-                              <img src={chevronRightIcon} alt="" width={20} height={20} />
-                            </ChevronButton>
-                          ) : (
-                            <img src={chevronRightIcon} alt="" width={20} height={20} />
-                          )}
+                          <ChevronIcon src={chevronRightIcon} alt="" width={20} height={20} />
                         </StopRow>
                       </Fragment>
                     );
@@ -701,11 +699,19 @@ const StopList = styled.div`
   flex-direction: column;
 `;
 
-const StopRow = styled.div`
+const StopRow = styled.div<{ $clickable?: boolean }>`
   display: flex;
   align-items: center;
   gap: 10px;
+  width: 100%;
   padding: 12px 16px;
+  border: none;
+  margin: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: ${(props) => (props.$clickable ? "pointer" : "default")};
 `;
 
 // Figma의 "Horizontal"(Inset)처럼 구분선 양옆에 16px 여백을 둡니다(카드 폭 그대로 걸치지 않음).
@@ -798,16 +804,8 @@ const StopMetaDot = styled.span`
   background-color: ${colors.gray[500]};
 `;
 
-const ChevronButton = styled.button`
+const ChevronIcon = styled.img`
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  margin: -8px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
 `;
 
 // 하단 고정 "지도에서 보기" 버튼(bottom 36px + 버튼 자체 높이)이 마지막 카드를
