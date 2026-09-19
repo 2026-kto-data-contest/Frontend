@@ -172,19 +172,23 @@ const CheckCircle = styled.span<{ $active: boolean }>`
 
 const WithdrawButton = styled.button`
   width: 100%;
-  padding: 10px 16px;
+  height: 48px;
+  padding: 12px 16px;
   border: none;
   border-radius: 8px;
   background-color: ${colors.gray[50]};
   color: ${colors.gray[300]};
-  font-size: 0.875rem;
+  font-size: 1rem;
   font-weight: 300;
+  line-height: 140%;
+  letter-spacing: -0.32px;
   cursor: pointer;
+  box-sizing: border-box;
 
   &:not(:disabled) {
     background-color: ${colors.primary[500]};
     color: #ffffff;
-    font-weight: 600;
+    font-weight: 700;
   }
 
   &:disabled {
