@@ -12,7 +12,7 @@ import {
 } from "../../shared/api/api";
 import type { OnboardingPreferencesData } from "../../shared/api/api";
 import { STRENGTH_OPTIONS, ALCOHOL_LEVEL_TO_ID } from "../signin/onboarding/OnboardingStrengthPage";
-import { isAnyFlavorPreference } from "../signin/onboarding/OnboardingTastePage";
+import { useTasteDisplayLabel } from "../signin/onboarding/OnboardingTastePage";
 import bannerBeforeIcon from "../../assets/icon/BannerBefore.png";
 import kakaoLogoIcon from "../../assets/icon/KakaoLogo.svg";
 import outwardIcon from "../../assets/icon/Outward.svg";
@@ -49,6 +49,7 @@ export default function MyPage() {
     null
   );
   const cacheGeneration = useCacheGeneration();
+  const [tasteDisplayLabel] = useTasteDisplayLabel();
   const [savingCode, setSavingCode] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [logoutOpen, setLogoutOpen] = useState(false);
@@ -138,11 +139,10 @@ export default function MyPage() {
     return null;
   }
 
-  const tasteLabel = preferences
-    ? isAnyFlavorPreference(preferences.liquorTypes)
-      ? "추천받기"
-      : preferences.liquorTypes.join("·")
-    : "";
+  // 저장값(백엔드용으로 부풀려진 실제 주종 목록)이 아니라, 온보딩에서 실제로 고른
+  // 조합을 로컬에 기억해둔 문구로 보여줍니다("과실주·추천받기" 등). 로컬에 없으면
+  // (다른 기기 등) 저장값을 그대로 나열합니다.
+  const tasteLabel = tasteDisplayLabel ?? preferences?.liquorTypes.join("·") ?? "";
   const regionLabel = preferences
     ? preferences.regions.length === 0
       ? "전국"

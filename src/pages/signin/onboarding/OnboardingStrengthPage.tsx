@@ -11,7 +11,7 @@ import {
   finishOnboardingWithPreferences,
   saveOnboardingPreferenceField,
 } from "./finishOnboarding";
-import { deriveLiquorTypes } from "./OnboardingTastePage";
+import { deriveLiquorTypes, deriveTasteDisplayLabel, useTasteDisplayLabel } from "./OnboardingTastePage";
 import { REAL_REGIONS } from "./OnboardingRegionPage";
 import { ALL_TYPE_FILTERS } from "../../../shared/lib/mockWineries";
 import { fetchOnboardingPreferences } from "../../../shared/api/api";
@@ -51,6 +51,7 @@ export default function OnboardingStrengthPage() {
   const from = searchParams.get("from") || "/";
   const isEditMode = from === "/mypage";
   const [selectedTaste] = usePersistentState<string[]>("onboarding:taste", []);
+  const [, setTasteDisplayLabel] = useTasteDisplayLabel();
   const [selectedRegion] = usePersistentState<string[]>("onboarding:region", []);
   const [selectedStrength, setSelectedStrength] = usePersistentState<string>(
     "onboarding:strength",
@@ -92,7 +93,9 @@ export default function OnboardingStrengthPage() {
       regions,
       alcoholLevel: ALCOHOL_LEVEL_MAP[selectedStrength] ?? "MEDIUM",
     });
-    if (!result.success) {
+    if (result.success) {
+      setTasteDisplayLabel(deriveTasteDisplayLabel(selectedTaste));
+    } else {
       setErrorMessage(result.message ?? null);
     }
     setIsSubmitting(false);
