@@ -54,7 +54,7 @@ const FALLBACK_TERMS: TermItem[] = [
   {
     code: "MARKETING",
     version: "1",
-    title: "마케팅 수신 동의",
+    title: "마케팅 수신 동의 (카카오톡, 이메일 등)",
     required: false,
     contentUrl: null,
     agreed: false,
