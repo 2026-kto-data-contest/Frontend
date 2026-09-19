@@ -4,7 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { ErrorState } from "../../shared/components/ErrorState";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { WineryCard } from "../../shared/components/WineryCard";
-import { PhotoCard } from "../../shared/components/PhotoCard";
 import { Button } from "../../shared/components/Button";
 import { BackButton } from "../../shared/components/BackButton";
 import searchIcon from "../../assets/icon/Search.svg";
@@ -529,24 +528,39 @@ export default function SearchPage() {
           <Section>
             <SectionHeader>
               <SectionTitle $large>이런 양조장은 어때요?</SectionTitle>
-              <TextButton type="button" onClick={() => navigate("/explore")}>
+              {/* 이 섹션만 Figma 색상(#656563)이 다른 화면 더보기 버튼(#b0b0ae)과 달라서
+                  공용 TextButton 색을 바꾸지 않고 이 자리에서만 덮어씁니다. */}
+              <TextButton
+                type="button"
+                style={{ color: colors.gray[500] }}
+                onClick={() => navigate("/explore")}
+              >
                 더보기
               </TextButton>
             </SectionHeader>
             <SuggestGrid>
               {recommended.map((winery) => (
-                <PhotoCard
+                <SuggestCard
                   key={winery.breweryId}
-                  fluid
-                  name={winery.businessName}
-                  region={
-                    winery.sigungu
-                      ? `${winery.sido ?? ""} ${winery.sigungu}`.trim()
-                      : (winery.sido ?? winery.region ?? "")
-                  }
-                  photoUrl={resolveImageUrl(winery.mainImage?.url)}
+                  type="button"
                   onClick={() => navigate(`/winery/${winery.breweryId}`)}
-                />
+                >
+                  <SuggestPhoto
+                    style={{
+                      backgroundImage: resolveImageUrl(winery.mainImage?.url)
+                        ? `url(${resolveImageUrl(winery.mainImage?.url)})`
+                        : undefined,
+                    }}
+                  />
+                  <SuggestInfo>
+                    <SuggestName>{winery.businessName}</SuggestName>
+                    <SuggestLocation>
+                      {winery.sigungu
+                        ? `${winery.sido ?? ""} ${winery.sigungu}`.trim()
+                        : (winery.sido ?? winery.region ?? "")}
+                    </SuggestLocation>
+                  </SuggestInfo>
+                </SuggestCard>
               ))}
             </SuggestGrid>
           </Section>
@@ -869,14 +883,69 @@ const EmptyResultWrapper = styled.div`
   min-height: 0;
   display: flex;
   flex-direction: column;
-  padding: 0 16px 50px;
-  gap: 50px;
+  padding: 0 16px 60px;
 `;
 
 const SuggestGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 4px 8px;
+`;
+
+// Figma "Card/Place"(검색 결과 없음 화면 전용)를 그대로 옮긴 카드입니다. 다른 화면에서 쓰는
+// PhotoCard와 디자인이 달라서 공용 컴포넌트를 재사용하지 않고 이 화면에서만 씁니다.
+const SuggestCard = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+  border: none;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+`;
+
+const SuggestPhoto = styled.div`
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 8px;
+  background-color: ${colors.gray[100]};
+  background-size: cover;
+  background-position: center;
+`;
+
+const SuggestInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 4px;
+  box-sizing: border-box;
+`;
+
+const SuggestName = styled.p`
+  margin: 0;
+  width: 100%;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 140%;
+  letter-spacing: -0.28px;
+  color: ${colors.gray[900]};
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+`;
+
+const SuggestLocation = styled.p`
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 100%;
+  color: ${colors.gray[400]};
+  white-space: nowrap;
 `;
 
 const ModalOverlay = styled.div`
