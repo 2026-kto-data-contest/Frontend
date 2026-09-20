@@ -57,18 +57,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await logoutApi();
-    } catch (error) {
-      console.error("로그아웃 요청 실패", error);
-    } finally {
       setMember(null);
       // 다른 계정으로 다시 로그인했을 때 이전 계정의 캐시된 탭 데이터가 잠깐이라도
       // 보이지 않도록, 로그아웃 시점에 탭별 캐시를 전부 무효화합니다.
       invalidateTabCache();
+      // 우리 서버 로그아웃이 성공했을 때만 카카오 자체 로그인 세션도 끊습니다(먼저 우리
+      // 세션을 확실히 지운 뒤에만 진행). 카카오 로그인 REST 앱 키가 준비되면 전체 페이지
+      // 이동으로 카카오 로그아웃 주소를 거쳐 로그인 화면으로 돌아가고, 키가 아직 없으면
+      // false를 반환해 아무 것도 하지 않고 호출한 쪽이 원래대로 다음 화면으로 이동합니다.
+      redirectToKakaoLogout();
+    } catch (error) {
+      console.error("로그아웃 요청 실패", error);
+      setMember(null);
+      invalidateTabCache();
     }
-    // 카카오 로그인 REST 앱 키가 준비되면, 우리 세션뿐 아니라 카카오 자체 로그인 세션도
-    // 끊어서 로그아웃 후 다른 계정으로 다시 로그인할 수 있게 합니다. 키가 아직 없으면
-    // false를 반환해 아무 것도 하지 않고, 호출한 쪽이 원래대로 직접 다음 화면으로 이동합니다.
-    redirectToKakaoLogout();
   }, []);
 
   const value = useMemo<AuthContextValue>(
