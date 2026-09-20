@@ -822,21 +822,29 @@ export default function Map() {
           });
         }
         kakao.event.addListener(map, "idle", () => {
-          if (suppressNextIdleRefetchRef.current) {
-            // 여기서 바로 끄지 않습니다 — focusMapOn 쪽 타이머가 일정 시간 뒤에 끕니다.
-          } else if (!isCourseMode && !isSearchResultModeRef.current) {
-            if (pendingUserMoveRef.current) {
-              pendingUserMoveRef.current = false;
-              setShowResearchButton(true);
-            } else {
-              refetchPlacesRef.current(activeCategoryRef.current);
+          // 카카오맵 SDK가 idle을 쏘는 시점에, 내부적으로 getBounds()가 아직 직전 줌
+          // 레벨의 값을 돌려주는 경우가 있습니다(특히 배포 빌드처럼 실행이 빨라 다음
+          // 프레임 전에 idle 콜백이 도는 환경에서 재현됨 — 반경 계산이 실제보다 훨씬
+          // 좁게 나와서, 지도를 많이 축소해도 일부 지역만 조회되는 결과로 이어집니다).
+          // 다음 프레임 이후로 한 틱 미뤄서 카카오맵 내부 상태가 확실히 정리된 뒤에
+          // bounds를 읽습니다.
+          requestAnimationFrame(() => {
+            if (suppressNextIdleRefetchRef.current) {
+              // 여기서 바로 끄지 않습니다 — focusMapOn 쪽 타이머가 일정 시간 뒤에 끕니다.
+            } else if (!isCourseMode && !isSearchResultModeRef.current) {
+              if (pendingUserMoveRef.current) {
+                pendingUserMoveRef.current = false;
+                setShowResearchButton(true);
+              } else {
+                refetchPlacesRef.current(activeCategoryRef.current);
+              }
             }
-          }
-          if (!isCourseMode) {
-            const center = map.getCenter();
-            setMemory("map:center", { lat: center.getLat(), lng: center.getLng() });
-            setMemory("map:level", map.getLevel());
-          }
+            if (!isCourseMode) {
+              const center = map.getCenter();
+              setMemory("map:center", { lat: center.getLat(), lng: center.getLng() });
+              setMemory("map:level", map.getLevel());
+            }
+          });
         });
         setLoadState("ready");
         requestAnimationFrame(() => map.relayout());
