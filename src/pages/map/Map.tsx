@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
@@ -310,6 +310,7 @@ export default function Map() {
   const stopOverlaysRef = useRef<KakaoCustomOverlayInstance[]>([]);
   const userDotOverlayRef = useRef<KakaoCustomOverlayInstance | null>(null);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
+  const sheetScrollRef = useRef<HTMLDivElement>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetInitialized = useRef(false);
   const restoredFocusRef = useRef(false);
@@ -534,10 +535,26 @@ export default function Map() {
 
     setPlacesLoadState("loading");
 
+    // 사용자가 지도를 축소해서 넓은 범위를 보고 있으면, 화면에 이미 보이는 범위보다 좁은
+    // 반경으로 조회를 시작해서는 안 됩니다(그 범위 안 장소도 아직 안 불러온 상태가 되어
+    // "일부만 보이는" 것처럼 됩니다). 현재 화면(bounds) 기준 반경보다 작은 단계는 건너뛰고,
+    // 그 반경부터 기존과 동일하게 최소 결과 수가 찰 때까지 넓혀갑니다.
+    const bounds = map.getBounds();
+    const ne = bounds.getNorthEast();
+    const visibleLatKm = Math.abs(ne.getLat() - centerLat) * 111;
+    const visibleLngKm =
+      Math.abs(ne.getLng() - centerLng) * 111 * Math.cos((centerLat * Math.PI) / 180);
+    const visibleRadiusKm = Math.max(visibleLatKm, visibleLngKm);
+    const radiiCoveringView = SEARCH_RADII_KM.filter((radiusKm) => radiusKm >= visibleRadiusKm);
+    // 화면이 미리 정해둔 반경 목록(최대 30km)보다도 넓게 보이면(많이 축소한 경우), 목록의
+    // 최대값으로 뭉개지 말고 실제로 보이는 반경을 그대로 씁니다 — 그래야 전국 단위로 축소해도
+    // 화면에 있는 양조장이 전부 조회됩니다.
+    const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [visibleRadiusKm];
+
     async function run() {
-      for (let i = 0; i < SEARCH_RADII_KM.length; i++) {
-        const radiusKm = SEARCH_RADII_KM[i];
-        const isLastRadius = i === SEARCH_RADII_KM.length - 1;
+      for (let i = 0; i < radii.length; i++) {
+        const radiusKm = radii[i];
+        const isLastRadius = i === radii.length - 1;
         const latDelta = radiusKm / 111;
         const lngDelta = radiusKm / (111 * Math.cos((centerLat * Math.PI) / 180));
         try {
@@ -1299,6 +1316,25 @@ export default function Map() {
     setIsDragging(true);
   };
 
+  // 시트 내용 영역에서 시작한 제스처입니다. 다 펼쳐지기 전까지는 내용을 스크롤하는 대신
+  // 핸들과 똑같이 시트 자체를 끌어올립니다(SheetScroll의 overflow-y가 그동안 hidden이라
+  // 어차피 스크롤도 안 됩니다). 다 펼쳐진 뒤에는 그냥 지나쳐서 원래 스크롤을 씁니다.
+  const handleContentDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (isSheetFullyExpanded) return;
+    handleDragStart(e);
+  };
+
+  // 터치·손가락 드래그(pointer 이벤트)와 별개로, 데스크탑에서 트랙패드로 스크롤하거나
+  // 마우스 휠을 굴리는 제스처는 pointer가 아니라 wheel 이벤트로 들어옵니다. 다 펼쳐지기
+  // 전에는 이것도 스크롤 대신 시트를 늘리는 데 그대로 씁니다.
+  const handleContentWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
+    if (isSheetFullyExpanded) return;
+    e.preventDefault();
+    const points = getSnapPoints(areaHeight);
+    const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
+    setSheetHeight((prev) => Math.min(points.full, Math.max(minHeight - 40, prev + e.deltaY)));
+  };
+
   const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragRef.current) return;
     const points = getSnapPoints(areaHeight);
@@ -1331,6 +1367,12 @@ export default function Map() {
     ) {
       navigate(`/winery/${selectedWinery.id}`);
       return;
+    }
+    // 다 펼쳐진 상태에서 내용을 스크롤해 내려간 채로 다시 접으면, 접힌 높이(칩 줄만 보여야
+    // 함) 창에 스크롤돼 있던 중간 내용이 그대로 보입니다. 완전히 펼쳐진 상태가 아닌 곳으로
+    // 스냅될 때는 스크롤 위치를 맨 위로 되돌려 항상 칩부터 보이게 합니다.
+    if (snapped < points.full && sheetScrollRef.current) {
+      sheetScrollRef.current.scrollTop = 0;
     }
     setSheetHeight(snapped);
   };
@@ -1493,7 +1535,15 @@ export default function Map() {
               <SheetHandle />
             </SheetHandleArea>
 
-            <SheetScroll>
+            <SheetScroll
+              ref={sheetScrollRef}
+              $expanded={isSheetFullyExpanded}
+              onPointerDown={handleContentDragStart}
+              onPointerMove={handleDragMove}
+              onPointerUp={handleDragEnd}
+              onPointerCancel={handleDragEnd}
+              onWheel={handleContentWheel}
+            >
               {sheetMode === "list" && (
                 <>
                   <ChipRow>
@@ -1768,7 +1818,20 @@ export default function Map() {
         {isSheetFullyExpanded && (
           <MapViewButton
             type="button"
-            onClick={() => setSheetHeight(getSnapPoints(areaHeight).collapsed)}
+            onClick={() => {
+              // 양조장 상세 등을 보다가 풀시트에서 지도보기를 눌러도 카테고리 칩이 있는
+              // 목록으로 돌아가게 합니다 — 상세 모드로 접으면 칩이 아예 없어서 다른
+              // 카테고리를 고를 방법이 없어집니다.
+              if (sheetMode !== "list") {
+                setSelectedId(null);
+                setDetailKind("winery");
+                setSheetMode("list");
+              }
+              // 펼쳐진 채로 내용을 스크롤해 내려간 상태였을 수 있으므로, 접었을 때 항상
+              // 칩부터 보이도록 스크롤 위치를 맨 위로 되돌립니다.
+              if (sheetScrollRef.current) sheetScrollRef.current.scrollTop = 0;
+              setSheetHeight(getSnapPoints(areaHeight).collapsed);
+            }}
           >
             <img src={mapViewIcon} alt="" width={16} height={16} />
             지도보기
@@ -2333,10 +2396,13 @@ const SheetHandleArea = styled.div`
   cursor: grab;
 `;
 
-const SheetScroll = styled.div`
+const SheetScroll = styled.div<{ $expanded: boolean }>`
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
+  /* 다 펼쳐지기 전에는 스크롤 대신 드래그로 시트 자체가 늘어나야 하므로 스크롤 자체를
+     막아둡니다(핸들과 동일하게 touch-action도 꺼서 브라우저가 제스처를 가로채지 않게 함). */
+  overflow-y: ${(props) => (props.$expanded ? "auto" : "hidden")};
+  touch-action: ${(props) => (props.$expanded ? "auto" : "none")};
   overscroll-behavior: contain;
   padding: 0 16px 20px;
   box-sizing: border-box;
