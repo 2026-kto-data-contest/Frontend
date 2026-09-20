@@ -747,13 +747,15 @@ export default function Map() {
     const visibleRadiusKm = Math.max(visibleLatKm, visibleLngKm);
     const radiiCoveringView = SEARCH_RADII_KM.filter((radiusKm) => radiusKm >= visibleRadiusKm);
     // 화면이 미리 정해둔 반경 목록(최대 30km)보다도 넓게 보이면(전국 단위로 많이 축소한
-    // 경우), 실제로 보이는 반경을 그대로 쓰지 않고 목록의 최댓값(30km)으로 잘라냅니다.
-    // 식당·카페처럼 개수가 아주 많은 카테고리는 전국 범위 bbox로 조회하면 페이지를
-    // 수십~수백 번 이어받아야 해서 로딩이 심하게 느려집니다(양조장처럼 수가 적은
-    // 카테고리에서만 괜찮던 방식). 화면 전체가 아니라 중심에서 가장 가까운 30개만
-    // 보여주면 되므로, 반경을 30km로 제한해도 실제로 필요한 결과는 그대로 나옵니다.
+    // 경우), 식당·카페처럼 전국에 수천 건씩 있는 카테고리는 실제로 보이는 반경을 그대로
+    // 쓰지 않고 목록의 최댓값(30km)으로 잘라냅니다 — 안 그러면 페이지를 수십~수백 번
+    // 이어받아야 해서 로딩이 심하게 느려지고, 어차피 화면엔 가장 가까운 30개만 보여줍니다.
+    // 다만 양조장은 전국에 다 합쳐도 수십 곳뿐이라 이 최적화가 필요 없고, 30km로 잘라내면
+    // 전국 단위로 축소했을 때 먼 지역 양조장이 통째로 빠져 보입니다. 그래서 양조장만은
+    // 예전처럼 실제로 보이는 반경을 그대로 씁니다.
     const MAX_SEARCH_RADIUS_KM = SEARCH_RADII_KM[SEARCH_RADII_KM.length - 1];
-    const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [MAX_SEARCH_RADIUS_KM];
+    const fallbackRadiusKm = mapCategory === "BREWERY" ? visibleRadiusKm : MAX_SEARCH_RADIUS_KM;
+    const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [fallbackRadiusKm];
 
     // 반경을 하나씩 순서대로 기다리면(작은 반경 결과가 모자랄 때마다 매번 왕복 한 번씩
     // 추가) 숙소·카페처럼 드문 카테고리는 반경을 여러 번 넓혀야 해서 왕복이 누적되고,
@@ -790,7 +792,14 @@ export default function Map() {
               north: ne.getLat(),
               east: ne.getLng(),
             };
-            setPlaces(selectSpreadPlaces(sorted, viewBounds, MAX_DISPLAYED_PLACES));
+            // 양조장은 전국에 다 합쳐도 수십 곳뿐이라 30개로 잘라낼 필요가 없고, 잘라내면
+            // 전국 단위로 봤을 때 일부 양조장 핀이 안 보이게 됩니다. 그 외 카테고리만
+            // 화면에 고르게 퍼진 30개로 줄입니다.
+            setPlaces(
+              mapCategory === "BREWERY"
+                ? sorted
+                : selectSpreadPlaces(sorted, viewBounds, MAX_DISPLAYED_PLACES)
+            );
             setPlacesLoadState("ready");
             return;
           }
