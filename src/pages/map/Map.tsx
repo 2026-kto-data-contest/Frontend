@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, UIEvent as ReactUIEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { PointerEvent as ReactPointerEvent, RefObject, UIEvent as ReactUIEvent } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
@@ -9,6 +9,7 @@ import { DotsLoader } from "../../shared/components/DotsLoader";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { Badge } from "../../shared/components/Badge";
 import { PhotoCard } from "../../shared/components/PhotoCard";
+import { WineryDetailContent } from "../winery/WineryDetailContent";
 import {
   WINERIES,
   getRepresentativeTypeLabel,
@@ -443,6 +444,16 @@ export default function Map() {
   const userDotOverlayRef = useRef<KakaoCustomOverlayInstance | null>(null);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const sheetScrollRef = useRef<HTMLDivElement>(null);
+  // 양조장 카드(DetailContent)에서 상세 내용(WineryDetailContent)으로 바뀔 때, 카드의 사진이
+  // 실제로 자라며 위로 올라가는 것처럼 보이도록 카드 사진의 시작 위치·크기를 재둡니다.
+  const detailStackWrapRef = useRef<HTMLDivElement>(null);
+  const cardPhotoRowRef = useRef<HTMLDivElement>(null);
+  const [cardPhotoRect, setCardPhotoRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetInitialized = useRef(false);
   const restoredFocusRef = useRef(false);
@@ -1028,6 +1039,17 @@ export default function Map() {
     if (isCourseMode) return;
     let cancelled = false;
 
+    // 코스보기 등으로 지도 화면을 떠났다가 돌아오면 이 컴포넌트가 다시 마운트되면서 이
+    // effect도 다시 실행됩니다. 이미 이번 세션에 한 번 물어봤다면(허용했든 "다음에
+    // 할게요"로 넘겼든) 매번 돌아올 때마다 또 띄우지 않습니다 — 한 번만 묻습니다.
+    // (자동으로 조용히 위치를 가져오는 acquireLocation()은 시트를 띄우는 게 아니라서
+    // 계속 허용합니다.)
+    const promptLocationConsentOnce = () => {
+      if (getMemory<boolean>("map:locationConsentPrompted")) return;
+      setMemory("map:locationConsentPrompted", true);
+      setShowLocationConsent(true);
+    };
+
     const checkBrowserPermission = () => {
       const nav = navigator as Navigator & {
         permissions?: { query: (opts: { name: string }) => Promise<{ state: string }> };
@@ -1040,14 +1062,14 @@ export default function Map() {
             if (status.state === "granted") {
               acquireLocation();
             } else {
-              setShowLocationConsent(true);
+              promptLocationConsentOnce();
             }
           })
           .catch(() => {
-            if (!cancelled) setShowLocationConsent(true);
+            if (!cancelled) promptLocationConsentOnce();
           });
       } else {
-        setShowLocationConsent(true);
+        promptLocationConsentOnce();
       }
     };
 
@@ -1066,7 +1088,7 @@ export default function Map() {
         if (locationTerm?.agreed) {
           acquireLocation();
         } else if (locationTerm) {
-          setShowLocationConsent(true);
+          promptLocationConsentOnce();
         } else {
           checkBrowserPermission();
         }
@@ -1562,7 +1584,7 @@ export default function Map() {
     const target = e.currentTarget;
     if (target.scrollTop <= 0) return;
     target.scrollTop = 0;
-    setSheetHeight(getSnapPoints(areaHeight).full);
+    setSheetHeight(getSheetFullHeight());
   };
 
   const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -1571,7 +1593,7 @@ export default function Map() {
     const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
     const delta = dragRef.current.startY - e.clientY;
     const next = Math.min(
-      points.full,
+      getSheetFullHeight(),
       Math.max(minHeight - 40, dragRef.current.startHeight + delta)
     );
     setSheetHeight(next);
@@ -1583,25 +1605,15 @@ export default function Map() {
     setIsDragging(false);
     const points = getSnapPoints(areaHeight);
     const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
-    const candidates = [minHeight, points.mid, points.full];
+    const fullHeight = getSheetFullHeight();
+    const candidates = [minHeight, points.mid, fullHeight];
     const snapped = candidates.reduce((a, b) =>
       Math.abs(b - sheetHeight) < Math.abs(a - sheetHeight) ? b : a
     );
-    // 양조장 상세를 맨 위까지 끌어올리면, Figma의 "Brewery Card Expanded" 미니 상세 페이지 대신
-    // 이미 동일한 내용(대표주종·방문방식·한 줄 요약 등)을 갖춘 양조장 상세 페이지로 이동합니다.
-    if (
-      snapped >= points.full &&
-      sheetMode === "detail" &&
-      detailKind === "winery" &&
-      selectedWinery
-    ) {
-      navigate(`/winery/${selectedWinery.id}`);
-      return;
-    }
     // 다 펼쳐진 상태에서 내용을 스크롤해 내려간 채로 다시 접으면, 접힌 높이(칩 줄만 보여야
     // 함) 창에 스크롤돼 있던 중간 내용이 그대로 보입니다. 완전히 펼쳐진 상태가 아닌 곳으로
     // 스냅될 때는 스크롤 위치를 맨 위로 되돌려 항상 칩부터 보이게 합니다.
-    if (snapped < points.full && sheetScrollRef.current) {
+    if (snapped < fullHeight && sheetScrollRef.current) {
       sheetScrollRef.current.scrollTop = 0;
     }
     setSheetHeight(snapped);
@@ -1641,6 +1653,46 @@ export default function Map() {
   // 위치 동의 시트·양조장 상세 시트·장소 상세 카드가 화면을 덮는 동안은 하단 네비게이션 바를 숨깁니다.
   useHideNavbar(consentActive || sheetMode === "detail" || Boolean(floatingInfo));
 
+  // 양조장 상세 모드는 진짜 상세 페이지처럼 지도 영역을 꽉 채우도록, 목록 모드가 검색바
+  // 자리로 남겨두는 52px까지 마저 씁니다(getSnapPoints의 full). 다른 모드는 기존 그대로.
+  const getSheetFullHeight = () =>
+    sheetMode === "detail" && detailKind === "winery"
+      ? areaHeight || 600
+      : getSnapPoints(areaHeight).full;
+
+  // 카드의 사진(DetailPhotoRow, 실제로는 photosHidden으로 안 보이게만 해둔 채 자리만 차지)의
+  // 시작 위치·크기를, 그 위에 따로 얹는 "떠오르는 사진" 레이어가 그대로 이어받아 자라며 위로
+  // 올라가는 시작점으로 씁니다. compact 상태에서는 사진 자체가 안 그려져 잴 수 없으니, 처음
+  // 마운트 시 시트가 완전히 자리 잡기 전(sheetHeight가 아직 0인 순간 등) compact였다가
+  // 곧 mid로 자리 잡으면 그때 다시 재야 합니다 — compactForMeasure를 deps에 넣어둡니다.
+  const compactForMeasure = sheetHeight <= getSnapPoints(areaHeight).detailCollapsed + 20;
+  useLayoutEffect(() => {
+    if (sheetMode !== "detail" || detailKind !== "winery" || !selectedWinery) {
+      setCardPhotoRect(null);
+      return;
+    }
+    const measure = () => {
+      const wrapEl = detailStackWrapRef.current;
+      const photoEl = cardPhotoRowRef.current;
+      if (!wrapEl || !photoEl) {
+        setCardPhotoRect(null);
+        return;
+      }
+      const wrapRect = wrapEl.getBoundingClientRect();
+      const photoRect = photoEl.getBoundingClientRect();
+      setCardPhotoRect({
+        top: photoRect.top - wrapRect.top,
+        left: photoRect.left - wrapRect.left,
+        width: photoRect.width,
+        height: photoRect.height,
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedWinery?.id, sheetMode, detailKind, compactForMeasure]);
+
   // 양조장 정보를 아직 못 찾은 게 "로딩 중"이 아니라 "완전히 실패"했을 때만 지도를 아예 안 그립니다.
   // 로딩 중에는 아래 메인 렌더가 그대로 진행되어야 <MapEl>이 마운트되고 카카오맵이 초기화됩니다
   // (여기서 일찍 return하면 <MapEl>이 없는 채로 지도 초기화 효과가 한 번만 실행되고 끝나버려,
@@ -1659,10 +1711,40 @@ export default function Map() {
   // 장소 카드(FloatingCard)가 떠 있을 때는 바텀시트 자체가 사라지므로 피해야 할 높이가 없습니다.
   const activeSheetHeight = consentActive ? 190 : floatingInfo ? 0 : sheetHeight;
   const isSheetFullyExpanded =
-    !consentActive && !floatingInfo && sheetHeight >= getSnapPoints(areaHeight).full - 2;
+    !consentActive && !floatingInfo && sheetHeight >= getSheetFullHeight() - 2;
   // 바텀시트를 접힌 스냅 지점까지 끌어내리면, Figma의 "Brewery Card Collapsed" 상태처럼
   // 이름·버튼만 남기고 종류/주소/사진 등 부가 정보는 숨깁니다.
   const isDetailCollapsed = sheetHeight <= getSnapPoints(areaHeight).detailCollapsed + 20;
+  const detailFullHeight = getSheetFullHeight();
+  const detailDragPoints = getSnapPoints(areaHeight);
+  // 양조장 상세를 mid에서 full로 끌어올리는 동안, 시트의 둥근 모서리·그림자를 점점 지워
+  // 진짜 상세 페이지처럼 자연스럽게 바뀌도록 합니다(목록 모드는 기존 모양 그대로 유지).
+  const winerySheetProgress =
+    sheetMode === "detail" && detailKind === "winery" && detailFullHeight > detailDragPoints.mid
+      ? Math.max(
+          0,
+          Math.min(
+            1,
+            (sheetHeight - detailDragPoints.mid) / (detailFullHeight - detailDragPoints.mid)
+          )
+        )
+      : 0;
+  // 카드의 사진 자리(cardPhotoRect)에서 시작해, 상세 내용의 대표 이미지 자리(왼쪽 끝 0,
+  // 시트 너비 전체, 높이 260px — WineryDetailContent의 ImageCarousel과 동일)까지 드래그
+  // 진행률만큼 실시간으로 자라며 위로 올라갑니다.
+  const lerp = (from: number, to: number, t: number) => from + (to - from) * t;
+  const risingPhotoRect = cardPhotoRect
+    ? {
+        top: lerp(cardPhotoRect.top, 0, winerySheetProgress),
+        left: lerp(cardPhotoRect.left, 0, winerySheetProgress),
+        width: lerp(
+          cardPhotoRect.width,
+          detailStackWrapRef.current?.clientWidth ?? cardPhotoRect.width,
+          winerySheetProgress
+        ),
+        height: lerp(cardPhotoRect.height, 260, winerySheetProgress),
+      }
+    : null;
 
   return (
     <PageContainer>
@@ -1701,6 +1783,7 @@ export default function Map() {
           !isSearchResultMode &&
           !consentActive &&
           !isSheetFullyExpanded &&
+          !floatingInfo &&
           selectedMenu === null &&
           sheetMode === "list" && (
             <ResearchAreaButton
@@ -1708,8 +1791,7 @@ export default function Map() {
               onClick={handleResearchArea}
               style={{ bottom: activeSheetHeight + 24 }}
             >
-              <img src={retryIcon} alt="" width={20} height={20} />
-              현 지도에서 검색
+              <img src={retryIcon} alt="" width={20} height={20} />현 지도에서 검색
             </ResearchAreaButton>
           )}
 
@@ -1756,8 +1838,9 @@ export default function Map() {
               위치 동의가 필요해요
             </ConsentTitle>
             <ConsentDesc>
-              브라우저 위치 권한을 허용해주세요. 위치 정보는 이 기기에서만 사용되며 서버로
-              전송되지 않아요.
+              브라우저 위치 권한을 허용해주세요.
+              <br />
+              위치 정보는 이 기기에서만 사용되며 서버로 전송되지 않아요.
             </ConsentDesc>
             {locationError && <ConsentError>{locationError}</ConsentError>}
             <ConsentAgreeButton
@@ -1775,13 +1858,34 @@ export default function Map() {
 
         {!consentActive && !floatingInfo && (
           <Sheet
-            style={{ height: sheetHeight, transition: isDragging ? "none" : "height 0.25s ease" }}
+            style={{
+              height: sheetHeight,
+              borderRadius: `${16 * (1 - winerySheetProgress)}px ${16 * (1 - winerySheetProgress)}px 0 0`,
+              boxShadow: `0 -4px 16px rgba(0, 0, 0, ${(0.1 * (1 - winerySheetProgress)).toFixed(3)})`,
+              transition: isDragging
+                ? "none"
+                : "height 0.25s ease, border-radius 0.25s ease, box-shadow 0.25s ease",
+            }}
           >
             <SheetHandleArea
               onPointerDown={handleDragStart}
               onPointerMove={handleDragMove}
               onPointerUp={handleDragEnd}
               onPointerCancel={handleDragEnd}
+              style={{
+                opacity: 1 - winerySheetProgress,
+                // opacity·max-height만 줄이면 padding(8px 0 6px)은 max-height로 안 줄어들어
+                // 뒤로가기·공유 아이콘 위에 여백이 그대로 남습니다. padding도 함께 접어야
+                // 완전히 없어집니다.
+                maxHeight: `${lerp(38, 0, winerySheetProgress)}px`,
+                paddingTop: `${lerp(8, 0, winerySheetProgress)}px`,
+                paddingBottom: `${lerp(6, 0, winerySheetProgress)}px`,
+                overflow: "hidden",
+                pointerEvents: winerySheetProgress > 0.98 ? "none" : "auto",
+                transition: isDragging
+                  ? "none"
+                  : "opacity 0.25s ease, max-height 0.25s ease, padding 0.25s ease",
+              }}
             >
               <SheetHandle />
             </SheetHandleArea>
@@ -1801,9 +1905,17 @@ export default function Map() {
                           onClick={() => {
                             const wasMenuMode = selectedMenu != null;
                             setSelectedMenu(null);
+                            setShowResearchButton(false);
+                            if (active) {
+                              // 이미 켜져 있는 칩을 다시 누르면 선택을 해제합니다. 칩이
+                              // 하나도 켜져 있지 않으면(categorySelected=false)
+                              // showRecommendedDefault가 다시 참이 되어 기본 시트
+                              // ("전통주로에서 추천하는 양조장" 등)로 돌아갑니다.
+                              setCategorySelected(false);
+                              return;
+                            }
                             setActiveCategory(key);
                             setCategorySelected(true);
-                            setShowResearchButton(false);
                             if (wasMenuMode) refetchPlacesByRadius(key);
                           }}
                         >
@@ -2026,16 +2138,63 @@ export default function Map() {
               {sheetMode === "detail" &&
                 detailKind === "winery" &&
                 (selectedWinery ? (
-                  <DetailContent
-                    winery={selectedWinery}
-                    showClose={!isCourseMode}
-                    compact={isDetailCollapsed}
-                    onClose={handleCloseDetail}
-                    onShare={handleShareWinery}
-                    onDirections={handleDirections}
-                    onCopyPhone={(phone) => copyToClipboard(phone, "전화번호를 복사했어요!")}
-                    onNavigateCourse={(courseId) => navigate(`/course/${courseId}`)}
-                  />
+                  // 상세 페이지와 같은 내용(WineryDetailContent)을 항상 시트 안에 그려두고, 그
+                  // 위에 양조장 카드(DetailContent)를 겹쳐 올립니다. 이름만 드래그 진행률만큼
+                  // 옅어지고, 그 아래 정보(주소·버튼)는 옅어지지 않는 대신 카드 사진이 실제
+                  // 위치·크기(cardPhotoRect)에서 상세 내용의 대표 이미지 자리까지 자라며 위로
+                  // 올라오면서 그 정보를 덮어버립니다 — 둘 다 sheetHeight에서 바로 계산되니
+                  // 드래그하는 동안 계속 진행되고, 손을 놓는 순간 확 바뀌지 않습니다. 코스
+                  // 모드는 이미 상단에 자기 AppBar(뒤로가기·공유)가 떠 있어서 WineryDetailContent
+                  // 에는 또 넘기지 않습니다.
+                  <DetailStackWrap ref={detailStackWrapRef}>
+                    <FullDetailPad>
+                      <WineryDetailContent
+                        winery={selectedWinery}
+                        onBack={
+                          isCourseMode
+                            ? undefined
+                            : () => setSheetHeight(getSnapPoints(areaHeight).mid)
+                        }
+                      />
+                    </FullDetailPad>
+                    {winerySheetProgress < 1 && (
+                      <DetailCardOverlay
+                        style={{ pointerEvents: winerySheetProgress > 0.98 ? "none" : "auto" }}
+                      >
+                        <DetailContent
+                          winery={selectedWinery}
+                          showClose={!isCourseMode}
+                          compact={isDetailCollapsed}
+                          onClose={handleCloseDetail}
+                          onShare={handleShareWinery}
+                          onDirections={handleDirections}
+                          onCopyPhone={(phone) => copyToClipboard(phone, "전화번호를 복사했어요!")}
+                          onNavigateCourse={(courseId) => navigate(`/course/${courseId}`)}
+                          nameOpacity={1 - winerySheetProgress}
+                          photosHidden
+                          photoRowRef={cardPhotoRowRef}
+                        />
+                      </DetailCardOverlay>
+                    )}
+                    {winerySheetProgress < 1 &&
+                      risingPhotoRect &&
+                      selectedWinery.photoUrls?.[0] && (
+                        <RisingPhoto
+                          src={selectedWinery.photoUrls[0]}
+                          alt=""
+                          style={{
+                            top: risingPhotoRect.top,
+                            left: risingPhotoRect.left,
+                            width: risingPhotoRect.width,
+                            height: risingPhotoRect.height,
+                            borderRadius: `${lerp(8, 16, winerySheetProgress)}px`,
+                            transition: isDragging
+                              ? "none"
+                              : "top 0.25s ease, left 0.25s ease, width 0.25s ease, height 0.25s ease, border-radius 0.25s ease",
+                          }}
+                        />
+                      )}
+                  </DetailStackWrap>
                 ) : wineryDetailLoading || (isCourseMode && focusWineryLoading) ? (
                   // 코스 모드에서는 focusWinery를 별도 effect로 불러오는 중이라 wineryDetailLoading이
                   // 아니라 focusWineryLoading이 참일 때도 "정보 없음"이 아니라 로딩으로 처리해야 합니다.
@@ -2061,8 +2220,9 @@ export default function Map() {
         )}
 
         {/* 시트를 끝까지 올리면 지도가 안 보이므로, Figma의 "Map - Basic Sheet Expanded"처럼
-            시트를 다시 접는 지름길 버튼을 띄웁니다. */}
-        {isSheetFullyExpanded && (
+            시트를 다시 접는 지름길 버튼을 띄웁니다. 양조장 풀시트는 이제 진짜 상세 페이지처럼
+            보이고 자체 뒤로가기(onBack)가 있어서, 이 버튼은 목록 쪽 풀시트에만 띄웁니다. */}
+        {isSheetFullyExpanded && !(sheetMode === "detail" && detailKind === "winery") && (
           <MapViewButton
             type="button"
             onClick={() => {
@@ -2187,6 +2347,9 @@ function DetailContent({
   onDirections,
   onCopyPhone,
   onNavigateCourse,
+  nameOpacity,
+  photosHidden,
+  photoRowRef,
 }: {
   winery: Winery;
   showClose: boolean;
@@ -2196,6 +2359,14 @@ function DetailContent({
   onDirections: (winery: Winery) => void;
   onCopyPhone: (phone: string) => void;
   onNavigateCourse: (courseId: string) => void;
+  // 풀시트로 끌어올리는 동안(양조장 상세) 이름만 따로 옅어지도록, 이 이름에만 별도
+  // opacity를 줄 수 있게 합니다. 지정하지 않으면 평소처럼 항상 보입니다.
+  nameOpacity?: number;
+  // 같은 전환 동안 사진은 이 컴포넌트가 아니라 Map.tsx가 별도 레이어로 그 위에 얹어 직접
+  // 자라며 위로 올라가게 하므로, 여기서는 자리만 차지하고(레이아웃은 그대로) 안 보이게만 합니다.
+  photosHidden?: boolean;
+  // Map.tsx가 그 별도 사진 레이어의 시작 위치·크기를 재기 위한 ref입니다.
+  photoRowRef?: RefObject<HTMLDivElement | null>;
 }) {
   const representativeType = getRepresentativeTypeLabel(winery);
   const visitLabel = getWineryVisitLabel(winery);
@@ -2205,7 +2376,9 @@ function DetailContent({
   return (
     <DetailWrap>
       <DetailHeaderRow>
-        <DetailName>{winery.name}</DetailName>
+        <DetailName style={nameOpacity === undefined ? undefined : { opacity: nameOpacity }}>
+          {winery.name}
+        </DetailName>
         {showClose && (
           <DetailCloseButton type="button" aria-label="닫기" onClick={onClose}>
             <img src={closeIcon} alt="" width={24} height={24} />
@@ -2250,7 +2423,10 @@ function DetailContent({
       </DetailActionRow>
 
       {!compact && photoUrls.length > 0 && (
-        <DetailPhotoRow>
+        <DetailPhotoRow
+          ref={photoRowRef}
+          style={photosHidden ? { visibility: "hidden" } : undefined}
+        >
           {photoUrls.map((url, index) => (
             <DetailPhoto
               key={`${url}-${index}`}
@@ -2580,6 +2756,7 @@ const ConsentTitle = styled.p`
 const ConsentDesc = styled.p`
   margin: 12px 0 0;
   font-size: 0.8125rem;
+  line-height: 1.5;
   color: ${colors.gray[400]};
   text-align: left;
 `;
@@ -2594,7 +2771,7 @@ const ConsentError = styled.p`
 const ConsentAgreeButton = styled.button`
   width: 100%;
   height: 48px;
-  margin-top: 32px;
+  margin-top: 20px;
   padding: 12px 16px;
   border: none;
   border-radius: 8px;
@@ -2673,6 +2850,43 @@ const SheetScroll = styled.div`
   overscroll-behavior: contain;
   padding: 0 16px 20px;
   box-sizing: border-box;
+`;
+
+// WineryDetailContent는 자체적으로 좌우 여백(Body/Section의 16px)을 이미 갖고 있어서,
+// SheetScroll의 좌우 padding(16px)까지 더해지면 독립 페이지보다 여백이 두 배로 넓어 보입니다.
+// 이 요소로 SheetScroll의 좌우 padding만 상쇄해 독립 페이지와 같은 여백으로 맞춥니다.
+const FullDetailPad = styled.div`
+  margin: 0 -16px;
+`;
+
+// WineryDetailContent(항상 그려둠) 위에 DetailContent(카드)를 겹쳐 올려두는 자리입니다.
+const DetailStackWrap = styled.div`
+  position: relative;
+`;
+
+// 카드(이름·주소·버튼)를 실제 상세 내용 위에 그대로 덮어둡니다. 이름 자체는
+// DetailContent에 넘기는 nameOpacity로만 옅어지고, 그 아래 주소·버튼은 옅어지지 않는
+// 대신 RisingPhoto가 자라며 위로 올라와 이 자리를 그대로 덮어버립니다. 배경을 불투명하게
+// 둬서 아직 안 덮인 부분은 뒤의 실제 상세 내용이 비쳐 보이지 않습니다.
+const DetailCardOverlay = styled.div`
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: -16px;
+  right: -16px;
+  padding: 0 16px;
+  background: #ffffff;
+`;
+
+// 카드 사진(cardPhotoRect)에서 시작해 상세 내용의 대표 이미지 자리까지 자라며 위로
+// 올라오는, 실제로 눈에 보이는 유일한 사진 레이어입니다(DetailContent 쪽 사진은
+// photosHidden으로 안 보이게만 해둔 채 자리만 차지). DetailCardOverlay보다 위에 있어야
+// 자라는 동안 그 아래 주소·버튼을 덮으며 지나갑니다.
+const RisingPhoto = styled.img`
+  position: absolute;
+  z-index: 2;
+  object-fit: cover;
+  background-color: ${colors.gray[50]};
 `;
 
 const ChipRow = styled.div`
@@ -3024,7 +3238,11 @@ const DetailAddressTextSpaced = styled(DetailAddressText)`
 // Figma "Map - Other Card"(장소 정보 카드)의 주소·전화번호 글자색은 #656563(gray-500)로,
 // 양조장 상세 카드가 쓰는 DetailAddressText의 기본색(#454543, gray-600)과 다릅니다. 공용
 // 컴포넌트 기본색을 바꾸면 양조장 카드 쪽도 같이 바뀌어버려서, 이 카드 전용으로만 덮어씁니다.
+// flex: 1도 마찬가지로 덮어씁니다 — DetailAddressText의 flex: 1은 남는 공간을 다 차지해
+// InlineCopyButton("복사")을 줄 끝까지 밀어내는데, Figma는 복사 버튼이 텍스트 바로
+// 옆에 붙어있는 모양이라 텍스트가 내용 너비만큼만 차지하게 합니다.
 const OtherCardInlineText = styled(DetailAddressText)`
+  flex: 0 1 auto;
   color: ${colors.gray[500]};
 `;
 

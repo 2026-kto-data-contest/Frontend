@@ -1,5 +1,6 @@
 import { createBrowserRouter, Navigate, useSearchParams } from "react-router-dom";
 import { Layout, AuthLayout } from "../shared/layouts/RootLayout";
+import { useAuth } from "../shared/lib/authContext";
 import Home from "../pages/home/Home";
 import Map from "../pages/map/Map";
 import MyPage from "../pages/mypage/MyPage";
@@ -18,7 +19,13 @@ import WithdrawPage from "../pages/mypage/WithdrawPage";
 // 실제 첫 온보딩 단계로 보내주는 얇은 래퍼입니다. 쿼리스트링은 그대로 이어줍니다.
 function OnboardingIndexRedirect() {
   const [searchParams] = useSearchParams();
+  const auth = useAuth();
   const query = searchParams.toString();
+  // 이미 온보딩을 마친 회원이 다시 이 경로로 오면(예: 로그인 시작 시 returnTo를
+  // /onboarding으로 넘긴 기존 회원이, 온보딩 완료 후 "로그인 직전 화면"으로 다시
+  // 여기로 돌아오는 경우) 온보딩 화면을 또 보여주지 않고 홈으로 보냅니다.
+  if (auth.isLoading) return null;
+  if (auth.hasOnboarded) return <Navigate to="/" replace />;
   return <Navigate to={`/onboarding/taste${query ? `?${query}` : ""}`} replace />;
 }
 
