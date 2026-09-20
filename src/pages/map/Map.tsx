@@ -467,6 +467,11 @@ export default function Map() {
   // idle에서 한 번 확인 후 끕니다) — 드래그로 인한 idle은 자동 재조회 대신 "이 지역
   // 재검색" 버튼을 띄우는 데 씁니다.
   const pendingUserMoveRef = useRef(false);
+  // focusMapOn(핀 선택 등)이 프로그램적으로 지도를 옮길 때 켭니다. 이때도 idle이 발생해서
+  // 자동 재조회가 도는데, 그 재조회는 (드래그 때와 달리 옮기지 않는) queryCenterRef 기준
+  // 좁은 반경으로 나가기 때문에 방금 선택한 장소가 그 결과에 없으면 핀이 사라져 버립니다.
+  // 선택 직후에는 장소 목록을 다시 조회할 이유가 없으므로 이 idle은 통째로 건너뜁니다.
+  const suppressNextIdleRefetchRef = useRef(false);
   const refetchPlacesRef = useRef<(category: CategoryKey) => void>(() => {});
   const placesAbortRef = useRef<AbortController | null>(null);
   const isSearchResultModeRef = useRef(Boolean(searchBreweryIds?.length));
@@ -871,7 +876,9 @@ export default function Map() {
           });
         }
         kakao.event.addListener(map, "idle", () => {
-          if (!isCourseMode && !isSearchResultModeRef.current) {
+          if (suppressNextIdleRefetchRef.current) {
+            suppressNextIdleRefetchRef.current = false;
+          } else if (!isCourseMode && !isSearchResultModeRef.current) {
             if (pendingUserMoveRef.current) {
               pendingUserMoveRef.current = false;
               setShowResearchButton(true);
@@ -1506,6 +1513,7 @@ export default function Map() {
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
     if (!kakao || !map) return;
+    suppressNextIdleRefetchRef.current = true;
     const pinLatLng = new kakao.LatLng(lat, lng);
     map.setCenter(pinLatLng);
     map.setLevel(FOCUS_LEVEL);
