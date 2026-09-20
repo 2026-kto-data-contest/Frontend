@@ -290,7 +290,12 @@ export default function WineryListPage() {
                   } else if (auth.isLoggedIn) {
                     navigate("/terms?from=%2Fexplore");
                   } else {
-                    navigate("/login?from=%2F");
+                    // 기존 회원(온보딩만 안 한 상태)은 온보딩 완료 여부와 무관하게 로그인
+                    // 직후 곧장 returnTo로 이동하므로, 양조장 탭이 아니라 온보딩 화면
+                    // 자체로 바로 보냅니다(신규 가입자는 어차피 백엔드가 약관→온보딩을
+                    // 강제하므로 영향 없음). 이미 온보딩을 마친 회원이 이 경로로 다시
+                    // 오는 경우는 OnboardingIndexRedirect가 홈으로 되돌립니다.
+                    navigate("/login?from=%2Fonboarding");
                   }
                 }}
               />
