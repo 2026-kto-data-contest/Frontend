@@ -59,6 +59,7 @@ import awardIcon from "../../assets/icon/Award.svg";
 import searchIcon from "../../assets/icon/MapSearch.svg";
 import targetIcon from "../../assets/icon/MapTarget.svg";
 import mapViewIcon from "../../assets/icon/MapViewIcon.svg";
+import retryIcon from "../../assets/icon/Retry.svg";
 import placeCardFallbackBrewery from "../../assets/icon/MapPlaceCardFallback.svg";
 import placeCardFallbackRestaurant from "../../assets/icon/CourseFallbackRestaurant.svg";
 import placeCardFallbackAttraction from "../../assets/icon/CourseFallbackAttraction.svg";
@@ -732,23 +733,32 @@ export default function Map() {
     // 화면에 있는 양조장이 전부 조회됩니다.
     const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [visibleRadiusKm];
 
+    // 반경을 하나씩 순서대로 기다리면(작은 반경 결과가 모자랄 때마다 매번 왕복 한 번씩
+    // 추가) 숙소·카페처럼 드문 카테고리는 반경을 여러 번 넓혀야 해서 왕복이 누적되고,
+    // 느린 백엔드(콜드 스타트 등)에서는 핀이 뜨기까지 몇 초씩 걸립니다. 반경 조회는
+    // 서로 의존관계가 없는 가벼운 bbox 조회라, 전부 한꺼번에 요청해두고 가장 작은
+    // 반경부터 "이미 시작된" 응답을 순서대로 확인합니다. 그러면 실제 대기 시간이
+    // 왕복 시간의 합이 아니라, 필요한 것 중 가장 느린 하나에만 걸립니다.
+    const requests = radii.map((radiusKm) => {
+      const latDelta = radiusKm / 111;
+      const lngDelta = radiusKm / (111 * Math.cos((queryCenterLat * Math.PI) / 180));
+      return fetchAllMapPlaces(
+        {
+          south: queryCenterLat - latDelta,
+          north: queryCenterLat + latDelta,
+          west: queryCenterLng - lngDelta,
+          east: queryCenterLng + lngDelta,
+        },
+        mapCategory,
+        controller.signal
+      );
+    });
+
     async function run() {
-      for (let i = 0; i < radii.length; i++) {
-        const radiusKm = radii[i];
-        const isLastRadius = i === radii.length - 1;
-        const latDelta = radiusKm / 111;
-        const lngDelta = radiusKm / (111 * Math.cos((queryCenterLat * Math.PI) / 180));
+      for (let i = 0; i < requests.length; i++) {
+        const isLastRadius = i === requests.length - 1;
         try {
-          const content = await fetchAllMapPlaces(
-            {
-              south: queryCenterLat - latDelta,
-              north: queryCenterLat + latDelta,
-              west: queryCenterLng - lngDelta,
-              east: queryCenterLng + lngDelta,
-            },
-            mapCategory,
-            controller.signal
-          );
+          const content = await requests[i];
           if (controller.signal.aborted) return;
           if (content.length >= MIN_PLACE_RESULTS || isLastRadius) {
             const sorted = withComputedDistance(content, position);
@@ -1691,8 +1701,13 @@ export default function Map() {
           !isSheetFullyExpanded &&
           selectedMenu === null &&
           sheetMode === "list" && (
-            <ResearchAreaButton type="button" onClick={handleResearchArea}>
-              이 지역 재검색
+            <ResearchAreaButton
+              type="button"
+              onClick={handleResearchArea}
+              style={{ bottom: activeSheetHeight + 24 }}
+            >
+              <img src={retryIcon} alt="" width={20} height={20} />
+              현 지도에서 검색
             </ResearchAreaButton>
           )}
 
@@ -2391,22 +2406,24 @@ const MapViewButton = styled.button`
 
 const ResearchAreaButton = styled.button`
   position: absolute;
-  top: 88px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 6;
   display: flex;
   align-items: center;
-  padding: 8px 14px;
+  gap: 4px;
+  padding: 10px 16px;
   border: none;
   border-radius: 9999px;
-  background-color: #2a2a28;
+  background-color: ${colors.primary[500]};
   color: #ffffff;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 600;
+  letter-spacing: -0.28px;
   white-space: nowrap;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
   cursor: pointer;
+  transition: bottom 0.2s ease;
 `;
 
 const SearchPlaceholder = styled.span`
