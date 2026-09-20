@@ -1356,21 +1356,16 @@ export default function Map() {
       }
     }
 
-    // 핀이 겹쳐 있으면 유저 현재 위치(없으면 양조장)와 가장 가까운 핀만 이름표를 보여줍니다.
+    // 정거장들이 넓게 흩어져 있으면 위의 "다 보이게" 축소 때문에 화면 픽셀상으로는 서로
+    // 가까워 보일 수 있는데, 그렇다고 이름표를 숨기면(이전 방식) 코스 전체에서 이름표가
+    // 하나만 남는 문제가 생깁니다. 정거장은 개수가 적어 다 보여줘도 괜찮고, 아이콘 자체는
+    // 아래 resolveOverlapOffsets가 이름표 자리까지 감안해 서로 떨어뜨려 그리므로, 이름표는
+    // 숨기지 않고 항상 보여줍니다.
     const projection = map.getProjection();
-    const reference =
-      userPosition ??
-      (focusWinery?.lat && focusWinery?.lng
-        ? { lat: focusWinery.lat, lng: focusWinery.lng }
-        : null);
-    const hiddenLabels = resolveHiddenPinLabels(stopPins, kakao, projection, reference);
     // 아이콘 자체가 서로 겹쳐 가려지지 않도록, 겹친 핀들은 원래 위치 주위로 살짝 흩어 그립니다.
     const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
-    const orderedStops = [...validStops].sort(
-      (a, b) => Number(hiddenLabels.has(b.contentId)) - Number(hiddenLabels.has(a.contentId))
-    );
 
-    orderedStops.forEach((stop) => {
+    validStops.forEach((stop) => {
       const category = STOP_TYPE_TO_CATEGORY[stop.type];
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
       const position = overlapOffsets[stop.contentId] ?? {
@@ -1384,7 +1379,7 @@ export default function Map() {
         label: stop.name,
         selected: isSelected,
         dimmed: false,
-        showLabel: isSelected || !hiddenLabels.has(stop.contentId),
+        showLabel: true,
       });
       el.addEventListener("click", () => handleSelectStop(stop));
       const overlay = new kakao.CustomOverlay({
@@ -1397,7 +1392,7 @@ export default function Map() {
       stopOverlaysRef.current.push(overlay);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, userPosition, focusWinery]);
+  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, focusWinery]);
 
   // 내 위치 표시(파란 점)를 그립니다.
   useEffect(() => {
