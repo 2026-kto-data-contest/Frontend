@@ -322,6 +322,7 @@ function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePl
       ? `${breweryName ? `${breweryName} ` : ""}양조장에서 ${distanceKm}km`
       : undefined,
     address: stop.address ?? undefined,
+    phone: stop.phone ?? undefined,
     mapUrl:
       stop.placeUrl ||
       `https://map.kakao.com/link/map/${encodeURIComponent(stop.name)},${stop.latitude},${stop.longitude}`,
