@@ -1767,8 +1767,9 @@ export default function Map() {
               위치 동의가 필요해요
             </ConsentTitle>
             <ConsentDesc>
-              브라우저 위치 권한을 허용해주세요. 위치 정보는 이 기기에서만 사용되며 서버로
-              전송되지 않아요.
+              브라우저 위치 권한을 허용해주세요.
+              <br />
+              위치 정보는 이 기기에서만 사용되며 서버로 전송되지 않아요.
             </ConsentDesc>
             {locationError && <ConsentError>{locationError}</ConsentError>}
             <ConsentAgreeButton
@@ -2599,6 +2600,7 @@ const ConsentTitle = styled.p`
 const ConsentDesc = styled.p`
   margin: 12px 0 0;
   font-size: 0.8125rem;
+  line-height: 1.5;
   color: ${colors.gray[400]};
   text-align: left;
 `;
