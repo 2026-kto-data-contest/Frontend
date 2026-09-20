@@ -1801,9 +1801,17 @@ export default function Map() {
                           onClick={() => {
                             const wasMenuMode = selectedMenu != null;
                             setSelectedMenu(null);
+                            setShowResearchButton(false);
+                            if (active) {
+                              // 이미 켜져 있는 칩을 다시 누르면 선택을 해제합니다. 칩이
+                              // 하나도 켜져 있지 않으면(categorySelected=false)
+                              // showRecommendedDefault가 다시 참이 되어 기본 시트
+                              // ("전통주로에서 추천하는 양조장" 등)로 돌아갑니다.
+                              setCategorySelected(false);
+                              return;
+                            }
                             setActiveCategory(key);
                             setCategorySelected(true);
-                            setShowResearchButton(false);
                             if (wasMenuMode) refetchPlacesByRadius(key);
                           }}
                         >
