@@ -1712,6 +1712,7 @@ export default function Map() {
           !isSearchResultMode &&
           !consentActive &&
           !isSheetFullyExpanded &&
+          !floatingInfo &&
           selectedMenu === null &&
           sheetMode === "list" && (
             <ResearchAreaButton
@@ -3045,7 +3046,11 @@ const DetailAddressTextSpaced = styled(DetailAddressText)`
 // Figma "Map - Other Card"(장소 정보 카드)의 주소·전화번호 글자색은 #656563(gray-500)로,
 // 양조장 상세 카드가 쓰는 DetailAddressText의 기본색(#454543, gray-600)과 다릅니다. 공용
 // 컴포넌트 기본색을 바꾸면 양조장 카드 쪽도 같이 바뀌어버려서, 이 카드 전용으로만 덮어씁니다.
+// flex: 1도 마찬가지로 덮어씁니다 — DetailAddressText의 flex: 1은 남는 공간을 다 차지해
+// InlineCopyButton("복사")을 줄 끝까지 밀어내는데, Figma는 복사 버튼이 텍스트 바로
+// 옆에 붙어있는 모양이라 텍스트가 내용 너비만큼만 차지하게 합니다.
 const OtherCardInlineText = styled(DetailAddressText)`
+  flex: 0 1 auto;
   color: ${colors.gray[500]};
 `;
 
