@@ -34,7 +34,7 @@ import type {
   MapAwardedLiquor,
   MapMenu,
 } from "../../shared/api/breweriesApi";
-import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
+import { adaptBreweryToWinery, sigunguFromAddress } from "../../shared/api/adaptBrewery";
 import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
@@ -535,9 +535,14 @@ export default function Map() {
   const [wineryDetailLoading, setWineryDetailLoading] = useState(false);
   const wineryFetchInFlightRef = useRef<Set<string>>(new Set());
 
-  // 양조장 리스트 행에 보여줄 이력 뱃지(수상이력 등)만 가볍게 따로 캐시합니다.
+  // 양조장 리스트 행에 보여줄 이력 뱃지(수상이력 등)·술 종류·지역만 가볍게 따로 캐시합니다.
   // (products까지 조회하는 ensureWineryLoaded는 핀을 눌러 상세를 열 때만 씁니다.)
+  // /api/v1/map/places 응답 자체에는 술 종류·짧은 지역명이 없어서, 이미 하던 상세 조회
+  // 한 번으로 같이 얻어옵니다(행마다 별도 요청을 추가하지 않습니다).
   const [breweryBadges, setBreweryBadges] = useState<Record<string, string[]>>({});
+  const [breweryListInfo, setBreweryListInfo] = useState<
+    Record<string, { liquorTypeLabel: string; region: string }>
+  >({});
   const badgeFetchInFlightRef = useRef<Set<string>>(new Set());
 
   function ensureBreweryBadgesLoaded(id: string) {
@@ -547,6 +552,16 @@ export default function Map() {
     fetchBreweryDetail(id)
       .then((detail) => {
         setBreweryBadges((prev) => ({ ...prev, [id]: detail.featureTags ?? [] }));
+        const sigungu = sigunguFromAddress(detail.address);
+        const sido = detail.sido ?? detail.region ?? "";
+        setBreweryListInfo((prev) => ({
+          ...prev,
+          [id]: {
+            liquorTypeLabel:
+              detail.liquorTypes.length > 0 ? formatLiquorTypes(detail.liquorTypes) : "",
+            region: sigungu ? `${sido} ${sigungu}`.trim() : sido,
+          },
+        }));
       })
       .catch(() => {
         setBreweryBadges((prev) => ({ ...prev, [id]: [] }));
@@ -1931,13 +1946,16 @@ export default function Map() {
                     <PlaceList>
                       {places.map((place) => {
                         const isBrewery = place.category === "BREWERY";
+                        const listInfo = isBrewery ? breweryListInfo[place.placeId] : undefined;
                         const distanceOrAddress =
                           place.distance != null
                             ? `${place.distance.toFixed(1)}km`
                             : place.roadAddressName || undefined;
+                        // 양조장은 술 종류·지역(예: "증류주/탁주 외 4 · 경기 포천")을 보여주고,
+                        // 그 외 카테고리는 기존대로 거리·카테고리명을 보여줍니다.
                         const subtitleParts = (
                           isBrewery
-                            ? [place.categoryName || undefined, distanceOrAddress]
+                            ? [listInfo?.liquorTypeLabel, listInfo?.region]
                             : [distanceOrAddress, place.categoryName || undefined]
                         ).filter((part): part is string => Boolean(part));
                         const thumbSrc = resolveImageUrl(place.imageUrl);

@@ -24,7 +24,7 @@ function asRegion(region: string | null): (typeof ALL_REGION_FILTERS)[number] {
 
 // BreweryDetail에는 시/군/구 필드가 따로 없어서, 전체 주소의 두 번째 토큰(예: "경상북도
 // 문경시 ..." → "문경시", "경북 영천시 ..." → "영천시")에서 시/군/구 접미사를 뗀 값을 씁니다.
-function sigunguFromAddress(address: string): string | null {
+export function sigunguFromAddress(address: string): string | null {
   const token = address.split(" ")[1];
   if (!token) return null;
   const trimmed = token.replace(/(시|군|구)$/, "");
