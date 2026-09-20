@@ -314,13 +314,14 @@ function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePl
 }
 
 // 바텀시트 높이는 리스트/상세 모드가 공유하는 mid(320px)·full(검색바까지 가리는 최대 높이)와,
-// 모드별로 다른 collapsed 높이를 가집니다: 리스트는 핸들+카테고리 칩 줄까지만(96px),
-// 상세는 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
+// 모드별로 다른 collapsed 높이를 가집니다: 리스트는 핸들(38px)+카테고리 칩 줄(52px)까지만
+// (90px) — 96px로 두면 칩 줄 밑으로 다음 섹션 제목이 몇 px 삐져나와 보입니다. 상세는
+// 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
 function getSnapPoints(areaHeight: number) {
   const safeHeight = areaHeight || 600;
   const full = Math.max(260, safeHeight - 52);
   return {
-    collapsed: Math.min(96, full),
+    collapsed: Math.min(90, full),
     detailCollapsed: Math.min(130, full),
     mid: Math.min(DETAIL_SHEET_HEIGHT, full),
     full,
@@ -2921,6 +2922,10 @@ const DetailCardOverlay = styled.div`
   right: -16px;
   padding: 0 16px;
   background: #ffffff;
+  /* 접힌 상태(compact)에서는 이름·버튼만 있어 내용 높이가 짧아서, 시트에 보이는 영역
+     아래쪽은 이 카드가 다 못 덮고 그 뒤에 항상 그려둔 실제 상세 내용(사진 등)이 비쳐
+     보였습니다. absolute라 레이아웃엔 영향 없으니 넉넉히 키워서 항상 다 덮습니다. */
+  min-height: 100vh;
 `;
 
 // 카드 사진(cardPhotoRect)에서 시작해 상세 내용의 대표 이미지 자리까지 자라며 위로
