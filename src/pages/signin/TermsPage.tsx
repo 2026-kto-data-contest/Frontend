@@ -67,6 +67,16 @@ const FALLBACK_TERMS: TermItem[] = [
     contentUrl: null,
     agreed: false,
   },
+  // 화면엔 안 보이지만(visibleTerms에서 제외), 저장 요청은 terms 전체를 그대로 보내므로
+  // 오프라인 등으로 fetchTerms가 실패했을 때도 이 항목이 빠지지 않게 fallback에도 둡니다.
+  {
+    code: "LOCATION",
+    version: "1",
+    title: "위치기반 서비스 이용약관",
+    required: false,
+    contentUrl: null,
+    agreed: false,
+  },
 ];
 
 export default function TermsPage() {
@@ -84,24 +94,33 @@ export default function TermsPage() {
   useEffect(() => {
     fetchTerms()
       .then((items) => {
-        // 위치기반 서비스 이용약관은 더 이상 동의 항목으로 받지 않습니다.
-        const visibleItems = items.filter((item) => item.code !== "LOCATION");
-        setTerms(visibleItems);
-        setChecked(Object.fromEntries(visibleItems.map((item) => [item.code, item.agreed])));
+        // 위치기반 서비스 이용약관은 화면에서만 숨기고(런타임 GPS 동의로 대체), terms
+        // 자체는 백엔드가 내려준 전체 목록을 그대로 둡니다 — 저장 요청(handleSubmit)이
+        // 이 값을 그대로 다시 보내야 하는데, 여기서 LOCATION을 빼버리면 백엔드가 아직
+        // 그 항목을 필수로 보고 있을 경우 "필수 약관 미동의"로 가입 자체가 막힙니다.
+        setTerms(items);
+        setChecked(Object.fromEntries(items.map((item) => [item.code, item.agreed])));
       })
       .catch((error) => {
         console.error("약관 조회 실패", error);
       });
   }, []);
 
-  const allChecked = ageVerified && terms.every((item) => checked[item.code]);
+  // 화면에 보여주고 사용자가 직접 체크하는 항목만 여기서 걸러냅니다(LOCATION 제외).
+  const visibleTerms = terms.filter((item) => item.code !== "LOCATION");
+
+  const allChecked = ageVerified && visibleTerms.every((item) => checked[item.code]);
   const canContinue =
-    ageVerified && terms.filter((item) => item.required).every((item) => checked[item.code]);
+    ageVerified &&
+    visibleTerms.filter((item) => item.required).every((item) => checked[item.code]);
 
   const toggleAll = () => {
     const next = !allChecked;
     setAgeVerified(next);
-    setChecked(Object.fromEntries(terms.map((item) => [item.code, next])));
+    setChecked((prev) => ({
+      ...prev,
+      ...Object.fromEntries(visibleTerms.map((item) => [item.code, next])),
+    }));
   };
 
   const toggleItem = (code: string) => {
@@ -177,7 +196,7 @@ export default function TermsPage() {
             <ItemLabel>[필수] 만 19세 이상입니다</ItemLabel>
           </ItemLeft>
         </ItemRow>
-        {terms.map((item) => (
+        {visibleTerms.map((item) => (
           <ItemRow key={item.code}>
             <ItemLeft type="button" onClick={() => toggleItem(item.code)}>
               <img

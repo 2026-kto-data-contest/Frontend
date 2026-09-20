@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent, WheelEvent as ReactWheelEvent } from "react";
+import type { PointerEvent as ReactPointerEvent, UIEvent as ReactUIEvent } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { colors } from "../../shared/styles/colors";
@@ -34,7 +34,7 @@ import type {
   MapAwardedLiquor,
   MapMenu,
 } from "../../shared/api/breweriesApi";
-import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
+import { adaptBreweryToWinery, sigunguFromAddress } from "../../shared/api/adaptBrewery";
 import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
@@ -59,6 +59,7 @@ import awardIcon from "../../assets/icon/Award.svg";
 import searchIcon from "../../assets/icon/MapSearch.svg";
 import targetIcon from "../../assets/icon/MapTarget.svg";
 import mapViewIcon from "../../assets/icon/MapViewIcon.svg";
+import retryIcon from "../../assets/icon/Retry.svg";
 import placeCardFallbackBrewery from "../../assets/icon/MapPlaceCardFallback.svg";
 import placeCardFallbackRestaurant from "../../assets/icon/CourseFallbackRestaurant.svg";
 import placeCardFallbackAttraction from "../../assets/icon/CourseFallbackAttraction.svg";
@@ -207,12 +208,68 @@ function withComputedDistance(
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
 }
 
+// 화면에 다 못 보여줄 만큼 많을 때 단순히 "가까운 N개"로 자르면, 사용자 위치 근처에만
+// 몰리고 지도의 나머지 영역엔 핀이 하나도 안 뜨는 것처럼 보입니다(줌아웃해서 넓은 범위를
+// 볼 때 특히 두드러집니다). 그래서 화면(bounds)을 격자로 나눠 칸마다 하나씩만 골라 화면
+// 전체에 고르게 퍼지도록 합니다. 이미 거리순으로 정렬된 목록을 순서대로 훑으면서 칸의
+// "첫 항목"만 취하므로, 각 칸에서는 자연히 가장 가까운 장소가 뽑힙니다. 격자 칸 수보다
+// limit이 크거나 칸을 다 채우지 못하면, 남은 자리는 다시 거리순으로 채웁니다.
+function selectSpreadPlaces(
+  sortedPlaces: MapPlace[],
+  viewBounds: { south: number; west: number; north: number; east: number },
+  limit: number
+): MapPlace[] {
+  if (sortedPlaces.length <= limit) return sortedPlaces;
+  const gridSize = Math.max(1, Math.ceil(Math.sqrt(limit)));
+  const latSpan = viewBounds.north - viewBounds.south || 1;
+  const lngSpan = viewBounds.east - viewBounds.west || 1;
+  const cellOf = (place: MapPlace) => {
+    const row = Math.min(
+      gridSize - 1,
+      Math.max(0, Math.floor(((place.latitude - viewBounds.south) / latSpan) * gridSize))
+    );
+    const col = Math.min(
+      gridSize - 1,
+      Math.max(0, Math.floor(((place.longitude - viewBounds.west) / lngSpan) * gridSize))
+    );
+    return `${row}:${col}`;
+  };
+  const picked: MapPlace[] = [];
+  const pickedIds = new Set<string>();
+  const usedCells = new Set<string>();
+  for (const place of sortedPlaces) {
+    const cell = cellOf(place);
+    if (usedCells.has(cell)) continue;
+    usedCells.add(cell);
+    picked.push(place);
+    pickedIds.add(place.placeId);
+    if (picked.length >= limit) return picked;
+  }
+  for (const place of sortedPlaces) {
+    if (picked.length >= limit) break;
+    if (!pickedIds.has(place.placeId)) {
+      picked.push(place);
+      pickedIds.add(place.placeId);
+    }
+  }
+  return picked;
+}
+
 // 백엔드가 더 이상 거리순으로 정렬한 뒤 페이지를 자르지 않으므로, 한 페이지만 받으면
 // 실제로 가장 가까운 장소가 뒷페이지에 남아 프론트 재정렬로도 복구되지 않을 수 있습니다.
 // 그래서 반경 안의 장소는 페이지를 최대한 이어 받아 전부 모은 뒤에 거리 정렬합니다.
-// (한 번에 많이 받도록 페이지를 크게 잡고, 과도한 요청을 막기 위한 상한만 둡니다.)
+// (한 번에 많이 받도록 페이지를 각 엔드포인트의 최대 size로 잡습니다. 최대 size는
+// 엔드포인트마다 다릅니다 — /map/places는 300, /map/menus/{menu}/places는 100까지
+// 허용됩니다. 페이지 수 상한은 totalPages를 항상 끝까지 받는 걸 기본으로 하되,
+// 응답이 비정상적으로 큰 값을 내려주는 경우에 대비한 방어용 상한만 넉넉하게 둡니다 —
+// 지금 실제 데이터 기준 가장 많은 카테고리도 20페이지 안팎이라 평소엔 절대 걸리지
+// 않습니다. 이 상한에 걸리면 "가장 가까운 순" 정렬이 전체 후보 기준이 아니게 됩니다.)
 const ALL_PLACES_PAGE_SIZE = 300;
-const MAX_PLACE_PAGES = 30;
+const ALL_MENU_PLACES_PAGE_SIZE = 100;
+const MAX_PLACE_PAGES = 200;
+// 지도를 많이 축소하면 반경 안에 장소가 지나치게 많이 잡혀 핀·목록이 뒤덮일 수 있어,
+// 거리순 정렬 후 가까운 순으로 이 개수까지만 보여줍니다.
+const MAX_DISPLAYED_PLACES = 30;
 
 async function fetchAllMapPlaces(
   bounds: MapBounds,
@@ -232,12 +289,12 @@ async function fetchAllMapPlaces(
 
 // 추천 메뉴칩도 같은 이유(거리순 정렬·자르기가 사라짐)로 한 페이지만 받으면 안 됩니다.
 async function fetchAllMapMenuPlaces(menu: string, signal: AbortSignal): Promise<MapPlace[]> {
-  const first = await fetchMapMenuPlaces(menu, 0, ALL_PLACES_PAGE_SIZE, signal);
+  const first = await fetchMapMenuPlaces(menu, 0, ALL_MENU_PLACES_PAGE_SIZE, signal);
   const totalPages = Math.min(first.totalPages, MAX_PLACE_PAGES);
   if (totalPages <= 1) return first.content;
   const restPages = await Promise.all(
     Array.from({ length: totalPages - 1 }, (_, i) =>
-      fetchMapMenuPlaces(menu, i + 1, ALL_PLACES_PAGE_SIZE, signal)
+      fetchMapMenuPlaces(menu, i + 1, ALL_MENU_PLACES_PAGE_SIZE, signal)
     )
   );
   return [first.content, ...restPages.map((p) => p.content)].flat();
@@ -255,12 +312,14 @@ function placeToInfo(place: MapPlace): SimplePlaceInfo {
   };
 }
 
-function stopToInfo(stop: RecommendedCourseStop): SimplePlaceInfo {
+function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePlaceInfo {
   const distanceKm = stop.distanceMeters != null ? (stop.distanceMeters / 1000).toFixed(1) : null;
   return {
     name: stop.name,
     categoryLabel: stop.subcategoryName || stop.categoryName || undefined,
-    distanceLabel: distanceKm ? `양조장에서 ${distanceKm}km` : undefined,
+    distanceLabel: distanceKm
+      ? `${breweryName ? `${breweryName} ` : ""}양조장에서 ${distanceKm}km`
+      : undefined,
     address: stop.address ?? undefined,
     mapUrl:
       stop.placeUrl ||
@@ -389,6 +448,15 @@ export default function Map() {
   const restoredFocusRef = useRef(false);
   const activeCategoryRef = useRef<CategoryKey>("brewery");
   const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
+  // 서버에 보낼 장소 조회 bbox의 기준점입니다. GPS로 지도가 자동으로 옮겨가도(위치 허용,
+  // 양조장 상세 포커스 등) 여기는 갱신하지 않고, 사용자가 직접 지도를 드래그해서 옮긴
+  // 경우에만 갱신합니다 — 그래야 서버로 나가는 bbox가 사용자 GPS 좌표로부터 계산되지
+  // 않습니다(GPS는 "내 위치" 표시와 거리 계산·정렬에만 씁니다).
+  const queryCenterRef = useRef<{ lat: number; lng: number } | null>(null);
+  // 방금 idle이 사용자의 드래그 때문에 발생했는지 표시합니다(dragend에서 true로 켜고,
+  // idle에서 한 번 확인 후 끕니다) — 드래그로 인한 idle은 자동 재조회 대신 "이 지역
+  // 재검색" 버튼을 띄우는 데 씁니다.
+  const pendingUserMoveRef = useRef(false);
   const refetchPlacesRef = useRef<(category: CategoryKey) => void>(() => {});
   const placesAbortRef = useRef<AbortController | null>(null);
   const isSearchResultModeRef = useRef(Boolean(searchBreweryIds?.length));
@@ -453,6 +521,10 @@ export default function Map() {
     isCourseMode ? [] : (getMemory<MapMenu[]>("map:mapMenus") ?? [])
   );
   const [selectedMenu, setSelectedMenu] = useState<string | null>(null);
+  // 사용자가 지도를 드래그해서 옮긴 뒤, 그 자리를 기준으로 다시 조회할지 직접 확정하게
+  // 하는 버튼입니다("이 지역 재검색"). 드래그로 지도가 멈추면 자동으로 재조회하는 대신
+  // 이 버튼을 띄우고, 눌렀을 때만 그 위치로 조회합니다.
+  const [showResearchButton, setShowResearchButton] = useState(false);
   // 칩을 하나라도 눌러야 그 카테고리의 실제 목록으로 바뀝니다. 누르기 전(진입 초기 포함)에는
   // 백그라운드에서 이미 양조장 결과가 도착했더라도 Figma의 "Default BottomSheet"(추천 콘텐츠)를
   // 계속 보여줍니다.
@@ -466,9 +538,14 @@ export default function Map() {
   const [wineryDetailLoading, setWineryDetailLoading] = useState(false);
   const wineryFetchInFlightRef = useRef<Set<string>>(new Set());
 
-  // 양조장 리스트 행에 보여줄 이력 뱃지(수상이력 등)만 가볍게 따로 캐시합니다.
+  // 양조장 리스트 행에 보여줄 이력 뱃지(수상이력 등)·술 종류·지역만 가볍게 따로 캐시합니다.
   // (products까지 조회하는 ensureWineryLoaded는 핀을 눌러 상세를 열 때만 씁니다.)
+  // /api/v1/map/places 응답 자체에는 술 종류·짧은 지역명이 없어서, 이미 하던 상세 조회
+  // 한 번으로 같이 얻어옵니다(행마다 별도 요청을 추가하지 않습니다).
   const [breweryBadges, setBreweryBadges] = useState<Record<string, string[]>>({});
+  const [breweryListInfo, setBreweryListInfo] = useState<
+    Record<string, { liquorTypeLabel: string; region: string }>
+  >({});
   const badgeFetchInFlightRef = useRef<Set<string>>(new Set());
 
   function ensureBreweryBadgesLoaded(id: string) {
@@ -478,6 +555,16 @@ export default function Map() {
     fetchBreweryDetail(id)
       .then((detail) => {
         setBreweryBadges((prev) => ({ ...prev, [id]: detail.featureTags ?? [] }));
+        const sigungu = sigunguFromAddress(detail.address);
+        const sido = detail.sido ?? detail.region ?? "";
+        setBreweryListInfo((prev) => ({
+          ...prev,
+          [id]: {
+            liquorTypeLabel:
+              detail.liquorTypes.length > 0 ? formatLiquorTypes(detail.liquorTypes) : "",
+            region: sigungu ? `${sido} ${sigungu}`.trim() : sido,
+          },
+        }));
       })
       .catch(() => {
         setBreweryBadges((prev) => ({ ...prev, [id]: [] }));
@@ -558,8 +645,20 @@ export default function Map() {
     return () => controller.abort();
   }, []);
 
+  // 현재 화면에 실제로 보이는 지도 범위입니다. MAX_DISPLAYED_PLACES로 자를 때, 이 범위를
+  // 격자 삼아 핀이 한쪽에 몰리지 않고 화면 전체에 고르게 퍼지도록 하는 데 씁니다.
+  function getViewBoundsBox() {
+    const map = mapInstanceRef.current;
+    if (!map) return null;
+    const bounds = map.getBounds();
+    const ne = bounds.getNorthEast();
+    const sw = bounds.getSouthWest();
+    return { south: sw.getLat(), west: sw.getLng(), north: ne.getLat(), east: ne.getLng() };
+  }
+
   // 추천 메뉴 칩을 고르면 그 메뉴를 파는 장소로 목록·핀을 바꿔 보여줍니다(양조장 카테고리 목록과 동일한 자리를 씁니다).
   function handleSelectMenu(menu: string) {
+    setShowResearchButton(false);
     if (selectedMenu === menu) {
       setSelectedMenu(null);
       refetchPlacesByRadius(activeCategory);
@@ -572,7 +671,13 @@ export default function Map() {
     setPlacesLoadState("loading");
     fetchAllMapMenuPlaces(menu, controller.signal)
       .then((content) => {
-        setPlaces(withComputedDistance(content, userPositionRef.current));
+        const sorted = withComputedDistance(content, userPositionRef.current);
+        const viewBounds = getViewBoundsBox();
+        setPlaces(
+          viewBounds
+            ? selectSpreadPlaces(sorted, viewBounds, MAX_DISPLAYED_PLACES)
+            : sorted.slice(0, MAX_DISPLAYED_PLACES)
+        );
         setPlacesLoadState("ready");
       })
       .catch((error) => {
@@ -601,22 +706,28 @@ export default function Map() {
     const controller = new AbortController();
     placesAbortRef.current = controller;
 
-    const center = map.getCenter();
-    const centerLat = center.getLat();
-    const centerLng = center.getLng();
+    // 서버로 나가는 bbox는 실제 지도 중심(GPS 허용 시 그 좌표로 옮겨갈 수 있음)이 아니라
+    // queryCenterRef를 기준으로 만듭니다 — 사용자가 직접 지도를 드래그해서 옮긴 위치만
+    // 반영되고, GPS로 인한 이동은 반영되지 않습니다.
+    const queryCenter = queryCenterRef.current ?? DEFAULT_CLUSTER_CENTER;
+    const queryCenterLat = queryCenter.lat;
+    const queryCenterLng = queryCenter.lng;
     const position = userPositionRef.current;
 
     setPlacesLoadState("loading");
 
     // 사용자가 지도를 축소해서 넓은 범위를 보고 있으면, 화면에 이미 보이는 범위보다 좁은
     // 반경으로 조회를 시작해서는 안 됩니다(그 범위 안 장소도 아직 안 불러온 상태가 되어
-    // "일부만 보이는" 것처럼 됩니다). 현재 화면(bounds) 기준 반경보다 작은 단계는 건너뛰고,
-    // 그 반경부터 기존과 동일하게 최소 결과 수가 찰 때까지 넓혀갑니다.
+    // "일부만 보이는" 것처럼 됩니다). 화면에 실제로 보이는 크기(현재 확대 수준)만큼은
+    // 최소한 덮어야 하므로, 그 크기를 bounds 두 모서리 사이 간격만으로 구합니다(어떤
+    // 지점을 중심으로 볼지와는 무관하게, 순전히 "지금 화면에 얼마나 넓게 보이는지"만
+    // 구하는 계산이라 GPS 등 특정 중심에 좌우되지 않습니다).
     const bounds = map.getBounds();
     const ne = bounds.getNorthEast();
-    const visibleLatKm = Math.abs(ne.getLat() - centerLat) * 111;
+    const sw = bounds.getSouthWest();
+    const visibleLatKm = (Math.abs(ne.getLat() - sw.getLat()) / 2) * 111;
     const visibleLngKm =
-      Math.abs(ne.getLng() - centerLng) * 111 * Math.cos((centerLat * Math.PI) / 180);
+      (Math.abs(ne.getLng() - sw.getLng()) / 2) * 111 * Math.cos((queryCenterLat * Math.PI) / 180);
     const visibleRadiusKm = Math.max(visibleLatKm, visibleLngKm);
     const radiiCoveringView = SEARCH_RADII_KM.filter((radiusKm) => radiusKm >= visibleRadiusKm);
     // 화면이 미리 정해둔 반경 목록(최대 30km)보다도 넓게 보이면(많이 축소한 경우), 목록의
@@ -624,26 +735,42 @@ export default function Map() {
     // 화면에 있는 양조장이 전부 조회됩니다.
     const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [visibleRadiusKm];
 
+    // 반경을 하나씩 순서대로 기다리면(작은 반경 결과가 모자랄 때마다 매번 왕복 한 번씩
+    // 추가) 숙소·카페처럼 드문 카테고리는 반경을 여러 번 넓혀야 해서 왕복이 누적되고,
+    // 느린 백엔드(콜드 스타트 등)에서는 핀이 뜨기까지 몇 초씩 걸립니다. 반경 조회는
+    // 서로 의존관계가 없는 가벼운 bbox 조회라, 전부 한꺼번에 요청해두고 가장 작은
+    // 반경부터 "이미 시작된" 응답을 순서대로 확인합니다. 그러면 실제 대기 시간이
+    // 왕복 시간의 합이 아니라, 필요한 것 중 가장 느린 하나에만 걸립니다.
+    const requests = radii.map((radiusKm) => {
+      const latDelta = radiusKm / 111;
+      const lngDelta = radiusKm / (111 * Math.cos((queryCenterLat * Math.PI) / 180));
+      return fetchAllMapPlaces(
+        {
+          south: queryCenterLat - latDelta,
+          north: queryCenterLat + latDelta,
+          west: queryCenterLng - lngDelta,
+          east: queryCenterLng + lngDelta,
+        },
+        mapCategory,
+        controller.signal
+      );
+    });
+
     async function run() {
-      for (let i = 0; i < radii.length; i++) {
-        const radiusKm = radii[i];
-        const isLastRadius = i === radii.length - 1;
-        const latDelta = radiusKm / 111;
-        const lngDelta = radiusKm / (111 * Math.cos((centerLat * Math.PI) / 180));
+      for (let i = 0; i < requests.length; i++) {
+        const isLastRadius = i === requests.length - 1;
         try {
-          const content = await fetchAllMapPlaces(
-            {
-              south: centerLat - latDelta,
-              north: centerLat + latDelta,
-              west: centerLng - lngDelta,
-              east: centerLng + lngDelta,
-            },
-            mapCategory,
-            controller.signal
-          );
+          const content = await requests[i];
           if (controller.signal.aborted) return;
           if (content.length >= MIN_PLACE_RESULTS || isLastRadius) {
-            setPlaces(withComputedDistance(content, position));
+            const sorted = withComputedDistance(content, position);
+            const viewBounds = {
+              south: sw.getLat(),
+              west: sw.getLng(),
+              north: ne.getLat(),
+              east: ne.getLng(),
+            };
+            setPlaces(selectSpreadPlaces(sorted, viewBounds, MAX_DISPLAYED_PLACES));
             setPlacesLoadState("ready");
             return;
           }
@@ -691,6 +818,9 @@ export default function Map() {
             : (savedLevel ?? (userPositionRef.current ? USER_LOCATION_LEVEL : DEFAULT_LEVEL)),
         });
         mapInstanceRef.current = map;
+        // 장소 조회 bbox의 기준점(queryCenterRef)은 GPS를 절대 거치지 않도록, 초기값도
+        // userPositionRef가 아니라 이전에 저장해둔 위치·기본 위치로만 잡습니다.
+        queryCenterRef.current = savedCenter ?? DEFAULT_CLUSTER_CENTER;
         // 코스 모드는 양조장 상세 시트(mid, DETAIL_SHEET_HEIGHT)가 처음부터 하단을 덮으므로,
         // focusMapOn과 동일하게 양조장 핀이 "시트를 제외한 지도 영역"의 가운데 오도록 지도
         // 중심을 살짝 아래로 옮깁니다. 그렇지 않으면 핀이 화면 위쪽으로 치우쳐 보입니다.
@@ -702,9 +832,25 @@ export default function Map() {
           const shiftedPoint = new kakao.Point(pinPoint.x, pinPoint.y + DETAIL_SHEET_HEIGHT / 3);
           map.setCenter(projection.coordsFromPoint(shiftedPoint));
         }
+        // 사용자가 직접 지도를 드래그했을 때만 queryCenterRef를 그 위치로 갱신합니다.
+        // GPS 허용이나 양조장 포커스처럼 코드가 map.setCenter()를 호출하는 경우는
+        // dragend가 발생하지 않아 여기 걸리지 않습니다. 이때는 자동으로 재조회하지 않고
+        // "이 지역 재검색" 버튼을 띄워, 사용자가 직접 확정했을 때만 재조회합니다.
+        if (!isCourseMode) {
+          kakao.event.addListener(map, "dragend", () => {
+            const center = map.getCenter();
+            queryCenterRef.current = { lat: center.getLat(), lng: center.getLng() };
+            pendingUserMoveRef.current = true;
+          });
+        }
         kakao.event.addListener(map, "idle", () => {
           if (!isCourseMode && !isSearchResultModeRef.current) {
-            refetchPlacesRef.current(activeCategoryRef.current);
+            if (pendingUserMoveRef.current) {
+              pendingUserMoveRef.current = false;
+              setShowResearchButton(true);
+            } else {
+              refetchPlacesRef.current(activeCategoryRef.current);
+            }
           }
           if (!isCourseMode) {
             const center = map.getCenter();
@@ -1304,6 +1450,13 @@ export default function Map() {
     );
   }
 
+  // "이 지역 재검색" 버튼: 드래그로 옮긴 위치(이미 dragend에서 queryCenterRef에
+  // 반영됨)를 사용자가 직접 확정하는 동작입니다.
+  const handleResearchArea = () => {
+    setShowResearchButton(false);
+    refetchPlacesByRadius(activeCategory);
+  };
+
   const handleLocationButtonClick = () => {
     if (isCourseMode) {
       if (focusWinery?.lat && focusWinery?.lng) {
@@ -1401,23 +1554,15 @@ export default function Map() {
     setIsDragging(true);
   };
 
-  // 시트 내용 영역에서 시작한 제스처입니다. 다 펼쳐지기 전까지는 내용을 스크롤하는 대신
-  // 핸들과 똑같이 시트 자체를 끌어올립니다(SheetScroll의 overflow-y가 그동안 hidden이라
-  // 어차피 스크롤도 안 됩니다). 다 펼쳐진 뒤에는 그냥 지나쳐서 원래 스크롤을 씁니다.
-  const handleContentDragStart = (e: ReactPointerEvent<HTMLDivElement>) => {
+  // 시트 내용 영역은 다 펼쳐지기 전에도 항상 정상적으로 터치·휠 스크롤이 됩니다. 다만 아직
+  // 다 펼쳐지지 않은 상태에서 내용이 스크롤되기 시작하면(스크롤 위치가 0에서 벗어나면),
+  // 그 스크롤을 취소하고 시트 자체를 풀시트 높이로 올립니다.
+  const handleContentScroll = (e: ReactUIEvent<HTMLDivElement>) => {
     if (isSheetFullyExpanded) return;
-    handleDragStart(e);
-  };
-
-  // 터치·손가락 드래그(pointer 이벤트)와 별개로, 데스크탑에서 트랙패드로 스크롤하거나
-  // 마우스 휠을 굴리는 제스처는 pointer가 아니라 wheel 이벤트로 들어옵니다. 다 펼쳐지기
-  // 전에는 이것도 스크롤 대신 시트를 늘리는 데 그대로 씁니다.
-  const handleContentWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
-    if (isSheetFullyExpanded) return;
-    e.preventDefault();
-    const points = getSnapPoints(areaHeight);
-    const minHeight = sheetMode === "detail" ? points.detailCollapsed : points.collapsed;
-    setSheetHeight((prev) => Math.min(points.full, Math.max(minHeight - 40, prev + e.deltaY)));
+    const target = e.currentTarget;
+    if (target.scrollTop <= 0) return;
+    target.scrollTop = 0;
+    setSheetHeight(getSnapPoints(areaHeight).full);
   };
 
   const handleDragMove = (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -1491,7 +1636,7 @@ export default function Map() {
     detailKind === "place" && selectedPlace
       ? placeToInfo(selectedPlace)
       : detailKind === "stop" && selectedStop
-        ? stopToInfo(selectedStop)
+        ? stopToInfo(selectedStop, focusWinery?.name)
         : null;
   // 위치 동의 시트·양조장 상세 시트·장소 상세 카드가 화면을 덮는 동안은 하단 네비게이션 바를 숨깁니다.
   useHideNavbar(consentActive || sheetMode === "detail" || Boolean(floatingInfo));
@@ -1549,6 +1694,24 @@ export default function Map() {
             <SearchPlaceholder>양조장·전통주 검색</SearchPlaceholder>
           </SearchBarButton>
         )}
+
+        {showResearchButton &&
+          loadState === "ready" &&
+          !isCourseMode &&
+          !isSearchResultMode &&
+          !consentActive &&
+          !isSheetFullyExpanded &&
+          selectedMenu === null &&
+          sheetMode === "list" && (
+            <ResearchAreaButton
+              type="button"
+              onClick={handleResearchArea}
+              style={{ bottom: activeSheetHeight + 24 }}
+            >
+              <img src={retryIcon} alt="" width={20} height={20} />
+              현 지도에서 검색
+            </ResearchAreaButton>
+          )}
 
         {(loadState === "loading" || (loadState === "ready" && isSearchResultMode)) && (
           <StatusOverlay style={{ bottom: activeSheetHeight }}>
@@ -1623,15 +1786,7 @@ export default function Map() {
               <SheetHandle />
             </SheetHandleArea>
 
-            <SheetScroll
-              ref={sheetScrollRef}
-              $expanded={isSheetFullyExpanded}
-              onPointerDown={handleContentDragStart}
-              onPointerMove={handleDragMove}
-              onPointerUp={handleDragEnd}
-              onPointerCancel={handleDragEnd}
-              onWheel={handleContentWheel}
-            >
+            <SheetScroll ref={sheetScrollRef} onScroll={handleContentScroll}>
               {sheetMode === "list" && (
                 <>
                   <ChipRow>
@@ -1648,6 +1803,7 @@ export default function Map() {
                             setSelectedMenu(null);
                             setActiveCategory(key);
                             setCategorySelected(true);
+                            setShowResearchButton(false);
                             if (wasMenuMode) refetchPlacesByRadius(key);
                           }}
                         >
@@ -1807,13 +1963,16 @@ export default function Map() {
                     <PlaceList>
                       {places.map((place) => {
                         const isBrewery = place.category === "BREWERY";
+                        const listInfo = isBrewery ? breweryListInfo[place.placeId] : undefined;
                         const distanceOrAddress =
                           place.distance != null
                             ? `${place.distance.toFixed(1)}km`
                             : place.roadAddressName || undefined;
+                        // 양조장은 술 종류·지역(예: "증류주/탁주 외 4 · 경기 포천")을 보여주고,
+                        // 그 외 카테고리는 기존대로 거리·카테고리명을 보여줍니다.
                         const subtitleParts = (
                           isBrewery
-                            ? [place.categoryName || undefined, distanceOrAddress]
+                            ? [listInfo?.liquorTypeLabel, listInfo?.region]
                             : [distanceOrAddress, place.categoryName || undefined]
                         ).filter((part): part is string => Boolean(part));
                         const thumbSrc = resolveImageUrl(place.imageUrl);
@@ -2141,7 +2300,7 @@ function SimplePlaceDetail({
 
       {info.address && (
         <InlineCopyRow>
-          <DetailAddressText>{info.address}</DetailAddressText>
+          <OtherCardInlineText>{info.address}</OtherCardInlineText>
           <InlineCopyButton
             type="button"
             onClick={() => onCopy(info.address!, "주소를 복사했어요!")}
@@ -2152,7 +2311,7 @@ function SimplePlaceDetail({
       )}
       {info.phone && (
         <InlineCopyRow>
-          <DetailAddressText>{info.phone}</DetailAddressText>
+          <OtherCardInlineText>{info.phone}</OtherCardInlineText>
           <InlineCopyButton
             type="button"
             onClick={() => onCopy(info.phone!, "전화번호를 복사했어요!")}
@@ -2245,6 +2404,28 @@ const MapViewButton = styled.button`
   font-size: 0.8125rem;
   white-space: nowrap;
   cursor: pointer;
+`;
+
+const ResearchAreaButton = styled.button`
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 9999px;
+  background-color: ${colors.primary[500]};
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.28px;
+  white-space: nowrap;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  transition: bottom 0.2s ease;
 `;
 
 const SearchPlaceholder = styled.span`
@@ -2484,13 +2665,11 @@ const SheetHandleArea = styled.div`
   cursor: grab;
 `;
 
-const SheetScroll = styled.div<{ $expanded: boolean }>`
+const SheetScroll = styled.div`
   flex: 1;
   min-height: 0;
-  /* 다 펼쳐지기 전에는 스크롤 대신 드래그로 시트 자체가 늘어나야 하므로 스크롤 자체를
-     막아둡니다(핸들과 동일하게 touch-action도 꺼서 브라우저가 제스처를 가로채지 않게 함). */
-  overflow-y: ${(props) => (props.$expanded ? "auto" : "hidden")};
-  touch-action: ${(props) => (props.$expanded ? "auto" : "none")};
+  overflow-y: auto;
+  touch-action: auto;
   overscroll-behavior: contain;
   padding: 0 16px 20px;
   box-sizing: border-box;
@@ -2840,6 +3019,13 @@ const DetailAddressText = styled.p`
 // Figma 기준 간격(6px)을 더합니다.
 const DetailAddressTextSpaced = styled(DetailAddressText)`
   margin-top: 6px;
+`;
+
+// Figma "Map - Other Card"(장소 정보 카드)의 주소·전화번호 글자색은 #656563(gray-500)로,
+// 양조장 상세 카드가 쓰는 DetailAddressText의 기본색(#454543, gray-600)과 다릅니다. 공용
+// 컴포넌트 기본색을 바꾸면 양조장 카드 쪽도 같이 바뀌어버려서, 이 카드 전용으로만 덮어씁니다.
+const OtherCardInlineText = styled(DetailAddressText)`
+  color: ${colors.gray[500]};
 `;
 
 const InlineCopyRow = styled.div`
