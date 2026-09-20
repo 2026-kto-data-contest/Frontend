@@ -20,7 +20,7 @@ import type {
   KakaoMapInstance,
   KakaoCustomOverlayInstance,
 } from "../../shared/api/kakaoMaps";
-import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
+import { resolveHiddenPinLabels } from "../../shared/lib/mapPinOverlap";
 import mapIcon from "../../assets/icon/Map.svg";
 import restaurantIcon from "../../assets/icon/Restaurant.svg";
 import flagIcon from "../../assets/icon/Flag.svg";
@@ -312,9 +312,6 @@ export default function CourseDetailPage() {
       lat: wineryLat,
       lng: wineryLng,
     });
-    // 이름표를 숨기는 것만으로는 아이콘끼리 여전히 겹쳐 보이므로, 겹친 핀들은 원래 위치
-    // 주위로 살짝 흩어 그려 아이콘 자체가 서로 가리지 않게 합니다.
-    const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
 
     // 카카오맵 CustomOverlay는 나중에 그린 것이 위로 쌓이므로, 이름표가 남아 다른 핀을
     // 가릴 수 있는 정거장을 먼저 그리고(뒤에 깔림), 이름표를 숨긴 정거장을 그 위에 그립니다.
@@ -324,13 +321,11 @@ export default function CourseDetailPage() {
 
     orderedStops.forEach((stop) => {
       const key = CATEGORY_BY_STOP_TYPE[stop.type]!;
-      const position = overlapOffsets[stop.contentId] ?? {
-        lat: stop.latitude,
-        lng: stop.longitude,
-      };
+      // 핀은 항상 실제 좌표 그대로 그립니다 — 겹친다고 원래 위치에서 옮겨버리면 핀이 실제
+      // 있지도 않은 곳에 꽂힌 것처럼 보입니다. 겹침은 이름표만 하나로 줄여서 처리합니다.
       const overlay = new kakao.CustomOverlay({
         map,
-        position: new kakao.LatLng(position.lat, position.lng),
+        position: new kakao.LatLng(stop.latitude, stop.longitude),
         content: createPreviewStopPin({
           iconSrc: CATEGORY_META[key].icon,
           color: CATEGORY_META[key].color,
@@ -484,7 +479,6 @@ export default function CourseDetailPage() {
                     const metaParts = [
                       distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음",
                       badge || undefined,
-                      item.phone || undefined,
                     ].filter((part): part is string => Boolean(part));
                     return (
                       <Fragment key={item.contentId}>
