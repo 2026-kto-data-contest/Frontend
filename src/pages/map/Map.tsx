@@ -427,6 +427,11 @@ export default function Map() {
   const userDotOverlayRef = useRef<KakaoCustomOverlayInstance | null>(null);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const sheetScrollRef = useRef<HTMLDivElement>(null);
+  // 코스 모드에서 양조장 상세 시트를 풀페이지로 끌어올렸을 때, 뒤로가기(물리 버튼/제스처)가
+  // 곧장 지도를 벗어나 코스 페이지로 나가버리지 않도록 SearchPage와 같은 더미 히스토리
+  // 가드를 씁니다. 풀페이지로 들어가는 순간 더미 엔트리를 하나 쌓아두고, 뒤로가기가 눌리면
+  // (popstate) 지도를 벗어나는 대신 시트를 mid로 접습니다.
+  const courseFullSheetGuardedRef = useRef(false);
   // 양조장 카드(DetailContent)에서 상세 내용(WineryDetailContent)으로 바뀔 때, 카드의 사진이
   // 실제로 자라며 위로 올라가는 것처럼 보이도록 카드 사진의 시작 위치·크기를 재둡니다.
   const detailStackWrapRef = useRef<HTMLDivElement>(null);
@@ -1626,6 +1631,30 @@ export default function Map() {
     sheetMode === "detail" && detailKind === "winery"
       ? areaHeight || 600
       : getSnapPoints(areaHeight).full;
+
+  const isCourseWineryFullSheet =
+    isCourseMode && sheetMode === "detail" && detailKind === "winery" && sheetHeight >= getSheetFullHeight() - 2;
+
+  useEffect(() => {
+    if (isCourseWineryFullSheet && !courseFullSheetGuardedRef.current) {
+      courseFullSheetGuardedRef.current = true;
+      window.history.pushState({ courseFullSheetGuard: true }, "", window.location.href);
+    } else if (!isCourseWineryFullSheet && courseFullSheetGuardedRef.current) {
+      courseFullSheetGuardedRef.current = false;
+      window.history.back();
+    }
+  }, [isCourseWineryFullSheet]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (!courseFullSheetGuardedRef.current) return;
+      courseFullSheetGuardedRef.current = false;
+      setSheetHeight(getSnapPoints(areaHeight).mid);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 카드의 사진(DetailPhotoRow, 실제로는 photosHidden으로 안 보이게만 해둔 채 자리만 차지)의
   // 시작 위치·크기를, 그 위에 따로 얹는 "떠오르는 사진" 레이어가 그대로 이어받아 자라며 위로
