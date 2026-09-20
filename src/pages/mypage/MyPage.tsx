@@ -28,8 +28,6 @@ const PRIVACY_POLICY_URL =
   "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80a09400eaca7173716b?source=copy_link";
 const PRIVACY_COLLECTION_URL =
   "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d806d9a9fe4e8e2b32788?source=copy_link";
-const LOCATION_TERMS_URL =
-  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80b5a0a6df4f9935eb8d?source=copy_link";
 
 export default function MyPage() {
   const navigate = useNavigate();
@@ -283,10 +281,6 @@ export default function MyPage() {
               rel="noopener noreferrer"
             >
               개인정보 수집·이용 <img src={outwardIcon} alt="" width={18} height={18} />
-            </InfoLinkRow>
-            <RowDivider />
-            <InfoLinkRow as="a" href={LOCATION_TERMS_URL} target="_blank" rel="noopener noreferrer">
-              위치기반 서비스 이용약관 <img src={outwardIcon} alt="" width={18} height={18} />
             </InfoLinkRow>
           </RowGroup>
         </Section>

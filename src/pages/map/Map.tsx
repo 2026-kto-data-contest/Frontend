@@ -28,15 +28,16 @@ import {
 import type {
   MapPlace,
   MapPlaceCategory,
+  MapBounds,
   RecommendedCourseStop,
   MapRecommendedBrewery,
   MapAwardedLiquor,
   MapMenu,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
-import { resolveImageUrl, fetchTerms } from "../../shared/api/api";
+import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
-import { usePageMemory } from "../../shared/lib/pageState";
+import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
 import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
@@ -168,6 +169,78 @@ function recommendedBreweryToPlace(item: MapRecommendedBrewery): MapPlace {
     longitude: item.longitude,
     imageUrl: resolveImageUrl(item.mainImage?.url) ?? null,
   };
+}
+
+const EARTH_RADIUS_KM = 6371;
+function toRadians(deg: number): number {
+  return (deg * Math.PI) / 180;
+}
+
+// 하버사인 공식으로 두 좌표 사이의 직선거리(km)를 구합니다. 좌표는 위치정보 비신고
+// 대상 유지를 위해 백엔드로 보내지 않고, 이미 받아둔 장소 좌표와 함께 프론트에서만 씁니다.
+function calcDistanceKm(
+  from: { lat: number; lng: number },
+  to: { lat: number; lng: number }
+): number {
+  const dLat = toRadians(to.lat - from.lat);
+  const dLng = toRadians(to.lng - from.lng);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const h =
+    sinDLat * sinDLat +
+    Math.cos(toRadians(from.lat)) * Math.cos(toRadians(to.lat)) * sinDLng * sinDLng;
+  return EARTH_RADIUS_KM * 2 * Math.asin(Math.sqrt(h));
+}
+
+// 장소 목록에 사용자 위치 기준 거리를 채우고 가까운 순으로 정렬합니다. 사용자 위치를
+// 아직 못 구했으면(권한 대기 등) 서버가 내려준 순서·null 거리 그대로 둡니다.
+function withComputedDistance(
+  places: MapPlace[],
+  position: { lat: number; lng: number } | null
+): MapPlace[] {
+  if (!position) return places;
+  return places
+    .map((place) => ({
+      ...place,
+      distance: calcDistanceKm(position, { lat: place.latitude, lng: place.longitude }),
+    }))
+    .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity));
+}
+
+// 백엔드가 더 이상 거리순으로 정렬한 뒤 페이지를 자르지 않으므로, 한 페이지만 받으면
+// 실제로 가장 가까운 장소가 뒷페이지에 남아 프론트 재정렬로도 복구되지 않을 수 있습니다.
+// 그래서 반경 안의 장소는 페이지를 최대한 이어 받아 전부 모은 뒤에 거리 정렬합니다.
+// (한 번에 많이 받도록 페이지를 크게 잡고, 과도한 요청을 막기 위한 상한만 둡니다.)
+const ALL_PLACES_PAGE_SIZE = 300;
+const MAX_PLACE_PAGES = 30;
+
+async function fetchAllMapPlaces(
+  bounds: MapBounds,
+  category: MapPlaceCategory,
+  signal: AbortSignal
+): Promise<MapPlace[]> {
+  const first = await fetchMapPlaces(bounds, category, 0, ALL_PLACES_PAGE_SIZE, signal);
+  const totalPages = Math.min(first.totalPages, MAX_PLACE_PAGES);
+  if (totalPages <= 1) return first.content;
+  const restPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      fetchMapPlaces(bounds, category, i + 1, ALL_PLACES_PAGE_SIZE, signal)
+    )
+  );
+  return [first.content, ...restPages.map((p) => p.content)].flat();
+}
+
+// 추천 메뉴칩도 같은 이유(거리순 정렬·자르기가 사라짐)로 한 페이지만 받으면 안 됩니다.
+async function fetchAllMapMenuPlaces(menu: string, signal: AbortSignal): Promise<MapPlace[]> {
+  const first = await fetchMapMenuPlaces(menu, 0, ALL_PLACES_PAGE_SIZE, signal);
+  const totalPages = Math.min(first.totalPages, MAX_PLACE_PAGES);
+  if (totalPages <= 1) return first.content;
+  const restPages = await Promise.all(
+    Array.from({ length: totalPages - 1 }, (_, i) =>
+      fetchMapMenuPlaces(menu, i + 1, ALL_PLACES_PAGE_SIZE, signal)
+    )
+  );
+  return [first.content, ...restPages.map((p) => p.content)].flat();
 }
 
 function placeToInfo(place: MapPlace): SimplePlaceInfo {
@@ -497,9 +570,9 @@ export default function Map() {
     const controller = new AbortController();
     placesAbortRef.current = controller;
     setPlacesLoadState("loading");
-    fetchMapMenuPlaces(menu, userPositionRef.current ?? undefined, 0, 20, controller.signal)
-      .then((page) => {
-        setPlaces(page.content);
+    fetchAllMapMenuPlaces(menu, controller.signal)
+      .then((content) => {
+        setPlaces(withComputedDistance(content, userPositionRef.current));
         setPlacesLoadState("ready");
       })
       .catch((error) => {
@@ -558,7 +631,7 @@ export default function Map() {
         const latDelta = radiusKm / 111;
         const lngDelta = radiusKm / (111 * Math.cos((centerLat * Math.PI) / 180));
         try {
-          const page = await fetchMapPlaces(
+          const content = await fetchAllMapPlaces(
             {
               south: centerLat - latDelta,
               north: centerLat + latDelta,
@@ -566,14 +639,11 @@ export default function Map() {
               east: centerLng + lngDelta,
             },
             mapCategory,
-            position ?? undefined,
-            0,
-            100,
             controller.signal
           );
           if (controller.signal.aborted) return;
-          if (page.content.length >= MIN_PLACE_RESULTS || isLastRadius) {
-            setPlaces(page.content);
+          if (content.length >= MIN_PLACE_RESULTS || isLastRadius) {
+            setPlaces(withComputedDistance(content, position));
             setPlacesLoadState("ready");
             return;
           }
@@ -838,12 +908,19 @@ export default function Map() {
     // 마이페이지(약관 동의)에서 위치 기반 서비스 이용약관에 이미 동의한 회원이면, 여기서
     // 다시 앱 자체 안내 시트를 띄우지 않고 바로 위치를 가져옵니다(브라우저 자체 권한 팝업은
     // 아직 허용 전이면 별도로 뜰 수 있고, 이건 앱이 막을 수 있는 대상이 아닙니다).
+    // 반대로 마이페이지 토글이 명시적으로 OFF(동의 항목은 있지만 agreed:false)면, 브라우저
+    // 쪽에 예전 허용 기록이 남아 있더라도 자동으로 위치를 가져오면 안 됩니다 — 그 경우까지
+    // checkBrowserPermission()으로 넘기면 "granted" 상태를 보고 조용히 위치를 요청해버려서
+    // 토글을 꺼둔 의미가 없어집니다. 이때는 동의 시트만 띄우고, 실제 요청은 사용자가 직접
+    // "동의하고 계속하기"를 눌러야만 나가게 합니다.
     fetchTerms()
       .then((items) => {
         if (cancelled) return;
-        const locationAgreed = items.find((item) => item.code === "LOCATION")?.agreed;
-        if (locationAgreed) {
+        const locationTerm = items.find((item) => item.code === "LOCATION");
+        if (locationTerm?.agreed) {
           acquireLocation();
+        } else if (locationTerm) {
+          setShowLocationConsent(true);
         } else {
           checkBrowserPermission();
         }
@@ -1203,6 +1280,14 @@ export default function Map() {
         setLocationState("granted");
         setShowLocationConsent(false);
         setLocationBusy(false);
+        // 실제로 위치를 획득했을 때만 마이페이지의 "위치기반 추천" 토글도 ON으로
+        // 맞춰둡니다(좌표가 아니라 동의 여부만 보내는 약관 API라 서버로 위치가 새지
+        // 않습니다). 동의 버튼만 누르고 브라우저 팝업에서 거부한 경우는 반영하지 않습니다.
+        updateOptionalAgreement("LOCATION", true)
+          .then(() => invalidateTabCache())
+          .catch((error) => {
+            console.error("위치 동의 상태 동기화 실패", error);
+          });
         const kakao = kakaoRef.current;
         const map = mapInstanceRef.current;
         if (kakao && map) {
@@ -1507,7 +1592,10 @@ export default function Map() {
               <br />
               위치 동의가 필요해요
             </ConsentTitle>
-            <ConsentDesc>위치 기반 서비스 약관 동의 후 위치 권한을 허용해주세요.</ConsentDesc>
+            <ConsentDesc>
+              브라우저 위치 권한을 허용해주세요. 위치 정보는 이 기기에서만 사용되며 서버로
+              전송되지 않아요.
+            </ConsentDesc>
             {locationError && <ConsentError>{locationError}</ConsentError>}
             <ConsentAgreeButton
               type="button"

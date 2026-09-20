@@ -14,7 +14,7 @@ import checkCircleOutlineMutedIcon from "../../assets/icon/CheckCircleOutlineMut
 
 // "보기"를 눌렀을 때 상세 약관 페이지로 이동하는 항목들입니다(연령확인 제외).
 // 아직 그 페이지가 없어서, 페이지가 생기면 여기서 실제 경로로 연결해주세요.
-const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "LOCATION", "MARKETING"]);
+const VIEWABLE_TERM_CODES = new Set(["SERVICE_USE", "PRIVACY", "MARKETING"]);
 
 // 백엔드가 내려주는 약관 제목을 그대로 쓰지 않고 화면 문구를 고정하고 싶은 항목입니다.
 const TERM_TITLE_OVERRIDES: Record<string, string> = {
@@ -33,8 +33,6 @@ const TERM_CONTENT_URL_OVERRIDES: Record<string, string> = {
     "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d804e8579ffe9e5cebc34?source=copy_link",
   PRIVACY:
     "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d806d9a9fe4e8e2b32788?source=copy_link",
-  LOCATION:
-    "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80b5a0a6df4f9935eb8d?source=copy_link",
   MARKETING:
     "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80c2a6e0e1d92f443f57?source=copy_link",
 };
@@ -58,14 +56,6 @@ const FALLBACK_TERMS: TermItem[] = [
     version: "1",
     title: "개인정보 수집 및 이용 동의",
     required: true,
-    contentUrl: null,
-    agreed: false,
-  },
-  {
-    code: "LOCATION",
-    version: "1",
-    title: "위치기반 서비스 이용약관",
-    required: false,
     contentUrl: null,
     agreed: false,
   },
@@ -94,8 +84,10 @@ export default function TermsPage() {
   useEffect(() => {
     fetchTerms()
       .then((items) => {
-        setTerms(items);
-        setChecked(Object.fromEntries(items.map((item) => [item.code, item.agreed])));
+        // 위치기반 서비스 이용약관은 더 이상 동의 항목으로 받지 않습니다.
+        const visibleItems = items.filter((item) => item.code !== "LOCATION");
+        setTerms(visibleItems);
+        setChecked(Object.fromEntries(visibleItems.map((item) => [item.code, item.agreed])));
       })
       .catch((error) => {
         console.error("약관 조회 실패", error);
