@@ -287,7 +287,11 @@ export default function Home() {
 
   const handlePreferenceBannerClick = () => {
     if (home?.banner.actionPath) {
-      navigate(home.banner.actionPath);
+      // 백엔드가 내려주는 로그인 유도 배너(actionPath: "/login")는 이 온보딩 뱃지에서
+      // 시작된 로그인이라, 로그인 후 원래 화면이 아니라 온보딩 화면으로 바로 가야 합니다.
+      navigate(
+        home.banner.actionPath === "/login" ? "/login?from=%2Fonboarding" : home.banner.actionPath
+      );
       return;
     }
     if (auth.hasOnboarded) {
@@ -297,7 +301,7 @@ export default function Home() {
     } else if (auth.isLoggedIn) {
       navigate("/terms");
     } else {
-      navigate("/login?from=%2F");
+      navigate("/login?from=%2Fonboarding");
     }
   };
 
