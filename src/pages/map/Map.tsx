@@ -312,12 +312,14 @@ function placeToInfo(place: MapPlace): SimplePlaceInfo {
   };
 }
 
-function stopToInfo(stop: RecommendedCourseStop): SimplePlaceInfo {
+function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePlaceInfo {
   const distanceKm = stop.distanceMeters != null ? (stop.distanceMeters / 1000).toFixed(1) : null;
   return {
     name: stop.name,
     categoryLabel: stop.subcategoryName || stop.categoryName || undefined,
-    distanceLabel: distanceKm ? `양조장에서 ${distanceKm}km` : undefined,
+    distanceLabel: distanceKm
+      ? `${breweryName ? `${breweryName} ` : ""}양조장에서 ${distanceKm}km`
+      : undefined,
     address: stop.address ?? undefined,
     mapUrl:
       stop.placeUrl ||
@@ -1634,7 +1636,7 @@ export default function Map() {
     detailKind === "place" && selectedPlace
       ? placeToInfo(selectedPlace)
       : detailKind === "stop" && selectedStop
-        ? stopToInfo(selectedStop)
+        ? stopToInfo(selectedStop, focusWinery?.name)
         : null;
   // 위치 동의 시트·양조장 상세 시트·장소 상세 카드가 화면을 덮는 동안은 하단 네비게이션 바를 숨깁니다.
   useHideNavbar(consentActive || sheetMode === "detail" || Boolean(floatingInfo));
@@ -2298,7 +2300,7 @@ function SimplePlaceDetail({
 
       {info.address && (
         <InlineCopyRow>
-          <DetailAddressText>{info.address}</DetailAddressText>
+          <OtherCardInlineText>{info.address}</OtherCardInlineText>
           <InlineCopyButton
             type="button"
             onClick={() => onCopy(info.address!, "주소를 복사했어요!")}
@@ -2309,7 +2311,7 @@ function SimplePlaceDetail({
       )}
       {info.phone && (
         <InlineCopyRow>
-          <DetailAddressText>{info.phone}</DetailAddressText>
+          <OtherCardInlineText>{info.phone}</OtherCardInlineText>
           <InlineCopyButton
             type="button"
             onClick={() => onCopy(info.phone!, "전화번호를 복사했어요!")}
@@ -3017,6 +3019,13 @@ const DetailAddressText = styled.p`
 // Figma 기준 간격(6px)을 더합니다.
 const DetailAddressTextSpaced = styled(DetailAddressText)`
   margin-top: 6px;
+`;
+
+// Figma "Map - Other Card"(장소 정보 카드)의 주소·전화번호 글자색은 #656563(gray-500)로,
+// 양조장 상세 카드가 쓰는 DetailAddressText의 기본색(#454543, gray-600)과 다릅니다. 공용
+// 컴포넌트 기본색을 바꾸면 양조장 카드 쪽도 같이 바뀌어버려서, 이 카드 전용으로만 덮어씁니다.
+const OtherCardInlineText = styled(DetailAddressText)`
+  color: ${colors.gray[500]};
 `;
 
 const InlineCopyRow = styled.div`
