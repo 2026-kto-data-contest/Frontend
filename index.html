@@ -2,7 +2,11 @@
 <html lang="ko">
   <head>
     <meta charset="UTF-8" />
+    <!-- 기본(라이트 모드용, 어두운 로고)과 다크 모드용(밝은 로고) 파비콘을 나눠서, 브라우저·OS가
+         다크 모드일 때는 탭 배경이 어두워도 로고가 묻히지 않게 합니다. media 속성을 지원하지
+         않는 브라우저는 기본값(라이트용)을 그대로 씁니다. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon-dark.svg" media="(prefers-color-scheme: dark)" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>전통주로</title>
