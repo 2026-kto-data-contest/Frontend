@@ -1028,6 +1028,17 @@ export default function Map() {
     if (isCourseMode) return;
     let cancelled = false;
 
+    // 코스보기 등으로 지도 화면을 떠났다가 돌아오면 이 컴포넌트가 다시 마운트되면서 이
+    // effect도 다시 실행됩니다. 이미 이번 세션에 한 번 물어봤다면(허용했든 "다음에
+    // 할게요"로 넘겼든) 매번 돌아올 때마다 또 띄우지 않습니다 — 한 번만 묻습니다.
+    // (자동으로 조용히 위치를 가져오는 acquireLocation()은 시트를 띄우는 게 아니라서
+    // 계속 허용합니다.)
+    const promptLocationConsentOnce = () => {
+      if (getMemory<boolean>("map:locationConsentPrompted")) return;
+      setMemory("map:locationConsentPrompted", true);
+      setShowLocationConsent(true);
+    };
+
     const checkBrowserPermission = () => {
       const nav = navigator as Navigator & {
         permissions?: { query: (opts: { name: string }) => Promise<{ state: string }> };
@@ -1040,14 +1051,14 @@ export default function Map() {
             if (status.state === "granted") {
               acquireLocation();
             } else {
-              setShowLocationConsent(true);
+              promptLocationConsentOnce();
             }
           })
           .catch(() => {
-            if (!cancelled) setShowLocationConsent(true);
+            if (!cancelled) promptLocationConsentOnce();
           });
       } else {
-        setShowLocationConsent(true);
+        promptLocationConsentOnce();
       }
     };
 
@@ -1066,7 +1077,7 @@ export default function Map() {
         if (locationTerm?.agreed) {
           acquireLocation();
         } else if (locationTerm) {
-          setShowLocationConsent(true);
+          promptLocationConsentOnce();
         } else {
           checkBrowserPermission();
         }
