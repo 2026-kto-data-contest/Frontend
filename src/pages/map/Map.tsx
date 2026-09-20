@@ -39,7 +39,7 @@ import { adaptBreweryToWinery, sigunguFromAddress } from "../../shared/api/adapt
 import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
-import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
+import { resolveHiddenPinLabels } from "../../shared/lib/mapPinOverlap";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
   KakaoMapsNamespace,
@@ -127,11 +127,9 @@ const DEFAULT_CLUSTER_CENTER = { lat: 37.892, lng: 127.199 };
 const DEFAULT_LEVEL = 7;
 const FOCUS_LEVEL = 5;
 const USER_LOCATION_LEVEL = 6;
-// 코스 모드에서 정거장 핀이 겹치면 이 레벨까지는 계속 확대합니다(그 이상은 코스 전체를
-// 보여준다는 의미가 없어질 만큼 과하게 확대되는 걸 막는 하한선).
+// 코스 정거장이 전부 양조장과 거의 같은 위치라 bounds가 아주 작을 때, "코스 전체를
+// 보여준다"는 의미가 없어질 만큼 과하게 확대되지 않도록 막는 하한선(가장 확대된 상태)입니다.
 const COURSE_MIN_ZOOM_LEVEL = 3;
-// 정거장이 FOCUS_LEVEL 기준으로도 화면 밖에 있으면 다 보일 때까지 이 레벨까지는 축소합니다.
-const COURSE_MAX_ZOOM_LEVEL = 12;
 const TOAST_DURATION_MS = 3000;
 // 양조장을 선택했을 때 바텀시트의 기본 높이입니다. 사용자가 핸들로 직접 늘리거나 줄일 수 있습니다.
 const DETAIL_SHEET_HEIGHT = 320;
@@ -1289,7 +1287,67 @@ export default function Map() {
     recommendedBreweries,
   ]);
 
-  // 코스 모드에서 실제 추천 코스 정거장(식당·관광지·카페·숙소) 마커를 그립니다.
+  // 코스 모드에서 정거장 핀 전부(가장 먼 정거장이 화면 가장자리에 오는 선)가 딱 맞게 보이도록
+  // 지도 레벨·중심을 맞춥니다. courseStops·focusWinery가 바뀔 때만 다시 맞추고, 핀을 눌러
+  // selectedStop만 바뀔 때는 다시 맞추지 않습니다 — 이 두 트리거를 같은 effect에 두면(원래
+  // 구조), 사용자가 직접 확대해둔 상태에서 핀을 누를 때마다 "전부 보이게" 축소로 되돌아가버립니다.
+  useEffect(() => {
+    const kakao = kakaoRef.current;
+    const map = mapInstanceRef.current;
+    if (!kakao || !map || loadState !== "ready" || !isCourseMode) return;
+
+    const validStops = courseStops.filter((stop) => STOP_TYPE_TO_CATEGORY[stop.type]);
+
+    if (!focusWinery?.lat || !focusWinery?.lng) return;
+    const wineryLat = focusWinery.lat;
+    const wineryLng = focusWinery.lng;
+    const wineryLatLng = new kakao.LatLng(wineryLat, wineryLng);
+
+    if (validStops.length === 0) {
+      map.setCenter(wineryLatLng);
+      map.setLevel(FOCUS_LEVEL);
+      return;
+    }
+
+    // 레벨을 하나씩 시험하는 대신, 정거장 전부(+양조장)를 감싸는 최소 범위를 직접 계산해서
+    // setBounds로 한 번에 딱 맞는 확대 수준·중심을 구합니다 — 가장 먼 정거장이 화면
+    // 가장자리(margin만큼 안쪽)에 오는 선까지 최대한 확대됩니다. 각 정거장의 양조장 기준
+    // 대칭점도 함께 bounds에 넣어서, bounds가 양조장을 중심으로 좌우대칭이 되게 합니다 —
+    // 그러면 setBounds가 계산하는 중심이 곧 양조장 좌표가 됩니다(CourseDetailPage.tsx의
+    // 미리보기 지도와 같은 방식).
+    const bounds = new kakao.LatLngBounds();
+    bounds.extend(wineryLatLng);
+    validStops.forEach((stop) => {
+      const dLat = stop.latitude - wineryLat;
+      const dLng = stop.longitude - wineryLng;
+      bounds.extend(new kakao.LatLng(stop.latitude, stop.longitude));
+      bounds.extend(new kakao.LatLng(wineryLat - dLat, wineryLng - dLng));
+    });
+
+    // 코스 모드에서 하단을 늘 덮고 있는 시트(DETAIL_SHEET_HEIGHT) 영역은 핀이 가려지므로,
+    // 그만큼 아래쪽 여백을 더 줘서 시트 위 실제로 보이는 영역 안에 다 들어오게 합니다.
+    const PIN_EDGE_MARGIN = 30;
+    map.setBounds(
+      bounds,
+      PIN_EDGE_MARGIN,
+      PIN_EDGE_MARGIN,
+      DETAIL_SHEET_HEIGHT + PIN_EDGE_MARGIN,
+      PIN_EDGE_MARGIN
+    );
+    map.setCenter(wineryLatLng);
+
+    // 정거장들이 양조장과 거의 같은 위치라 bounds가 아주 작으면 지나치게 확대될 수 있으므로,
+    // "코스 전체를 보여준다"는 의미가 없어질 만큼 과하게 확대되지 않도록 하한선을 둡니다.
+    if (map.getLevel() < COURSE_MIN_ZOOM_LEVEL) {
+      map.setLevel(COURSE_MIN_ZOOM_LEVEL);
+      map.setCenter(wineryLatLng);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadState, isCourseMode, courseStops, focusWinery]);
+
+  // 코스 모드에서 실제 추천 코스 정거장(식당·관광지·카페·숙소) 마커를 그립니다. 핀을
+  // 누르면(selectedStop) 선택 표시만 다시 그리고, 위 확대/중심 맞추기 effect는 건드리지
+  // 않습니다.
   useEffect(() => {
     const kakao = kakaoRef.current;
     const map = mapInstanceRef.current;
@@ -1299,92 +1357,16 @@ export default function Map() {
     stopOverlaysRef.current = [];
 
     const validStops = courseStops.filter((stop) => STOP_TYPE_TO_CATEGORY[stop.type]);
-    const stopPins = validStops.map((stop) => ({
-      key: stop.contentId,
-      lat: stop.latitude,
-      lng: stop.longitude,
-    }));
-
-    // 정거장 핀 전부가 "실제로 눈에 보이는" 영역 안에 들어오는 선에서 최대한 확대합니다.
-    // map.getBounds()는 시트 아래 가려진 부분까지 포함한 지도 컨테이너 전체 기준이라, 코스
-    // 모드에서 하단을 늘 덮고 있는 시트(DETAIL_SHEET_HEIGHT) 영역은 화면 픽셀 좌표로 직접
-    // 제외하고 판정합니다. 항상 FOCUS_LEVEL에서부터 다시 판정해야 courseStops가 바뀌었을 때
-    // 이전에 조정해둔 레벨이 누적되지 않습니다.
-    const containerWidth = mapElRef.current?.clientWidth ?? 0;
-    const containerHeight = mapElRef.current?.clientHeight ?? 0;
-    const PIN_EDGE_MARGIN = 30;
-    const visibleLeft = PIN_EDGE_MARGIN;
-    const visibleRight = containerWidth - PIN_EDGE_MARGIN;
-    const visibleTop = PIN_EDGE_MARGIN;
-    const visibleBottom = containerHeight - DETAIL_SHEET_HEIGHT - PIN_EDGE_MARGIN;
-
-    // 레벨을 바꿀 때마다, 양조장이 시트에 덮이지 않는 영역 한가운데 오도록 매번 다시
-    // 중심을 맞춥니다(그래야 아래 가시성 판정이 실제로 화면에 그려질 상태와 일치합니다).
-    const setLevelCenteredOnWinery = (level: number) => {
-      map.setLevel(level);
-      if (!focusWinery?.lat || !focusWinery?.lng) return;
-      const wineryLatLng = new kakao.LatLng(focusWinery.lat, focusWinery.lng);
-      map.setCenter(wineryLatLng);
-      const proj = map.getProjection();
-      const centerPoint = proj.pointFromCoords(wineryLatLng);
-      const shiftedPoint = new kakao.Point(centerPoint.x, centerPoint.y + DETAIL_SHEET_HEIGHT / 3);
-      map.setCenter(proj.coordsFromPoint(shiftedPoint));
-    };
-
-    let zoomLevel = FOCUS_LEVEL;
-    setLevelCenteredOnWinery(zoomLevel);
-    if (containerWidth > 0 && containerHeight > 0 && visibleBottom > visibleTop) {
-      const allStopsVisibleAtCurrentLevel = () => {
-        const currentProjection = map.getProjection();
-        return stopPins.every((pin) => {
-          const point = currentProjection.pointFromCoords(new kakao.LatLng(pin.lat, pin.lng));
-          return (
-            point.x >= visibleLeft &&
-            point.x <= visibleRight &&
-            point.y >= visibleTop &&
-            point.y <= visibleBottom
-          );
-        });
-      };
-
-      // FOCUS_LEVEL 자체가 이미 정거장들이 흩어진 범위보다 확대돼 있을 수 있으므로, 먼저
-      // 전부 보일 때까지 축소합니다(코스는 흔히 양조장 근처가 아니라 꽤 떨어진 곳까지
-      // 포함하는데, 기존 FOCUS_LEVEL은 "양조장 상세" 화면용으로 정해진 고정값이라 코스
-      // 정거장 범위엔 너무 좁을 수 있습니다).
-      while (zoomLevel < COURSE_MAX_ZOOM_LEVEL && !allStopsVisibleAtCurrentLevel()) {
-        zoomLevel += 1;
-        setLevelCenteredOnWinery(zoomLevel);
-      }
-
-      // 그 상태에서 한 단계씩 더 확대해도 여전히 전부 보이면 계속 확대해, 보이는 한도
-      // 안에서 최대한 확대된 상태로 맞춥니다.
-      while (zoomLevel > COURSE_MIN_ZOOM_LEVEL) {
-        const candidateLevel = zoomLevel - 1;
-        setLevelCenteredOnWinery(candidateLevel);
-        if (!allStopsVisibleAtCurrentLevel()) {
-          setLevelCenteredOnWinery(zoomLevel);
-          break;
-        }
-        zoomLevel = candidateLevel;
-      }
-    }
 
     // 정거장들이 넓게 흩어져 있으면 위의 "다 보이게" 축소 때문에 화면 픽셀상으로는 서로
-    // 가까워 보일 수 있는데, 그렇다고 이름표를 숨기면(이전 방식) 코스 전체에서 이름표가
-    // 하나만 남는 문제가 생깁니다. 정거장은 개수가 적어 다 보여줘도 괜찮고, 아이콘 자체는
-    // 아래 resolveOverlapOffsets가 이름표 자리까지 감안해 서로 떨어뜨려 그리므로, 이름표는
-    // 숨기지 않고 항상 보여줍니다.
-    const projection = map.getProjection();
-    // 아이콘 자체가 서로 겹쳐 가려지지 않도록, 겹친 핀들은 원래 위치 주위로 살짝 흩어 그립니다.
-    const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
-
+    // 가까워 보이거나 겹칠 수 있습니다. 예전에는 그런 핀을 원래 좌표에서 살짝 떨어뜨려
+    // 그렸는데, 그러면 핀이 실제 위치가 아닌 곳에 꽂힌 것처럼 보이는 문제가 있었습니다.
+    // 위치는 항상 실제 좌표 그대로 쓰고, 화면상 겹치는 건 확대하면 자연스럽게 풀리는
+    // 정상적인 지도 동작으로 둡니다(이름표는 항상 보여주므로 어떤 핀인지는 구분됩니다).
     validStops.forEach((stop) => {
       const category = STOP_TYPE_TO_CATEGORY[stop.type];
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
-      const position = overlapOffsets[stop.contentId] ?? {
-        lat: stop.latitude,
-        lng: stop.longitude,
-      };
+      const position = { lat: stop.latitude, lng: stop.longitude };
       const el = createPinElement({
         emoji: CATEGORY_META[category].icon,
         iconSrc: CATEGORY_PIN_ICON[category],
@@ -1405,7 +1387,7 @@ export default function Map() {
       stopOverlaysRef.current.push(overlay);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, focusWinery]);
+  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop]);
 
   // 내 위치 표시(파란 점)를 그립니다.
   useEffect(() => {
@@ -1798,23 +1780,33 @@ export default function Map() {
           </SearchBarButton>
         )}
 
-        {showResearchButton &&
-          loadState === "ready" &&
+        {loadState === "ready" &&
           !isCourseMode &&
           !isSearchResultMode &&
           !consentActive &&
           !isSheetFullyExpanded &&
           !floatingInfo &&
           selectedMenu === null &&
-          sheetMode === "list" && (
+          sheetMode === "list" &&
+          (placesLoadState === "loading" ? (
             <ResearchAreaButton
               type="button"
-              onClick={handleResearchArea}
+              disabled
               style={{ bottom: activeSheetHeight + 24 }}
             >
-              <img src={retryIcon} alt="" width={20} height={20} />현 지도에서 검색
+              <SearchingSpinner />검색중
             </ResearchAreaButton>
-          )}
+          ) : (
+            showResearchButton && (
+              <ResearchAreaButton
+                type="button"
+                onClick={handleResearchArea}
+                style={{ bottom: activeSheetHeight + 24 }}
+              >
+                <img src={retryIcon} alt="" width={20} height={20} />현 지도에서 검색
+              </ResearchAreaButton>
+            )
+          ))}
 
         {(loadState === "loading" || (loadState === "ready" && isSearchResultMode)) && (
           <StatusOverlay style={{ bottom: activeSheetHeight }}>
@@ -2630,6 +2622,28 @@ const ResearchAreaButton = styled.button`
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.25);
   cursor: pointer;
   transition: bottom 0.2s ease;
+
+  &:disabled {
+    cursor: default;
+  }
+`;
+
+// Figma "Button/Button - Solid" 검색중 상태(node 1578:9873)의 Progress 아이콘을, 이미지
+// 에셋을 받아오는 대신 흰색 링을 회전시키는 CSS만으로 구현합니다.
+const SearchingSpinner = styled.span`
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 `;
 
 const SearchPlaceholder = styled.span`
