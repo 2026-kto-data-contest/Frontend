@@ -1965,7 +1965,7 @@ export default function Map() {
                       // 그리드 사이사이에 수상 전통주·추천 메뉴 섹션을 끼워 보여줍니다. 백그라운드에서
                       // 이미 실제 양조장 결과(places)가 도착했어도, 칩을 누르기 전까지는 이 추천
                       // 콘텐츠를 계속 보여줍니다.
-                      <>
+                      <RecommendedSectionsStack>
                         <RecommendedSection>
                           <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
                           <RecommendedGrid>
@@ -2021,7 +2021,7 @@ export default function Map() {
 
                         {recommendedBreweries.slice(4, 8).length > 0 && (
                           <RecommendedSection>
-                            <RecommendedGrid>
+                            <StandaloneRecommendedGrid>
                               {recommendedBreweries.slice(4, 8).map((item) => (
                                 <RecommendedBreweryCard
                                   key={item.breweryId}
@@ -2029,13 +2029,13 @@ export default function Map() {
                                   onNavigate={navigate}
                                 />
                               ))}
-                            </RecommendedGrid>
+                            </StandaloneRecommendedGrid>
                           </RecommendedSection>
                         )}
 
                         {recommendedKeywords.length > 0 && (
                           <RecommendedSection>
-                            <RecommendedTitle>추천 검색어</RecommendedTitle>
+                            <TightRecommendedTitle>추천 검색어</TightRecommendedTitle>
                             <MenuChipRow>
                               {recommendedKeywords.map((keyword, index) => (
                                 <MenuChip
@@ -2055,7 +2055,7 @@ export default function Map() {
 
                         {recommendedBreweries.slice(8, 12).length > 0 && (
                           <RecommendedSection>
-                            <RecommendedGrid>
+                            <StandaloneRecommendedGrid>
                               {recommendedBreweries.slice(8, 12).map((item) => (
                                 <RecommendedBreweryCard
                                   key={item.breweryId}
@@ -2063,10 +2063,10 @@ export default function Map() {
                                   onNavigate={navigate}
                                 />
                               ))}
-                            </RecommendedGrid>
+                            </StandaloneRecommendedGrid>
                           </RecommendedSection>
                         )}
-                      </>
+                      </RecommendedSectionsStack>
                     )
                   ) : (
                     <>
@@ -2300,7 +2300,7 @@ function RecommendedBreweryCard({
 // 각 카드 크기를 PhotoCard(fluid)·AwardCard·MenuChip과 맞췄습니다.
 function DefaultBottomSheetSkeleton() {
   return (
-    <>
+    <RecommendedSectionsStack>
       <RecommendedSection>
         <SkeletonTitle $width="180px" $height="20px" />
         <RecommendedGrid>
@@ -2320,11 +2320,11 @@ function DefaultBottomSheetSkeleton() {
       </AwardSection>
 
       <RecommendedSection>
-        <RecommendedGrid>
+        <StandaloneRecommendedGrid>
           {Array.from({ length: 2 }, (_, i) => (
             <BrewerySkeletonCard key={i} />
           ))}
-        </RecommendedGrid>
+        </StandaloneRecommendedGrid>
       </RecommendedSection>
 
       <RecommendedSection>
@@ -2335,7 +2335,7 @@ function DefaultBottomSheetSkeleton() {
           ))}
         </MenuChipRow>
       </RecommendedSection>
-    </>
+    </RecommendedSectionsStack>
   );
 }
 
@@ -2937,7 +2937,10 @@ const RisingPhoto = styled.img`
 const ChipRow = styled.div`
   display: flex;
   gap: 6px;
-  padding: 4px 0 14px;
+  // 왼쪽은 부모(SheetScroll)의 16px 패딩으로 이미 여백이 생기지만, 가로 스크롤은 이
+  // 컨테이너 안에서만 일어나 오른쪽 끝까지 넘기면 마지막 칩이 부모 패딩과 무관하게 화면
+  // 가장자리에 딱 붙어버립니다. 왼쪽과 같은 여백이 오른쪽 끝에도 남도록 직접 채워줍니다.
+  padding: 4px 16px 14px 0;
   overflow-x: auto;
 
   &::-webkit-scrollbar {
@@ -2990,9 +2993,20 @@ const LoaderCenter = styled.div<{ $height: number }>`
   min-height: ${(props) => props.$height}px;
 `;
 
-const RecommendedSection = styled.div`
-  padding: 15px 0 45px;
+// Figma는 기본 바텀시트의 추천 섹션들(추천 양조장·수상 전통주·추천 검색어)을 24px 간격으로
+// 균일하게 쌓습니다(각 섹션 바깥쪽 gap이지, 섹션 자기 내부 padding이 아닙니다). 예전에는
+// RecommendedSection 자체에 위아래 padding(15px/45px, 비대칭)을 줘서 섹션 사이 간격을
+// 흉내 냈는데, AwardSection처럼 이미 자기 padding이 있는 섹션과 합쳐지면 60px까지 벌어지거나
+// (반대로 그 padding을 0으로 줄이면) 32px 같은 애매한 값이 나와 섹션마다 실제 간격이 달라지는
+// 문제가 있었습니다. 이제 간격은 이 스택의 gap 하나로만 책임지고, RecommendedSection 자체는
+// padding 없이 내용만 감쌉니다.
+const RecommendedSectionsStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 `;
+
+const RecommendedSection = styled.div``;
 
 const RecommendedTitle = styled.h2`
   margin: 0 0 20px;
@@ -3028,10 +3042,20 @@ const RecommendedGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 30px 16px;
+  // Figma의 카드 그리드는 아래쪽으로 16px 안쪽 여백이 있어(좌우는 SheetScroll의 16px
+  // padding이 이미 맡고 있음), 다음 섹션과의 간격이 스택 gap(24px)만 있을 때보다 넓습니다.
+  padding-bottom: 16px;
 
   img {
     height: 200px;
   }
+`;
+
+// 타이틀 없이 바로 그리드로 시작하는 섹션(추천 검색어 다음 그리드 등)에서만 위쪽 16px도
+// 마저 더합니다 — 타이틀이 있는 그리드는 RecommendedTitle의 margin-bottom이 이미 그
+// 역할을 하고 있어서, 여기에 위 padding까지 더하면 타이틀-카드 간격이 과하게 벌어집니다.
+const StandaloneRecommendedGrid = styled(RecommendedGrid)`
+  padding-top: 16px;
 `;
 
 const AwardSection = styled(RecommendedSection)`
@@ -3102,6 +3126,13 @@ const AwardMetaSecondary = styled.p`
   margin: 0;
   font-size: 0.75rem;
   color: ${colors.info.text};
+`;
+
+// Figma(추천 검색어 섹션)는 타이틀과 칩 사이 간격이 12px인데, RecommendedTitle의 기본
+// margin-bottom(20px)은 다른 두 섹션(추천 양조장·수상 전통주)과 공유하는 값이라 그대로
+// 바꾸면 그쪽 간격도 달라집니다. 이 섹션에서만 12px로 좁히기 위해 따로 오버라이드합니다.
+const TightRecommendedTitle = styled(RecommendedTitle)`
+  margin-bottom: 12px;
 `;
 
 const MenuChipRow = styled.div`
