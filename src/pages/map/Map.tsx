@@ -35,9 +35,9 @@ import type {
   MapMenu,
 } from "../../shared/api/breweriesApi";
 import { adaptBreweryToWinery } from "../../shared/api/adaptBrewery";
-import { resolveImageUrl, fetchTerms } from "../../shared/api/api";
+import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
-import { usePageMemory } from "../../shared/lib/pageState";
+import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
 import { resolveHiddenPinLabels, resolveOverlapOffsets } from "../../shared/lib/mapPinOverlap";
 import { loadKakaoMaps } from "../../shared/api/kakaoMaps";
 import type {
@@ -1280,6 +1280,14 @@ export default function Map() {
         setLocationState("granted");
         setShowLocationConsent(false);
         setLocationBusy(false);
+        // 실제로 위치를 획득했을 때만 마이페이지의 "위치기반 추천" 토글도 ON으로
+        // 맞춰둡니다(좌표가 아니라 동의 여부만 보내는 약관 API라 서버로 위치가 새지
+        // 않습니다). 동의 버튼만 누르고 브라우저 팝업에서 거부한 경우는 반영하지 않습니다.
+        updateOptionalAgreement("LOCATION", true)
+          .then(() => invalidateTabCache())
+          .catch((error) => {
+            console.error("위치 동의 상태 동기화 실패", error);
+          });
         const kakao = kakaoRef.current;
         const map = mapInstanceRef.current;
         if (kakao && map) {
