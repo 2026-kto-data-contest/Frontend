@@ -474,10 +474,12 @@ export default function CourseDetailPage() {
                   {section.items.map((item, index) => {
                     const distanceKm = formatDistanceKm(item.distanceMeters);
                     const badge = item.subcategoryName || item.categoryName;
-                    // 페어링 코멘트는 Figma대로 식당 섹션의 첫 번째 항목에만 보여줍니다.
+                    // 페어링 코멘트는 Figma대로 식당 섹션의 첫 번째 항목에만 보여주고,
+                    // recommendationReason(일반 추천 사유)으로 대신 채우지 않습니다 —
+                    // pairingComment가 없으면(null) 배지 자체를 숨깁니다.
                     const note =
                       section.key === "restaurants" && index === 0
-                        ? item.pairingComment || item.recommendationReason
+                        ? item.pairingComment
                         : undefined;
                     const metaParts = [
                       distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음",
