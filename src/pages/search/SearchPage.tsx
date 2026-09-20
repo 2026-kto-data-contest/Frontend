@@ -315,7 +315,19 @@ export default function SearchPage() {
   // 돌아옵니다. 검색을 여러 번 반복해도 더미 엔트리가 항상 최대 1개만 쌓이도록,
   // 뒤로가기가 아니라 직접 검색어를 지워 idle로 돌아온 경우에는 그 즉시(같은 URL이라
   // 화면엔 안 보임) 더미를 소비해 정리합니다.
-  const historyGuardedRef = useRef(false);
+  // (검색 결과에서 상세 페이지로 넘어갔다가 뒤로가기로 돌아오면 SearchPage가 새로
+  // 마운트되어 이 ref도 false로 초기화되는데, 이때 phase/query는 store에 남아있던 값
+  // 그대로라 leavingIdle이 true입니다. 초기값을 항상 false로 두면 이미 쌓여있는 더미
+  // 엔트리를 인지하지 못하고 또 하나를 더 쌓아버려서, 검색을 반복할수록 뒤로가기를
+  // 여러 번 눌러야 빠져나가지는 문제가 생깁니다. 그래서 마운트 시점에 현재 history
+  // state를 직접 읽어 이미 더미 엔트리 위에 있는지 확인합니다. history.state는 새로고침
+  // 후에도 남아있지만 phase/query가 담긴 store는 새로고침되면 초기화되므로, "복원된
+  // phase/query가 실제로 idle이 아닐 때만" 신뢰하도록 같이 확인합니다 — 그렇지 않으면
+  // 더미 엔트리 위에서 새로고침했을 때 곧장 자동으로 뒤로가기가 실행돼버립니다.
+  const historyGuardedRef = useRef(
+    Boolean((window.history.state as { searchGuard?: boolean } | null)?.searchGuard) &&
+      (phase !== "idle" || query.length > 0)
+  );
 
   const handleBack = () => {
     if (phase !== "idle" || query) {

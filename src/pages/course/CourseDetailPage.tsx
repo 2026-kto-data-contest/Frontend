@@ -484,6 +484,7 @@ export default function CourseDetailPage() {
                     const metaParts = [
                       distanceKm ? `양조장에서 ${distanceKm}km` : "거리 정보 없음",
                       badge || undefined,
+                      item.phone || undefined,
                     ].filter((part): part is string => Boolean(part));
                     return (
                       <Fragment key={item.contentId}>

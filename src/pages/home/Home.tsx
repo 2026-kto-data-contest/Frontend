@@ -41,6 +41,13 @@ const ONBOARDING_PROMPT_LABEL = "나에게 맞는 양조장";
 const ONBOARDING_PROMPT_SUFFIX = "을 찾아볼까요?";
 const PREFERENCE_SUFFIX = "를 선호하시네요!";
 
+// 백엔드에 아직 약관 문서 링크가 없어서, 실제 링크가 생길 때까지 프론트에서 직접 둡니다
+// (MyPage.tsx의 이용 안내 섹션과 같은 URL).
+const SERVICE_TERMS_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d804e8579ffe9e5cebc34?source=copy_link";
+const PRIVACY_POLICY_URL =
+  "https://nonstop-platinum-949.notion.site/3e0a70bfeb5d80a09400eaca7173716b?source=copy_link";
+
 type LoadState = "loading" | "success" | "network-error" | "server-error";
 
 // "깔끔함" → "깔끔한"처럼, 저장된 취향 태그를 문장에 들어가는 관형형으로 바꿉니다.
@@ -536,6 +543,28 @@ export default function Home() {
               ))}
             </ScrollRow>
           </Section>
+
+          <Footer>
+            <FooterLegalLinks>
+              <FooterLegalLink href={SERVICE_TERMS_URL} target="_blank" rel="noopener noreferrer">
+                이용약관
+              </FooterLegalLink>
+              <FooterDivider aria-hidden />
+              <FooterLegalLink
+                $emphasized
+                href={PRIVACY_POLICY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                개인정보처리방침
+              </FooterLegalLink>
+            </FooterLegalLinks>
+            <FooterInfo>
+              <FooterInfoText>데이터 출처: ©한국관광공사 / ©한국관광콘텐츠랩</FooterInfoText>
+              <FooterInfoText>문의: jeontongjuro@gmail.com</FooterInfoText>
+            </FooterInfo>
+            <FooterCopyright>Copyright © 2026 전통주로. All rights reserved.</FooterCopyright>
+          </Footer>
         </>
       )}
 
@@ -919,6 +948,67 @@ const ScrollRow = styled.div<{ $large?: boolean }>`
   &::-webkit-scrollbar {
     display: none;
   }
+`;
+
+const Footer = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  /* PageContainer의 좌우 padding(16px)을 뚫고 화면 끝까지 꽉 채웁니다. 아래쪽도 마찬가지로
+     PageContainer의 하단 padding(16px)을 뚫어서 네비게이션 바와 바로 맞닿게 합니다. */
+  width: calc(100% + 32px);
+  margin: 24px -16px -16px;
+  padding: 32px 16px;
+  box-sizing: border-box;
+  background-color: ${colors.info.bg};
+`;
+
+const FooterLegalLinks = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const FooterLegalLink = styled.a<{ $emphasized?: boolean }>`
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 140%;
+  color: ${(props) => (props.$emphasized ? colors.gray[900] : colors.gray[400])};
+  text-decoration: none;
+  white-space: nowrap;
+`;
+
+const FooterDivider = styled.span`
+  flex-shrink: 0;
+  width: 1px;
+  height: 14px;
+  background-color: ${colors.gray[300]};
+`;
+
+const FooterInfo = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+`;
+
+const FooterInfoText = styled.p`
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 400;
+  line-height: 140%;
+  color: ${colors.gray[500]};
+  text-align: left;
+`;
+
+const FooterCopyright = styled.p`
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 400;
+  line-height: 100%;
+  color: ${colors.gray[300]};
+  text-align: left;
 `;
 
 const SkeletonWrapper = styled.div`

@@ -322,6 +322,7 @@ function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePl
       ? `${breweryName ? `${breweryName} ` : ""}양조장에서 ${distanceKm}km`
       : undefined,
     address: stop.address ?? undefined,
+    phone: stop.phone ?? undefined,
     mapUrl:
       stop.placeUrl ||
       `https://map.kakao.com/link/map/${encodeURIComponent(stop.name)},${stop.latitude},${stop.longitude}`,
@@ -741,10 +742,14 @@ export default function Map() {
       (Math.abs(ne.getLng() - sw.getLng()) / 2) * 111 * Math.cos((queryCenterLat * Math.PI) / 180);
     const visibleRadiusKm = Math.max(visibleLatKm, visibleLngKm);
     const radiiCoveringView = SEARCH_RADII_KM.filter((radiusKm) => radiusKm >= visibleRadiusKm);
-    // 화면이 미리 정해둔 반경 목록(최대 30km)보다도 넓게 보이면(많이 축소한 경우), 목록의
-    // 최대값으로 뭉개지 말고 실제로 보이는 반경을 그대로 씁니다 — 그래야 전국 단위로 축소해도
-    // 화면에 있는 양조장이 전부 조회됩니다.
-    const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [visibleRadiusKm];
+    // 화면이 미리 정해둔 반경 목록(최대 30km)보다도 넓게 보이면(전국 단위로 많이 축소한
+    // 경우), 실제로 보이는 반경을 그대로 쓰지 않고 목록의 최댓값(30km)으로 잘라냅니다.
+    // 식당·카페처럼 개수가 아주 많은 카테고리는 전국 범위 bbox로 조회하면 페이지를
+    // 수십~수백 번 이어받아야 해서 로딩이 심하게 느려집니다(양조장처럼 수가 적은
+    // 카테고리에서만 괜찮던 방식). 화면 전체가 아니라 중심에서 가장 가까운 30개만
+    // 보여주면 되므로, 반경을 30km로 제한해도 실제로 필요한 결과는 그대로 나옵니다.
+    const MAX_SEARCH_RADIUS_KM = SEARCH_RADII_KM[SEARCH_RADII_KM.length - 1];
+    const radii = radiiCoveringView.length > 0 ? radiiCoveringView : [MAX_SEARCH_RADIUS_KM];
 
     // 반경을 하나씩 순서대로 기다리면(작은 반경 결과가 모자랄 때마다 매번 왕복 한 번씩
     // 추가) 숙소·카페처럼 드문 카테고리는 반경을 여러 번 넓혀야 해서 왕복이 누적되고,
@@ -1351,21 +1356,16 @@ export default function Map() {
       }
     }
 
-    // 핀이 겹쳐 있으면 유저 현재 위치(없으면 양조장)와 가장 가까운 핀만 이름표를 보여줍니다.
+    // 정거장들이 넓게 흩어져 있으면 위의 "다 보이게" 축소 때문에 화면 픽셀상으로는 서로
+    // 가까워 보일 수 있는데, 그렇다고 이름표를 숨기면(이전 방식) 코스 전체에서 이름표가
+    // 하나만 남는 문제가 생깁니다. 정거장은 개수가 적어 다 보여줘도 괜찮고, 아이콘 자체는
+    // 아래 resolveOverlapOffsets가 이름표 자리까지 감안해 서로 떨어뜨려 그리므로, 이름표는
+    // 숨기지 않고 항상 보여줍니다.
     const projection = map.getProjection();
-    const reference =
-      userPosition ??
-      (focusWinery?.lat && focusWinery?.lng
-        ? { lat: focusWinery.lat, lng: focusWinery.lng }
-        : null);
-    const hiddenLabels = resolveHiddenPinLabels(stopPins, kakao, projection, reference);
     // 아이콘 자체가 서로 겹쳐 가려지지 않도록, 겹친 핀들은 원래 위치 주위로 살짝 흩어 그립니다.
     const overlapOffsets = resolveOverlapOffsets(stopPins, kakao, projection);
-    const orderedStops = [...validStops].sort(
-      (a, b) => Number(hiddenLabels.has(b.contentId)) - Number(hiddenLabels.has(a.contentId))
-    );
 
-    orderedStops.forEach((stop) => {
+    validStops.forEach((stop) => {
       const category = STOP_TYPE_TO_CATEGORY[stop.type];
       const isSelected = detailKind === "stop" && selectedStop?.contentId === stop.contentId;
       const position = overlapOffsets[stop.contentId] ?? {
@@ -1379,7 +1379,7 @@ export default function Map() {
         label: stop.name,
         selected: isSelected,
         dimmed: false,
-        showLabel: isSelected || !hiddenLabels.has(stop.contentId),
+        showLabel: true,
       });
       el.addEventListener("click", () => handleSelectStop(stop));
       const overlay = new kakao.CustomOverlay({
@@ -1392,7 +1392,7 @@ export default function Map() {
       stopOverlaysRef.current.push(overlay);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, userPosition, focusWinery]);
+  }, [loadState, isCourseMode, courseStops, detailKind, selectedStop, focusWinery]);
 
   // 내 위치 표시(파란 점)를 그립니다.
   useEffect(() => {

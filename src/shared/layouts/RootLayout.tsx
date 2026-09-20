@@ -69,7 +69,11 @@ const Backdrop = styled.div`
 
 const PhoneFrame = styled.div`
   width: ${PHONE_WIDTH}px;
-  height: ${PHONE_HEIGHT}px;
+  /* 브라우저 창(뷰포트)이 844px보다 낮으면(노트북 등) 고정 높이가 화면 밖으로 넘쳐서
+     페이지 전체를 스크롤해야 하단 네비게이션 바가 보였습니다. 뷰포트보다 커지지
+     않도록 min()으로 감싸서, 창이 작을 땐 그만큼 줄어들어 항상 화면 안에 맞습니다. */
+  height: min(${PHONE_HEIGHT}px, 100vh);
+  height: min(${PHONE_HEIGHT}px, 100dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;

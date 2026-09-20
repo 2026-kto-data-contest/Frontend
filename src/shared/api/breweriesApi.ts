@@ -363,6 +363,7 @@ export interface RecommendedCourseStop {
   pairingComment: string | null;
   featureTags: string[];
   liquorTypes: string[];
+  phone: string | null;
 }
 
 export interface RecommendedCourseDetail {
