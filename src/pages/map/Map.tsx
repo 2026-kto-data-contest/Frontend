@@ -444,7 +444,6 @@ export default function Map() {
   } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetInitialized = useRef(false);
-  const restoredFocusRef = useRef(false);
   const activeCategoryRef = useRef<CategoryKey>("brewery");
   const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   // 서버에 보낼 장소 조회 bbox의 기준점입니다. GPS로 지도가 자동으로 옮겨가도(위치 허용,
@@ -496,6 +495,12 @@ export default function Map() {
   );
   const [selectedPlace, setSelectedPlace] = useState<MapPlace | null>(null);
   const [selectedStop, setSelectedStop] = useState<RecommendedCourseStop | null>(null);
+  // 마운트 시점에 이미 메모리로부터 "detail"+"winery"로 복원돼 있던 경우에만 true입니다.
+  // 이후 지도 위 핀을 새로 눌러 detail로 바뀐 경우는 포함하지 않도록, 최초 렌더 값만
+  // 한 번 캡처해서 아래 복원 전용 focusMapOn 효과의 실행 여부를 가립니다.
+  const restoredFocusRef = useRef(
+    !(!isCourseMode && sheetMode === "detail" && detailKind === "winery")
+  );
   const [sheetHeight, setSheetHeight] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   // 풀시트로 펼쳐지는 CSS 전환(height 0.25s)이 끝나기 전까지는 내용 스크롤을 막습니다.
@@ -1217,7 +1222,7 @@ export default function Map() {
         dimmed: false,
         showLabel: isSelected || !hiddenLabels.has(place.placeId),
       });
-      el.addEventListener("click", () => handleSelectPlace(place));
+      el.addEventListener("click", () => handleSelectPlace(place, { focus: false }));
       const overlay = new kakao.CustomOverlay({
         map,
         position: new kakao.LatLng(place.latitude, place.longitude),
@@ -1496,9 +1501,12 @@ export default function Map() {
     if (winery?.lat && winery?.lng) focusMapOn(winery.lat, winery.lng, DETAIL_SHEET_HEIGHT);
   }
 
-  // 목록·핀에서 장소를 선택하면 카테고리 상관없이 해당 핀으로 지도를 이동시키고(반경 3km 수준)
-  // 그 장소의 바텀시트(양조장이면 상세 시트, 그 외는 FloatingCard)를 엽니다.
-  function handleSelectPlace(place: MapPlace) {
+  // 목록에서 장소를 선택하면 카테고리 상관없이 해당 핀으로 지도를 이동시키고(반경 3km 수준)
+  // 그 장소의 바텀시트(양조장이면 상세 시트, 그 외는 FloatingCard)를 엽니다. 지도 위 핀을
+  // 직접 눌렀을 때는(focus: false) 이미 여러 핀이 보이는 화면 그대로 두고 선택 표시(크기·
+  // 빛효과)만 바뀌도록 지도 이동을 건너뜁니다.
+  function handleSelectPlace(place: MapPlace, options?: { focus?: boolean }) {
+    const focus = options?.focus ?? true;
     if (place.category === "BREWERY") {
       if (sheetMode === "list") previousSheetHeightRef.current = sheetHeight;
       setSelectedId(place.placeId);
@@ -1506,12 +1514,12 @@ export default function Map() {
       ensureWineryLoaded(place.placeId);
       setSheetMode("detail");
       setSheetHeight(getSnapPoints(areaHeight).mid);
-      focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
+      if (focus) focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
       return;
     }
     setSelectedPlace(place);
     setDetailKind("place");
-    focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
+    if (focus) focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
   }
 
   function handleSelectStop(stop: RecommendedCourseStop) {
