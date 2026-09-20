@@ -245,7 +245,7 @@ function createPinElement(options: {
       -webkit-mask-image:url("${iconSrc}");mask-image:url("${iconSrc}");
       -webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
       -webkit-mask-position:center;mask-position:center;
-      -webkit-mask-size:60% 60%;mask-size:60% 60%;
+      -webkit-mask-size:contain;mask-size:contain;
     `;
     circle.appendChild(icon);
   } else {
