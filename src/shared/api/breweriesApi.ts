@@ -227,7 +227,8 @@ export interface MapPlace {
   placeName: string;
   category: MapPlaceCategory;
   categoryName: string;
-  /** 사용자 좌표를 함께 보냈을 때만 값이 있는 직선거리(km) */
+  /** 백엔드는 더 이상 거리를 계산해 내려주지 않습니다 — 항상 null이며, 프론트에서
+   *  latitude/longitude로 직접 계산해 채웁니다. */
   distance: number | null;
   roadAddressName: string | null;
   phone: string | null;
@@ -246,7 +247,6 @@ export interface MapBounds {
 export function fetchMapPlaces(
   bounds: MapBounds,
   category: MapPlaceCategory,
-  userPosition?: { lat: number; lng: number },
   page = 0,
   size = 100,
   signal?: AbortSignal
@@ -260,10 +260,6 @@ export function fetchMapPlaces(
     page: String(page),
     size: String(size),
   });
-  if (userPosition) {
-    qs.set("userLatitude", String(userPosition.lat));
-    qs.set("userLongitude", String(userPosition.lng));
-  }
   return getJson<PageResponse<MapPlace>>("/api/v1/map/places", qs, signal);
 }
 
@@ -328,16 +324,11 @@ export function fetchMapMenus(signal?: AbortSignal): Promise<MapMenu[]> {
 
 export function fetchMapMenuPlaces(
   menu: string,
-  userPosition?: { lat: number; lng: number },
   page = 0,
   size = 20,
   signal?: AbortSignal
 ): Promise<PageResponse<MapPlace>> {
   const qs = new URLSearchParams({ page: String(page), size: String(size) });
-  if (userPosition) {
-    qs.set("userLatitude", String(userPosition.lat));
-    qs.set("userLongitude", String(userPosition.lng));
-  }
   return getJson<PageResponse<MapPlace>>(
     `/api/v1/map/menus/${encodeURIComponent(menu)}/places`,
     qs,
