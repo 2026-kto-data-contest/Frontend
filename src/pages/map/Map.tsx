@@ -502,6 +502,10 @@ export default function Map() {
   const [selectedStop, setSelectedStop] = useState<RecommendedCourseStop | null>(null);
   const [sheetHeight, setSheetHeight] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  // 풀시트로 펼쳐지는 CSS 전환(height 0.25s)이 끝나기 전까지는 내용 스크롤을 막습니다.
+  // sheetHeight는 전환이 시작되는 순간 이미 목표값으로 바뀌어(isSheetFullyExpanded가
+  // 곧장 true) 애니메이션이 끝나기도 전에 스크롤이 가능해지던 문제를 막기 위한 상태입니다.
+  const [sheetExpandSettled, setSheetExpandSettled] = useState(true);
 
   const [locationState, setLocationState] = useState<"unknown" | "granted" | "denied">("unknown");
   const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(null);
@@ -1584,6 +1588,7 @@ export default function Map() {
     const target = e.currentTarget;
     if (target.scrollTop <= 0) return;
     target.scrollTop = 0;
+    setSheetExpandSettled(false);
     setSheetHeight(getSheetFullHeight());
   };
 
@@ -1615,6 +1620,13 @@ export default function Map() {
     // 스냅될 때는 스크롤 위치를 맨 위로 되돌려 항상 칩부터 보이게 합니다.
     if (snapped < fullHeight && sheetScrollRef.current) {
       sheetScrollRef.current.scrollTop = 0;
+    }
+    // 드래그로 직접 끌어올린 경우 sheetHeight는 이미 손가락을 따라 fullHeight 근처까지
+    // 와있을 수 있어(전환 없이 그대로 따라감), 그럴 땐 실제로 애니메이션이 일어나지 않아
+    // transitionend가 발생하지 않습니다. 아직 fullHeight에 못 미친 상태에서 풀시트로
+    // 스냅될 때만 전환 대기 상태로 표시합니다.
+    if (snapped >= fullHeight - 2 && sheetHeight < fullHeight - 2) {
+      setSheetExpandSettled(false);
     }
     setSheetHeight(snapped);
   };
@@ -1866,6 +1878,9 @@ export default function Map() {
                 ? "none"
                 : "height 0.25s ease, border-radius 0.25s ease, box-shadow 0.25s ease",
             }}
+            onTransitionEnd={(e) => {
+              if (e.propertyName === "height") setSheetExpandSettled(true);
+            }}
           >
             <SheetHandleArea
               onPointerDown={handleDragStart}
@@ -1890,7 +1905,11 @@ export default function Map() {
               <SheetHandle />
             </SheetHandleArea>
 
-            <SheetScroll ref={sheetScrollRef} onScroll={handleContentScroll}>
+            <SheetScroll
+              ref={sheetScrollRef}
+              onScroll={handleContentScroll}
+              $scrollLocked={!sheetExpandSettled}
+            >
               {sheetMode === "list" && (
                 <>
                   <ChipRow>
@@ -2842,11 +2861,11 @@ const SheetHandleArea = styled.div`
   cursor: grab;
 `;
 
-const SheetScroll = styled.div`
+const SheetScroll = styled.div<{ $scrollLocked?: boolean }>`
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  touch-action: auto;
+  overflow-y: ${({ $scrollLocked }) => ($scrollLocked ? "hidden" : "auto")};
+  touch-action: ${({ $scrollLocked }) => ($scrollLocked ? "none" : "auto")};
   overscroll-behavior: contain;
   padding: 0 16px 20px;
   box-sizing: border-box;
