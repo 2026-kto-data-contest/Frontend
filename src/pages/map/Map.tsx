@@ -33,7 +33,11 @@ import type {
   MapAwardedLiquor,
 } from "../../shared/api/breweriesApi";
 import { fetchRecommendedKeywords } from "../../shared/api/searchApi";
-import { adaptBreweryToWinery, sigunguFromAddress } from "../../shared/api/adaptBrewery";
+import {
+  adaptBreweryToWinery,
+  sigunguFromAddress,
+  shortRegionFromAddress,
+} from "../../shared/api/adaptBrewery";
 import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
@@ -1756,7 +1760,19 @@ export default function Map() {
       {isCourseMode ? (
         <AppBar
           onBack={() => navigate(-1)}
-          title={focusWinery ? `${focusWinery.name} 코스` : "코스"}
+          title={
+            // 시트가 mid→full로 자라는 동안 DetailCardOverlay의 이름(nameOpacity)과 같은
+            // 진행률로 이 제목도 같이 옅어지다 사라지게 해, 두 헤더가 서로 자리를 바꾸는
+            // 느낌이 나도록 맞춥니다.
+            <span
+              style={{
+                opacity: 1 - winerySheetProgress,
+                transition: isDragging ? "none" : "opacity 0.25s ease",
+              }}
+            >
+              {focusWinery ? `${focusWinery.name} 코스` : "코스"}
+            </span>
+          }
           align="left"
           trailing={
             focusWinery && (
@@ -1911,7 +1927,7 @@ export default function Map() {
             <SheetScroll
               ref={sheetScrollRef}
               onScroll={handleContentScroll}
-              $scrollLocked={!sheetExpandSettled}
+              $scrollLocked={sheetMode === "list" && !sheetExpandSettled}
             >
               {sheetMode === "list" && (
                 <>
@@ -2103,7 +2119,10 @@ export default function Map() {
                         const distanceOrAddress =
                           place.distance != null
                             ? `${place.distance.toFixed(1)}km`
-                            : place.roadAddressName || undefined;
+                            : (place.roadAddressName &&
+                                (shortRegionFromAddress(place.roadAddressName) ??
+                                  place.roadAddressName)) ||
+                              undefined;
                         // 양조장은 술 종류·지역(예: "증류주/탁주 외 4 · 경기 포천")을 보여주고,
                         // 그 외 카테고리는 기존대로 거리·카테고리명을 보여줍니다.
                         const subtitleParts = (
