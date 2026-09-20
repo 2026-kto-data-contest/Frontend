@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import styled from "styled-components";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ErrorState } from "../../shared/components/ErrorState";
 import { Skeleton } from "../../shared/components/Skeleton";
 import { WineryCard } from "../../shared/components/WineryCard";
@@ -59,6 +59,7 @@ function HighlightedText({ text, match }: { text: string; match: string }) {
 
 export default function SearchPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isLoggedIn } = useAuth();
   const [query, setQuery] = usePersistentState("search:query", "");
   const [submittedQuery, setSubmittedQuery] = usePersistentState("search:submittedQuery", "");
@@ -260,6 +261,17 @@ export default function SearchPage() {
       );
     }
   };
+
+  // 지도의 "추천 검색어" 칩처럼 다른 화면에서 검색어를 미리 채운 채로 넘어온 경우, 처음
+  // 진입했을 때(phase가 아직 idle일 때)만 그 검색어로 자동 검색합니다. 뒤로가기로 돌아와
+  // store에 복원된 검색 상태가 있을 때는 덮어쓰지 않습니다.
+  useEffect(() => {
+    const presetQuery = (location.state as { presetQuery?: string } | null)?.presetQuery;
+    if (presetQuery && phase === "idle") {
+      runSearch(presetQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (value: string) => {
     const next = value.slice(0, QUERY_MAX_LENGTH);
