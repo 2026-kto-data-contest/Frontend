@@ -33,7 +33,11 @@ import type {
   MapAwardedLiquor,
 } from "../../shared/api/breweriesApi";
 import { fetchRecommendedKeywords } from "../../shared/api/searchApi";
-import { adaptBreweryToWinery, sigunguFromAddress } from "../../shared/api/adaptBrewery";
+import {
+  adaptBreweryToWinery,
+  sigunguFromAddress,
+  shortRegionFromAddress,
+} from "../../shared/api/adaptBrewery";
 import { resolveImageUrl, fetchTerms, updateOptionalAgreement } from "../../shared/api/api";
 import { useHideNavbar } from "../../shared/lib/navbarVisibility";
 import { usePageMemory, invalidateTabCache } from "../../shared/lib/pageState";
@@ -314,13 +318,14 @@ function stopToInfo(stop: RecommendedCourseStop, breweryName?: string): SimplePl
 }
 
 // 바텀시트 높이는 리스트/상세 모드가 공유하는 mid(320px)·full(검색바까지 가리는 최대 높이)와,
-// 모드별로 다른 collapsed 높이를 가집니다: 리스트는 핸들+카테고리 칩 줄까지만(96px),
-// 상세는 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
+// 모드별로 다른 collapsed 높이를 가집니다: 리스트는 핸들(38px)+카테고리 칩 줄(52px)까지만
+// (90px) — 96px로 두면 칩 줄 밑으로 다음 섹션 제목이 몇 px 삐져나와 보입니다. 상세는
+// 이름+액션 버튼 줄까지 보이도록 더 큽니다(Figma "Map - Card Sheet" 기준 130px).
 function getSnapPoints(areaHeight: number) {
   const safeHeight = areaHeight || 600;
   const full = Math.max(260, safeHeight - 52);
   return {
-    collapsed: Math.min(96, full),
+    collapsed: Math.min(90, full),
     detailCollapsed: Math.min(130, full),
     mid: Math.min(DETAIL_SHEET_HEIGHT, full),
     full,
@@ -427,6 +432,11 @@ export default function Map() {
   const userDotOverlayRef = useRef<KakaoCustomOverlayInstance | null>(null);
   const dragRef = useRef<{ startY: number; startHeight: number } | null>(null);
   const sheetScrollRef = useRef<HTMLDivElement>(null);
+  // 코스 모드에서 양조장 상세 시트를 풀페이지로 끌어올렸을 때, 뒤로가기(물리 버튼/제스처)가
+  // 곧장 지도를 벗어나 코스 페이지로 나가버리지 않도록 SearchPage와 같은 더미 히스토리
+  // 가드를 씁니다. 풀페이지로 들어가는 순간 더미 엔트리를 하나 쌓아두고, 뒤로가기가 눌리면
+  // (popstate) 지도를 벗어나는 대신 시트를 mid로 접습니다.
+  const courseFullSheetGuardedRef = useRef(false);
   // 양조장 카드(DetailContent)에서 상세 내용(WineryDetailContent)으로 바뀔 때, 카드의 사진이
   // 실제로 자라며 위로 올라가는 것처럼 보이도록 카드 사진의 시작 위치·크기를 재둡니다.
   const detailStackWrapRef = useRef<HTMLDivElement>(null);
@@ -439,7 +449,6 @@ export default function Map() {
   } | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sheetInitialized = useRef(false);
-  const restoredFocusRef = useRef(false);
   const activeCategoryRef = useRef<CategoryKey>("brewery");
   const userPositionRef = useRef<{ lat: number; lng: number } | null>(null);
   // 서버에 보낼 장소 조회 bbox의 기준점입니다. GPS로 지도가 자동으로 옮겨가도(위치 허용,
@@ -491,6 +500,12 @@ export default function Map() {
   );
   const [selectedPlace, setSelectedPlace] = useState<MapPlace | null>(null);
   const [selectedStop, setSelectedStop] = useState<RecommendedCourseStop | null>(null);
+  // 마운트 시점에 이미 메모리로부터 "detail"+"winery"로 복원돼 있던 경우에만 true입니다.
+  // 이후 지도 위 핀을 새로 눌러 detail로 바뀐 경우는 포함하지 않도록, 최초 렌더 값만
+  // 한 번 캡처해서 아래 복원 전용 focusMapOn 효과의 실행 여부를 가립니다.
+  const restoredFocusRef = useRef(
+    !(!isCourseMode && sheetMode === "detail" && detailKind === "winery")
+  );
   const [sheetHeight, setSheetHeight] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   // 풀시트로 펼쳐지는 CSS 전환(height 0.25s)이 끝나기 전까지는 내용 스크롤을 막습니다.
@@ -1212,7 +1227,7 @@ export default function Map() {
         dimmed: false,
         showLabel: isSelected || !hiddenLabels.has(place.placeId),
       });
-      el.addEventListener("click", () => handleSelectPlace(place));
+      el.addEventListener("click", () => handleSelectPlace(place, { focus: false }));
       const overlay = new kakao.CustomOverlay({
         map,
         position: new kakao.LatLng(place.latitude, place.longitude),
@@ -1491,9 +1506,12 @@ export default function Map() {
     if (winery?.lat && winery?.lng) focusMapOn(winery.lat, winery.lng, DETAIL_SHEET_HEIGHT);
   }
 
-  // 목록·핀에서 장소를 선택하면 카테고리 상관없이 해당 핀으로 지도를 이동시키고(반경 3km 수준)
-  // 그 장소의 바텀시트(양조장이면 상세 시트, 그 외는 FloatingCard)를 엽니다.
-  function handleSelectPlace(place: MapPlace) {
+  // 목록에서 장소를 선택하면 카테고리 상관없이 해당 핀으로 지도를 이동시키고(반경 3km 수준)
+  // 그 장소의 바텀시트(양조장이면 상세 시트, 그 외는 FloatingCard)를 엽니다. 지도 위 핀을
+  // 직접 눌렀을 때는(focus: false) 이미 여러 핀이 보이는 화면 그대로 두고 선택 표시(크기·
+  // 빛효과)만 바뀌도록 지도 이동을 건너뜁니다.
+  function handleSelectPlace(place: MapPlace, options?: { focus?: boolean }) {
+    const focus = options?.focus ?? true;
     if (place.category === "BREWERY") {
       if (sheetMode === "list") previousSheetHeightRef.current = sheetHeight;
       setSelectedId(place.placeId);
@@ -1501,12 +1519,12 @@ export default function Map() {
       ensureWineryLoaded(place.placeId);
       setSheetMode("detail");
       setSheetHeight(getSnapPoints(areaHeight).mid);
-      focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
+      if (focus) focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
       return;
     }
     setSelectedPlace(place);
     setDetailKind("place");
-    focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
+    if (focus) focusMapOn(place.latitude, place.longitude, DETAIL_SHEET_HEIGHT);
   }
 
   function handleSelectStop(stop: RecommendedCourseStop) {
@@ -1627,6 +1645,30 @@ export default function Map() {
       ? areaHeight || 600
       : getSnapPoints(areaHeight).full;
 
+  const isCourseWineryFullSheet =
+    isCourseMode && sheetMode === "detail" && detailKind === "winery" && sheetHeight >= getSheetFullHeight() - 2;
+
+  useEffect(() => {
+    if (isCourseWineryFullSheet && !courseFullSheetGuardedRef.current) {
+      courseFullSheetGuardedRef.current = true;
+      window.history.pushState({ courseFullSheetGuard: true }, "", window.location.href);
+    } else if (!isCourseWineryFullSheet && courseFullSheetGuardedRef.current) {
+      courseFullSheetGuardedRef.current = false;
+      window.history.back();
+    }
+  }, [isCourseWineryFullSheet]);
+
+  useEffect(() => {
+    const onPopState = () => {
+      if (!courseFullSheetGuardedRef.current) return;
+      courseFullSheetGuardedRef.current = false;
+      setSheetHeight(getSnapPoints(areaHeight).mid);
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 카드의 사진(DetailPhotoRow, 실제로는 photosHidden으로 안 보이게만 해둔 채 자리만 차지)의
   // 시작 위치·크기를, 그 위에 따로 얹는 "떠오르는 사진" 레이어가 그대로 이어받아 자라며 위로
   // 올라가는 시작점으로 씁니다. compact 상태에서는 사진 자체가 안 그려져 잴 수 없으니, 처음
@@ -1718,7 +1760,19 @@ export default function Map() {
       {isCourseMode ? (
         <AppBar
           onBack={() => navigate(-1)}
-          title={focusWinery ? `${focusWinery.name} 코스` : "코스"}
+          title={
+            // 시트가 mid→full로 자라는 동안 DetailCardOverlay의 이름(nameOpacity)과 같은
+            // 진행률로 이 제목도 같이 옅어지다 사라지게 해, 두 헤더가 서로 자리를 바꾸는
+            // 느낌이 나도록 맞춥니다.
+            <span
+              style={{
+                opacity: 1 - winerySheetProgress,
+                transition: isDragging ? "none" : "opacity 0.25s ease",
+              }}
+            >
+              {focusWinery ? `${focusWinery.name} 코스` : "코스"}
+            </span>
+          }
           align="left"
           trailing={
             focusWinery && (
@@ -1873,7 +1927,7 @@ export default function Map() {
             <SheetScroll
               ref={sheetScrollRef}
               onScroll={handleContentScroll}
-              $scrollLocked={!sheetExpandSettled}
+              $scrollLocked={sheetMode === "list" && !sheetExpandSettled}
             >
               {sheetMode === "list" && (
                 <>
@@ -1928,7 +1982,7 @@ export default function Map() {
                       // 그리드 사이사이에 수상 전통주·추천 메뉴 섹션을 끼워 보여줍니다. 백그라운드에서
                       // 이미 실제 양조장 결과(places)가 도착했어도, 칩을 누르기 전까지는 이 추천
                       // 콘텐츠를 계속 보여줍니다.
-                      <>
+                      <RecommendedSectionsStack>
                         <RecommendedSection>
                           <RecommendedTitle>전통주로에서 추천하는 양조장</RecommendedTitle>
                           <RecommendedGrid>
@@ -1984,7 +2038,7 @@ export default function Map() {
 
                         {recommendedBreweries.slice(4, 8).length > 0 && (
                           <RecommendedSection>
-                            <RecommendedGrid>
+                            <StandaloneRecommendedGrid>
                               {recommendedBreweries.slice(4, 8).map((item) => (
                                 <RecommendedBreweryCard
                                   key={item.breweryId}
@@ -1992,13 +2046,13 @@ export default function Map() {
                                   onNavigate={navigate}
                                 />
                               ))}
-                            </RecommendedGrid>
+                            </StandaloneRecommendedGrid>
                           </RecommendedSection>
                         )}
 
                         {recommendedKeywords.length > 0 && (
                           <RecommendedSection>
-                            <RecommendedTitle>추천 검색어</RecommendedTitle>
+                            <TightRecommendedTitle>추천 검색어</TightRecommendedTitle>
                             <MenuChipRow>
                               {recommendedKeywords.map((keyword, index) => (
                                 <MenuChip
@@ -2018,7 +2072,7 @@ export default function Map() {
 
                         {recommendedBreweries.slice(8, 12).length > 0 && (
                           <RecommendedSection>
-                            <RecommendedGrid>
+                            <StandaloneRecommendedGrid>
                               {recommendedBreweries.slice(8, 12).map((item) => (
                                 <RecommendedBreweryCard
                                   key={item.breweryId}
@@ -2026,10 +2080,10 @@ export default function Map() {
                                   onNavigate={navigate}
                                 />
                               ))}
-                            </RecommendedGrid>
+                            </StandaloneRecommendedGrid>
                           </RecommendedSection>
                         )}
-                      </>
+                      </RecommendedSectionsStack>
                     )
                   ) : (
                     <>
@@ -2065,7 +2119,10 @@ export default function Map() {
                         const distanceOrAddress =
                           place.distance != null
                             ? `${place.distance.toFixed(1)}km`
-                            : place.roadAddressName || undefined;
+                            : (place.roadAddressName &&
+                                (shortRegionFromAddress(place.roadAddressName) ??
+                                  place.roadAddressName)) ||
+                              undefined;
                         // 양조장은 술 종류·지역(예: "증류주/탁주 외 4 · 경기 포천")을 보여주고,
                         // 그 외 카테고리는 기존대로 거리·카테고리명을 보여줍니다.
                         const subtitleParts = (
@@ -2263,7 +2320,7 @@ function RecommendedBreweryCard({
 // 각 카드 크기를 PhotoCard(fluid)·AwardCard·MenuChip과 맞췄습니다.
 function DefaultBottomSheetSkeleton() {
   return (
-    <>
+    <RecommendedSectionsStack>
       <RecommendedSection>
         <SkeletonTitle $width="180px" $height="20px" />
         <RecommendedGrid>
@@ -2283,11 +2340,11 @@ function DefaultBottomSheetSkeleton() {
       </AwardSection>
 
       <RecommendedSection>
-        <RecommendedGrid>
+        <StandaloneRecommendedGrid>
           {Array.from({ length: 2 }, (_, i) => (
             <BrewerySkeletonCard key={i} />
           ))}
-        </RecommendedGrid>
+        </StandaloneRecommendedGrid>
       </RecommendedSection>
 
       <RecommendedSection>
@@ -2298,7 +2355,7 @@ function DefaultBottomSheetSkeleton() {
           ))}
         </MenuChipRow>
       </RecommendedSection>
-    </>
+    </RecommendedSectionsStack>
   );
 }
 
@@ -2884,6 +2941,10 @@ const DetailCardOverlay = styled.div`
   right: -16px;
   padding: 0 16px;
   background: #ffffff;
+  /* 접힌 상태(compact)에서는 이름·버튼만 있어 내용 높이가 짧아서, 시트에 보이는 영역
+     아래쪽은 이 카드가 다 못 덮고 그 뒤에 항상 그려둔 실제 상세 내용(사진 등)이 비쳐
+     보였습니다. absolute라 레이아웃엔 영향 없으니 넉넉히 키워서 항상 다 덮습니다. */
+  min-height: 100vh;
 `;
 
 // 카드 사진(cardPhotoRect)에서 시작해 상세 내용의 대표 이미지 자리까지 자라며 위로
@@ -2900,8 +2961,17 @@ const RisingPhoto = styled.img`
 const ChipRow = styled.div`
   display: flex;
   gap: 6px;
-  padding: 4px 0 14px;
+  // 부모(SheetScroll)의 좌우 16px 패딩만큼 스크롤 가능한 실제 화면 폭이 줄어들어, 칩
+  // 5개가 다 안 들어가고 양쪽 끝 칩(양조장·숙소)이 잘려 보였습니다. 이 칩 목록에서만
+  // 그 패딩을 상쇄해 화면 끝까지 폭을 넓게 쓰고, 대신 같은 크기의 padding을 직접 둬서
+  // 쉬고 있을 때(스크롤 맨 앞·맨 끝)는 다른 섹션과 같은 여백으로 보이게 합니다.
+  padding: 4px 16px 14px 16px;
+  margin: 0 -16px;
   overflow-x: auto;
+  // 스크롤을 아무 데서나 멈추면 칩이 화면 가장자리에 반쯤 잘린 채로 남을 수 있습니다.
+  // 스냅을 걸어서 손을 떼면 항상 칩 하나가 온전히 보이는 지점으로 자리 잡게 합니다.
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 16px;
 
   &::-webkit-scrollbar {
     display: none;
@@ -2922,6 +2992,7 @@ const CategoryChip = styled.button<{ $active: boolean }>`
   font-weight: ${(props) => (props.$active ? 700 : 400)};
   white-space: nowrap;
   cursor: pointer;
+  scroll-snap-align: start;
 `;
 
 const ChipIcon = styled.span<{ $src: string; $color: string }>`
@@ -2953,9 +3024,20 @@ const LoaderCenter = styled.div<{ $height: number }>`
   min-height: ${(props) => props.$height}px;
 `;
 
-const RecommendedSection = styled.div`
-  padding: 15px 0 45px;
+// Figma는 기본 바텀시트의 추천 섹션들(추천 양조장·수상 전통주·추천 검색어)을 24px 간격으로
+// 균일하게 쌓습니다(각 섹션 바깥쪽 gap이지, 섹션 자기 내부 padding이 아닙니다). 예전에는
+// RecommendedSection 자체에 위아래 padding(15px/45px, 비대칭)을 줘서 섹션 사이 간격을
+// 흉내 냈는데, AwardSection처럼 이미 자기 padding이 있는 섹션과 합쳐지면 60px까지 벌어지거나
+// (반대로 그 padding을 0으로 줄이면) 32px 같은 애매한 값이 나와 섹션마다 실제 간격이 달라지는
+// 문제가 있었습니다. 이제 간격은 이 스택의 gap 하나로만 책임지고, RecommendedSection 자체는
+// padding 없이 내용만 감쌉니다.
+const RecommendedSectionsStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
 `;
+
+const RecommendedSection = styled.div``;
 
 const RecommendedTitle = styled.h2`
   margin: 0 0 20px;
@@ -2991,10 +3073,20 @@ const RecommendedGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 30px 16px;
+  // Figma의 카드 그리드는 아래쪽으로 16px 안쪽 여백이 있어(좌우는 SheetScroll의 16px
+  // padding이 이미 맡고 있음), 다음 섹션과의 간격이 스택 gap(24px)만 있을 때보다 넓습니다.
+  padding-bottom: 16px;
 
   img {
     height: 200px;
   }
+`;
+
+// 타이틀 없이 바로 그리드로 시작하는 섹션(추천 검색어 다음 그리드 등)에서만 위쪽 16px도
+// 마저 더합니다 — 타이틀이 있는 그리드는 RecommendedTitle의 margin-bottom이 이미 그
+// 역할을 하고 있어서, 여기에 위 padding까지 더하면 타이틀-카드 간격이 과하게 벌어집니다.
+const StandaloneRecommendedGrid = styled(RecommendedGrid)`
+  padding-top: 16px;
 `;
 
 const AwardSection = styled(RecommendedSection)`
@@ -3065,6 +3157,13 @@ const AwardMetaSecondary = styled.p`
   margin: 0;
   font-size: 0.75rem;
   color: ${colors.info.text};
+`;
+
+// Figma(추천 검색어 섹션)는 타이틀과 칩 사이 간격이 12px인데, RecommendedTitle의 기본
+// margin-bottom(20px)은 다른 두 섹션(추천 양조장·수상 전통주)과 공유하는 값이라 그대로
+// 바꾸면 그쪽 간격도 달라집니다. 이 섹션에서만 12px로 좁히기 위해 따로 오버라이드합니다.
+const TightRecommendedTitle = styled(RecommendedTitle)`
+  margin-bottom: 12px;
 `;
 
 const MenuChipRow = styled.div`

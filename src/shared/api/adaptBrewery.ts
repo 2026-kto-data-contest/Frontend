@@ -31,6 +31,41 @@ export function sigunguFromAddress(address: string): string | null {
   return trimmed || null;
 }
 
+// 시/도 정식 명칭 → 두 글자 축약형입니다. 시/군/구와 달리 접미사만 떼서는 안 되는(예:
+// "충청북도"→"충북", "전북특별자치도"→"전북") 불규칙한 축약이라 표로 관리합니다.
+const SIDO_ABBREVIATIONS: Record<string, string> = {
+  서울특별시: "서울",
+  부산광역시: "부산",
+  대구광역시: "대구",
+  인천광역시: "인천",
+  광주광역시: "광주",
+  대전광역시: "대전",
+  울산광역시: "울산",
+  세종특별자치시: "세종",
+  경기도: "경기",
+  강원도: "강원",
+  강원특별자치도: "강원",
+  충청북도: "충북",
+  충청남도: "충남",
+  전라북도: "전북",
+  전북특별자치도: "전북",
+  전라남도: "전남",
+  경상북도: "경북",
+  경상남도: "경남",
+  제주특별자치도: "제주",
+};
+
+// 도로명주소 전체 문자열(예: "경기도 포천시 가산면 포천로898번길 156")을 지도 리스트처럼
+// 공간이 좁은 곳에 쓸 짧은 지역명("경기 포천")으로 줄입니다.
+export function shortRegionFromAddress(address: string): string | null {
+  const [sidoToken, sigunguToken] = address.trim().split(/\s+/);
+  if (!sidoToken) return null;
+  const sido = SIDO_ABBREVIATIONS[sidoToken] ?? sidoToken;
+  if (!sigunguToken) return sido;
+  const sigungu = sigunguToken.replace(/(시|군|구)$/, "");
+  return sigungu ? `${sido} ${sigungu}` : sido;
+}
+
 function asVisitAvailability(state: VisitState): VisitAvailability {
   if (state === "Y") return "가능";
   if (state === "N") return "불가";
