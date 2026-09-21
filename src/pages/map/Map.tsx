@@ -2961,11 +2961,17 @@ const RisingPhoto = styled.img`
 const ChipRow = styled.div`
   display: flex;
   gap: 6px;
-  // 왼쪽은 부모(SheetScroll)의 16px 패딩으로 이미 여백이 생기지만, 가로 스크롤은 이
-  // 컨테이너 안에서만 일어나 오른쪽 끝까지 넘기면 마지막 칩이 부모 패딩과 무관하게 화면
-  // 가장자리에 딱 붙어버립니다. 왼쪽과 같은 여백이 오른쪽 끝에도 남도록 직접 채워줍니다.
-  padding: 4px 16px 14px 0;
+  // 부모(SheetScroll)의 좌우 16px 패딩만큼 스크롤 가능한 실제 화면 폭이 줄어들어, 칩
+  // 5개가 다 안 들어가고 양쪽 끝 칩(양조장·숙소)이 잘려 보였습니다. 이 칩 목록에서만
+  // 그 패딩을 상쇄해 화면 끝까지 폭을 넓게 쓰고, 대신 같은 크기의 padding을 직접 둬서
+  // 쉬고 있을 때(스크롤 맨 앞·맨 끝)는 다른 섹션과 같은 여백으로 보이게 합니다.
+  padding: 4px 16px 14px 16px;
+  margin: 0 -16px;
   overflow-x: auto;
+  // 스크롤을 아무 데서나 멈추면 칩이 화면 가장자리에 반쯤 잘린 채로 남을 수 있습니다.
+  // 스냅을 걸어서 손을 떼면 항상 칩 하나가 온전히 보이는 지점으로 자리 잡게 합니다.
+  scroll-snap-type: x mandatory;
+  scroll-padding: 0 16px;
 
   &::-webkit-scrollbar {
     display: none;
@@ -2986,6 +2992,7 @@ const CategoryChip = styled.button<{ $active: boolean }>`
   font-weight: ${(props) => (props.$active ? 700 : 400)};
   white-space: nowrap;
   cursor: pointer;
+  scroll-snap-align: start;
 `;
 
 const ChipIcon = styled.span<{ $src: string; $color: string }>`
